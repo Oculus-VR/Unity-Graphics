@@ -14,8 +14,12 @@ namespace UnityEngine.Rendering.Universal.Internal
         FilteringSettings m_FilteringSettings;
         ProfilingSampler m_ProfilingSampler;
 
+        private static readonly ShaderTagId s_MotionVectorTag = new ShaderTagId("MotionVectors");
+
         RenderTargetIdentifier motionVectorColorIdentifier;
         RenderTargetIdentifier motionVectorDepthIdentifier;
+
+        private static readonly int s_MotionVectorsEnabledID = Shader.PropertyToID("_MotionVectorsEnabled");
 
         public OculusMotionVectorPass(string profilerTag, bool opaque, RenderPassEvent evt, RenderQueueRange renderQueueRange, LayerMask layerMask, StencilState stencilState, int stencilReference)
         {
@@ -57,10 +61,16 @@ namespace UnityEngine.Rendering.Universal.Internal
                 cmd.Clear();
 
                 Camera camera = renderingData.cameraData.camera;
+                Shader.SetGlobalFloat(s_MotionVectorsEnabledID, (float)(camera.depthTextureMode & DepthTextureMode.MotionVectors));
+
                 var filterSettings = m_FilteringSettings;
 
-                var drawSettings = CreateDrawingSettings(new ShaderTagId("MotionVectors"), ref renderingData, renderingData.cameraData.defaultOpaqueSortFlags);
+                var drawSettings = CreateDrawingSettings(s_MotionVectorTag, ref renderingData, renderingData.cameraData.defaultOpaqueSortFlags);
                 drawSettings.perObjectData = PerObjectData.MotionVectors;
+
+                context.DrawRenderers(renderingData.cullResults, ref drawSettings, ref filterSettings);
+                drawSettings.perObjectData = PerObjectData.None;
+                filterSettings.excludeMotionVectorObjects = true;
                 context.DrawRenderers(renderingData.cullResults, ref drawSettings, ref filterSettings);
             }
             context.ExecuteCommandBuffer(cmd);

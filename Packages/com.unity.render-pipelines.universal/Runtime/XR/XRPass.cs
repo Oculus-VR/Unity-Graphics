@@ -88,12 +88,15 @@ namespace UnityEngine.Rendering.Universal
         // Same but for motion vectors
         internal RenderTargetIdentifier motionVectorRenderTarget { get; private set; }
         internal RenderTextureDescriptor motionVectorRenderTargetDesc { get; private set; }
+        internal RenderTargetIdentifier depthRenderTarget { get; private set; }
+        internal RenderTextureDescriptor depthRenderTargetDesc { get; private set; }
 
         static   RenderTargetIdentifier  invalidRT = -1;
         internal bool                    renderTargetValid { get => renderTarget != invalidRT; }
         internal bool                    renderTargetIsRenderTexture { get; private set; }
         internal bool motionVectorRenderTargetValid { get => motionVectorRenderTarget != invalidRT; }
         internal bool motionVectorRenderTargetIsRenderTexture { get; private set; }
+        internal bool depthRenderTargetValid { get => depthRenderTarget != invalidRT; }
 
         internal bool isLateLatchEnabled { get; set; }
         internal bool canMarkLateLatch { get; set; }
@@ -240,18 +243,23 @@ namespace UnityEngine.Rendering.Universal
             if (xrRenderPass.hasMotionVectorPass)
             {
                 passInfo.motionVectorRenderTarget = new RenderTargetIdentifier(xrRenderPass.motionVectorRenderTarget, 0, CubemapFace.Unknown, -1);
-
-                RenderTextureDescriptor xrMotionVectorDesc = xrRenderPass.renderTargetDesc;
-                RenderTextureDescriptor rtMotionVectorDesc = new RenderTextureDescriptor(xrMotionVectorDesc.width, xrMotionVectorDesc.height, xrMotionVectorDesc.colorFormat, xrMotionVectorDesc.depthBufferBits, xrMotionVectorDesc.mipCount);
-                rtMotionVectorDesc.dimension = xrRenderPass.renderTargetDesc.dimension;
-                rtMotionVectorDesc.volumeDepth = xrRenderPass.renderTargetDesc.volumeDepth;
-                rtMotionVectorDesc.vrUsage = xrRenderPass.renderTargetDesc.vrUsage;
-                rtMotionVectorDesc.sRGB = xrRenderPass.renderTargetDesc.sRGB;
-                passInfo.motionVectorRenderTargetDesc = rtMotionVectorDesc;
+                passInfo.motionVectorRenderTargetDesc = xrRenderPass.motionVectorRenderTargetDesc;
+                passInfo.depthRenderTarget = -1;
 
                 Debug.Assert(passInfo.motionVectorRenderTargetValid, "Invalid motion vector render target from XRDisplaySubsystem!");
             }
+#if UNITY_EDITOR
+            if (DebugOculusMotionVectorSettings.enableDebugMotionVectors)
+            {
+                passInfo.motionVectorRenderTarget = new RenderTargetIdentifier(DebugOculusMotionVectorSettings.motionVectorRenderTarget, 0, CubemapFace.Unknown, -1);
+                passInfo.motionVectorRenderTargetDesc = DebugOculusMotionVectorSettings.motionVectorRenderTargetDesc;
 
+                passInfo.depthRenderTarget = new RenderTargetIdentifier(DebugOculusMotionVectorSettings.depthRenderTarget, 0, CubemapFace.Unknown, -1);
+                passInfo.depthRenderTargetDesc = DebugOculusMotionVectorSettings.depthRenderTargetDesc;
+
+                Debug.Assert(passInfo.motionVectorRenderTargetValid, "Invalid motion vector render target from XRDisplaySubsystem!");
+            }
+#endif
             return passInfo;
         }
 

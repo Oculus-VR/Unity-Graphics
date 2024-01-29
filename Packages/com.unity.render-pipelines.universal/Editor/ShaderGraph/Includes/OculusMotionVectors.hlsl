@@ -15,6 +15,13 @@ half4 frag(PackedVaryings packedInput) : SV_TARGET
     Varyings unpacked = UnpackVaryings(packedInput);
     UNITY_SETUP_INSTANCE_ID(unpacked);
 
+    #if _ALPHATEST_ON
+        UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(unpacked);
+        SurfaceDescription surfaceDescription = BuildSurfaceDescription(unpacked);
+
+        clip(surfaceDescription.Alpha - surfaceDescription.AlphaClipThreshold);
+    #endif
+
     float3 screenPos = unpacked.curPositionCS.xyz / unpacked.curPositionCS.w;
     float3 screenPosPrev = unpacked.prevPositionCS.xyz / unpacked.prevPositionCS.w;
     half4 color = (1);

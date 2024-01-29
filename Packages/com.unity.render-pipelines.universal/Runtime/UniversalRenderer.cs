@@ -288,7 +288,8 @@ namespace UnityEngine.Rendering.Universal
                 m_RenderOpaqueForwardOnlyPass = new DrawObjectsPass("Render Opaques Forward Only", forwardOnlyShaderTagIds, true, RenderPassEvent.BeforeRenderingOpaques, RenderQueueRange.opaque, data.opaqueLayerMask, forwardOnlyStencilState, forwardOnlyStencilRef);
             }
 
-            m_OculusMotionVecPass = new OculusMotionVectorPass(URPProfileId.DrawMVOpaqueObjects, true, RenderPassEvent.BeforeRenderingOpaques, RenderQueueRange.opaque, data.opaqueLayerMask, m_DefaultStencilState, stencilData.stencilReference);
+            m_OculusMotionVecPass = new OculusMotionVectorPass(URPProfileId.DrawMVOpaqueObjects, true, RenderPassEvent.BeforeRenderingOpaques - 1, RenderQueueRange.all, data.opaqueLayerMask | data.transparentLayerMask, m_DefaultStencilState, stencilData.stencilReference);
+
             // Always create this pass even in deferred because we use it for wireframe rendering in the Editor or offscreen depth texture rendering.
             m_RenderOpaqueForwardPass = new DrawObjectsPass(URPProfileId.DrawOpaqueObjects, true, RenderPassEvent.BeforeRenderingOpaques, RenderQueueRange.opaque, data.opaqueLayerMask, m_DefaultStencilState, stencilData.stencilReference);
 
@@ -729,18 +730,22 @@ namespace UnityEngine.Rendering.Universal
                 EnqueuePass(m_XROcclusionMeshPass);
 #endif
 
-#if !UNITY_EDITOR
             if (cameraData.xr.motionVectorRenderTargetValid)
             {
                 RenderTargetHandle motionVecHandle = new RenderTargetHandle(cameraData.xr.motionVectorRenderTarget);
-                var rtMotionId = motionVecHandle.Identifier();
-                rtMotionId = new RenderTargetIdentifier(rtMotionId, 0, CubemapFace.Unknown, -1);
+                var rtMotionId = new RenderTargetIdentifier(motionVecHandle.Identifier(), 0, CubemapFace.Unknown, -1);
 
                 // ID is the same since a RenderTexture encapsulates all the attachments, including both color+depth.
-                m_OculusMotionVecPass.Setup(rtMotionId, rtMotionId);
+                var depthId = rtMotionId;
+
+                if (cameraData.xr.depthRenderTargetValid) {
+                    RenderTargetHandle depthHandle = new RenderTargetHandle(cameraData.xr.depthRenderTarget);
+                    depthId = new RenderTargetIdentifier(depthHandle.Identifier(), 0, CubemapFace.Unknown, -1);
+                }
+
+                m_OculusMotionVecPass.Setup(rtMotionId, depthId);
                 EnqueuePass(m_OculusMotionVecPass);
             }
-#endif
 
             if (this.actualRenderingMode == RenderingMode.Deferred)
             {

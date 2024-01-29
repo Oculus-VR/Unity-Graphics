@@ -3,7 +3,6 @@
 struct Attributes
 {
     float4 positionOS : POSITION;
-    float3 previousPositionOS : TEXCOORD4;
     UNITY_VERTEX_INPUT_INSTANCE_ID
 };
 
@@ -14,6 +13,9 @@ struct Varyings
     float4 prevPositionCS : TEXCOORD9;
     UNITY_VERTEX_OUTPUT_STEREO
 };
+
+// Custom Flag for Static MotionVectors
+half _MotionVectorsEnabled;
 
 Varyings vert(Attributes input)
 {
@@ -26,17 +28,13 @@ Varyings vert(Attributes input)
 
     float3 curWS = TransformObjectToWorld(input.positionOS.xyz);
     output.curPositionCS = TransformWorldToHClip(curWS);
-    if (unity_MotionVectorsParams.y == 0.0)
+    if (_MotionVectorsEnabled == 0.0)
     {
         output.prevPositionCS = output.curPositionCS;
     }
     else
     {
-        bool hasDeformation = unity_MotionVectorsParams.x > 0.0;
-        // interpolate to our next deformed position
-        float3 effectivePositionOS = (hasDeformation ? (2.0 * input.positionOS.xyz - input.previousPositionOS) : input.positionOS.xyz);
-        float3 previousWS = TransformPreviousObjectToWorld(effectivePositionOS);
-        output.prevPositionCS = TransformWorldToPrevHClip(previousWS);
+        output.prevPositionCS = TransformWorldToPrevHClip(curWS);
     }
 
     return output;
