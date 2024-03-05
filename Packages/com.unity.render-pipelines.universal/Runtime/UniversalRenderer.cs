@@ -133,6 +133,7 @@ namespace UnityEngine.Rendering.Universal
         RTHandle m_OpaqueColor;
         RTHandle m_MotionVectorColor;
         RTHandle m_MotionVectorDepth;
+        RTHandle m_XRMotionVectorTargetHandleAlias;
 
         ForwardLights m_ForwardLights;
         DeferredLights m_DeferredLights;
@@ -393,6 +394,7 @@ namespace UnityEngine.Rendering.Universal
             m_OpaqueColor?.Release();
             m_MotionVectorColor?.Release();
             m_MotionVectorDepth?.Release();
+            m_XRMotionVectorTargetHandleAlias?.Release();
             hasReleasedRTs = true;
         }
 
@@ -960,12 +962,19 @@ namespace UnityEngine.Rendering.Universal
 #if !UNITY_EDITOR
             if (cameraData.xr.motionVectorRenderTargetValid)
             {
-                RenderTargetHandle motionVecHandle = new RenderTargetHandle(cameraData.xr.motionVectorRenderTarget);
-                var rtMotionId = motionVecHandle.Identifier();
-                rtMotionId = new RenderTargetIdentifier(rtMotionId, 0, CubemapFace.Unknown, -1);
+                RenderTargetIdentifier motionVecId = cameraData.xr.motionVectorRenderTarget;
+
+                if (m_XRMotionVectorTargetHandleAlias == null || m_XRMotionVectorTargetHandleAlias.nameID != motionVecId)
+                {
+                    m_XRMotionVectorTargetHandleAlias?.Release();
+                    m_XRMotionVectorTargetHandleAlias = RTHandles.Alloc(motionVecId);
+                }
 
                 // ID is the same since a RenderTexture encapsulates all the attachments, including both color+depth.
-                m_OculusMotionVecPass.Setup(rtMotionId, rtMotionId);
+                RTHandle mvColor = m_XRMotionVectorTargetHandleAlias;
+                RTHandle mvDepth = m_XRMotionVectorTargetHandleAlias;
+
+                m_OculusMotionVecPass.Setup(mvColor, mvDepth);
                 EnqueuePass(m_OculusMotionVecPass);
             }
 #endif
