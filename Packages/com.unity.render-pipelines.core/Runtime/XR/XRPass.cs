@@ -9,11 +9,9 @@ namespace UnityEngine.Experimental.Rendering
     /// </summary>
     public struct XRPassCreateInfo
     {
-        public static RenderTargetIdentifier mvInvalidRT = -1;
-        public bool motionVectorRenderTargetValid { get => motionVectorRenderTarget != mvInvalidRT; }
-
         internal RenderTargetIdentifier renderTarget;
         internal RenderTextureDescriptor renderTargetDesc;
+        internal bool motionVectorRenderTargetValid;
         internal RenderTargetIdentifier motionVectorRenderTarget;
         internal RenderTextureDescriptor motionVectorRenderTargetDesc;
         internal ScriptableCullingParameters cullingParameters;
@@ -126,7 +124,7 @@ namespace UnityEngine.Experimental.Rendering
         /// <summary>
         //  Check if render target is valid
         /// <summary>
-        public bool motionVectorRenderTargetValid { get => motionVectorRenderTarget != XRPassCreateInfo.mvInvalidRT; }
+        public bool motionVectorRenderTargetValid { get; private set; }
 
         /// <summary>
         /// Destination render target descriptor
@@ -350,6 +348,7 @@ namespace UnityEngine.Experimental.Rendering
             multipassId = createInfo.multipassId;
             AssignCullingParams(createInfo.cullingPassId, createInfo.cullingParameters);
             renderTarget = new RenderTargetIdentifier(createInfo.renderTarget, 0, CubemapFace.Unknown, -1);
+            motionVectorRenderTargetValid = createInfo.motionVectorRenderTargetValid;
             motionVectorRenderTarget = new RenderTargetIdentifier(createInfo.motionVectorRenderTarget, 0, CubemapFace.Unknown, -1);
             renderTargetDesc = createInfo.renderTargetDesc;
             m_OcclusionMesh.SetMaterial(createInfo.occlusionMeshMaterial);

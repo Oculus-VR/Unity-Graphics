@@ -355,46 +355,35 @@ namespace UnityEngine.Experimental.Rendering
             return new XRView(renderParameter.projection, renderParameter.view, viewport, occlusionMesh, renderParameter.textureArraySlice, prevViewValid, prevViewMatrix);
         }
 
-        static XRPassCreateInfo BuildPass(XRDisplaySubsystem.XRRenderPass xrRenderPass, ScriptableCullingParameters cullingParameters)
+        static RenderTextureDescriptor CopyXRRenderTextureDescriptor(in RenderTextureDescriptor xrDesc)
         {
             // We can't use descriptor directly because y-flip is forced
             // XRTODO : fix root problem
-            RenderTextureDescriptor xrDesc = xrRenderPass.renderTargetDesc;
             RenderTextureDescriptor rtDesc = new RenderTextureDescriptor(xrDesc.width, xrDesc.height, xrDesc.colorFormat, xrDesc.depthBufferBits, xrDesc.mipCount);
-            rtDesc.dimension    = xrRenderPass.renderTargetDesc.dimension;
-            rtDesc.volumeDepth  = xrRenderPass.renderTargetDesc.volumeDepth;
-            rtDesc.vrUsage      = xrRenderPass.renderTargetDesc.vrUsage;
-            rtDesc.sRGB         = xrRenderPass.renderTargetDesc.sRGB;
+            rtDesc.dimension    = xrDesc.dimension;
+            rtDesc.volumeDepth  = xrDesc.volumeDepth;
+            rtDesc.vrUsage      = xrDesc.vrUsage;
+            rtDesc.sRGB         = xrDesc.sRGB;
+            return rtDesc;
+        }
 
-            XRPassCreateInfo passInfo = new XRPassCreateInfo
+        static XRPassCreateInfo BuildPass(XRDisplaySubsystem.XRRenderPass xrRenderPass, ScriptableCullingParameters cullingParameters)
+        {
+            return new XRPassCreateInfo
             {
-                renderTarget                = xrRenderPass.renderTarget,
-                renderTargetDesc            = rtDesc,
-                cullingParameters           = cullingParameters,
-                motionVectorRenderTarget    = XRPassCreateInfo.mvInvalidRT,
-                occlusionMeshMaterial       = s_OcclusionMeshMaterial,
-                foveatedRenderingInfo       = xrRenderPass.foveatedRenderingInfo,
-                multipassId                 = s_Layout.GetActivePasses().Count,
-                cullingPassId               = xrRenderPass.cullingPassIndex,
-                copyDepth                   = xrRenderPass.shouldFillOutDepth,
-                xrSdkRenderPass             = xrRenderPass
+                renderTarget                  = xrRenderPass.renderTarget,
+                renderTargetDesc              = CopyXRRenderTextureDescriptor(xrRenderPass.renderTargetDesc),
+                cullingParameters             = cullingParameters,
+                occlusionMeshMaterial         = s_OcclusionMeshMaterial,
+                foveatedRenderingInfo         = xrRenderPass.foveatedRenderingInfo,
+                motionVectorRenderTargetValid = xrRenderPass.hasMotionVectorPass,
+                motionVectorRenderTarget      = xrRenderPass.motionVectorRenderTarget,
+                motionVectorRenderTargetDesc  = CopyXRRenderTextureDescriptor(xrRenderPass.motionVectorRenderTargetDesc),
+                multipassId                   = s_Layout.GetActivePasses().Count,
+                cullingPassId                 = xrRenderPass.cullingPassIndex,
+                copyDepth                     = xrRenderPass.shouldFillOutDepth,
+                xrSdkRenderPass               = xrRenderPass
             };
-
-            if (xrRenderPass.hasMotionVectorPass)
-            {
-                passInfo.motionVectorRenderTarget = new RenderTargetIdentifier(xrRenderPass.motionVectorRenderTarget, 0, CubemapFace.Unknown, -1);
-
-                RenderTextureDescriptor rtMotionVectorDesc = new RenderTextureDescriptor(xrDesc.width, xrDesc.height, xrDesc.colorFormat, xrDesc.depthBufferBits, xrDesc.mipCount);
-                rtMotionVectorDesc.dimension = xrRenderPass.renderTargetDesc.dimension;
-                rtMotionVectorDesc.volumeDepth = xrRenderPass.renderTargetDesc.volumeDepth;
-                rtMotionVectorDesc.vrUsage = xrRenderPass.renderTargetDesc.vrUsage;
-                rtMotionVectorDesc.sRGB = xrRenderPass.renderTargetDesc.sRGB;
-                passInfo.motionVectorRenderTargetDesc = rtMotionVectorDesc;
-
-                Debug.Assert(passInfo.motionVectorRenderTargetValid, "Invalid motion vector render target from XRDisplaySubsystem!");
-            }
-
-            return passInfo;
         }
 
 #endif
