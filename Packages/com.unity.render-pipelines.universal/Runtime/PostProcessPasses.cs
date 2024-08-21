@@ -62,7 +62,7 @@ namespace UnityEngine.Rendering.Universal
         /// </summary>
         /// <param name="rendererPostProcessData">Post process resources.</param>
         /// <param name="postProcessParams">Post process run-time creation parameters.</param>
-        public PostProcessPasses(PostProcessData rendererPostProcessData, ref PostProcessParams postProcessParams)
+        public PostProcessPasses(PostProcessData rendererPostProcessData, ref PostProcessParams postProcessParams, bool useNativeRenderPass = false)
         {
             m_ColorGradingLutPass = null;
             m_PostProcessPass = null;
@@ -74,7 +74,7 @@ namespace UnityEngine.Rendering.Universal
 
             m_RendererPostProcessData = rendererPostProcessData;
             m_BlitMaterial = postProcessParams.blitMaterial;
-            Recreate(rendererPostProcessData, ref postProcessParams);
+            Recreate(rendererPostProcessData, ref postProcessParams, useNativeRenderPass);
         }
 
         /// <summary>
@@ -82,7 +82,7 @@ namespace UnityEngine.Rendering.Universal
         /// </summary>
         /// <param name="data">Resources used for creating passes. In case of the null, no passes will be created.</param>
         /// <param name="ppParams">Run-time parameters used for creating passes.</param>
-        public void Recreate(PostProcessData data, ref PostProcessParams ppParams)
+        public void Recreate(PostProcessData data, ref PostProcessParams ppParams, bool useNativeRenderPass=false)
         {
             if (m_RendererPostProcessData)
                 data = m_RendererPostProcessData;
@@ -106,8 +106,8 @@ namespace UnityEngine.Rendering.Universal
             if (data != null)
             {
                 m_ColorGradingLutPass = new ColorGradingLutPass(RenderPassEvent.BeforeRenderingPrePasses, data);
-                m_PostProcessPass = new PostProcessPass(RenderPassEvent.BeforeRenderingPostProcessing, data, ref ppParams);
-                m_FinalPostProcessPass = new PostProcessPass(RenderPassEvent.AfterRenderingPostProcessing, data, ref ppParams);
+                m_PostProcessPass = new PostProcessPass(RenderPassEvent.BeforeRenderingPostProcessing, data, ref ppParams, useNativeRenderPass);
+                m_FinalPostProcessPass = new PostProcessPass(RenderPassEvent.AfterRenderingPostProcessing, data, ref ppParams, useNativeRenderPass);
                 m_CurrentPostProcessData = data;
             }
         }

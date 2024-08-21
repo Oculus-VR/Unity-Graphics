@@ -212,8 +212,6 @@ namespace UnityEngine.Rendering.Universal
             {
                 cameraWidth = (float)cameraData.cameraTargetDescriptor.width;
                 cameraHeight = (float)cameraData.cameraTargetDescriptor.height;
-
-                useRenderPassEnabled = false;
             }
 
             if (camera.allowDynamicResolution)
@@ -1504,6 +1502,7 @@ namespace UnityEngine.Rendering.Universal
                 ExecuteNativeRenderPass(context, renderPass, ref cameraData, ref renderingData); // cmdBuffer is executed inside
             else
             {
+                renderPass.isNativeRenderPass = useRenderPassEnabled;
                 renderPass.Execute(context, ref renderingData);
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
@@ -1783,8 +1782,9 @@ namespace UnityEngine.Rendering.Universal
                         {
                             // SetRenderTarget might alter the internal device state(winding order).
                             // Non-stereo buffer is already updated internally when switching render target. We update stereo buffers here to keep the consistency.
-                            bool renderIntoTexture = passColorAttachment.nameID != cameraData.xr.renderTarget;
+                            bool renderIntoTexture = passColorAttachment.nameID != cameraData.xr.renderTarget && !useRenderPassEnabled; // Prevent Unity from flipping the v coord of the texture.
                             cameraData.PushBuiltinShaderConstantsXR(cmd, renderIntoTexture);
+
                             XRSystemUniversal.MarkShaderProperties(cmd, cameraData.xrUniversal, renderIntoTexture);
                         }
 #endif

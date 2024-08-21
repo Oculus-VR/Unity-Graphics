@@ -306,6 +306,7 @@ namespace UnityEngine.Rendering.Universal
         internal bool isBlitRenderPass { get; set; }
 
         internal bool useNativeRenderPass { get; set; }
+        internal bool isNativeRenderPass = false; // To avoid Y-flip when NRP is used but the pass does not support NRP.
 
         // index to track the position in the current frame
         internal int renderPassQueueIndex { get; set; }
@@ -319,6 +320,8 @@ namespace UnityEngine.Rendering.Universal
         RTHandle[] m_ColorAttachments;
         RenderTargetIdentifier[] m_ColorAttachmentIds;
         internal RTHandle[] m_InputAttachments = new RTHandle[8];
+        internal int bindCurrentDepthBuffer = -1; // When setting up the pass, bind the current in use depth buffer.
+
         internal bool[] m_InputAttachmentIsTransient = new bool[8];
         RTHandle m_DepthAttachment;
         RenderTargetIdentifier m_DepthAttachmentId;

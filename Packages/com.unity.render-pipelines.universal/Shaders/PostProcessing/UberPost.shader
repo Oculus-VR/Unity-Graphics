@@ -14,6 +14,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
         #pragma multi_compile_fragment _ DEBUG_DISPLAY
         #pragma multi_compile_fragment _ SCREEN_COORD_OVERRIDE
         #pragma multi_compile_local_fragment _ HDR_INPUT HDR_ENCODING
+        #pragma multi_compile_local_fragment _ SUBPASS_INPUT_ATTACHMENT
 
         #ifdef HDR_ENCODING
         #define HDR_INPUT 1 // this should be defined when HDR_ENCODING is defined
@@ -38,6 +39,13 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #if _BLOOM_LQ_DIRT || _BLOOM_HQ_DIRT
                 #define BLOOM_DIRT
             #endif
+        #endif
+
+
+        #if SUBPASS_INPUT_ATTACHMENT
+            #define urp_cameraColor 0
+            FRAMEBUFFER_INPUT_HALF_MS(urp_cameraColor);
+            int _MSAALevel;
         #endif
 
         TEXTURE2D_X(_Bloom_Texture);
@@ -140,6 +148,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             return uv;
         }
 
+
         half4 FragUberPost(Varyings input) : SV_Target
         {
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -165,7 +174,17 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             }
             #else
             {
-                color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, SCREEN_COORD_REMOVE_SCALEBIAS(uvDistorted)).xyz;
+                #if SUBPASS_INPUT_ATTACHMENT
+                    for(int i = 0; i < _MSAALevel; ++i) {
+                        half3 col = LOAD_FRAMEBUFFER_INPUT_MS(urp_cameraColor, i, float2(0,0)).xyz;
+                        color = color + col;
+                    }
+                    color = color / _MSAALevel;
+
+
+                #else
+                    color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, SCREEN_COORD_REMOVE_SCALEBIAS(uvDistorted)).xyz;
+                #endif
             }
             #endif
 
@@ -285,6 +304,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #endif
 
             return half4(color, 1.0);
+
         }
 
     ENDHLSL

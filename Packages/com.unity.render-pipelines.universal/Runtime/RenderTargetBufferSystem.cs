@@ -79,6 +79,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                 RenderingUtils.ReAllocateIfNeeded(ref m_B.rtMSAA, desc, m_FilterMode, TextureWrapMode.Clamp, name: m_B.name);
 
             desc.msaaSamples = 1;
+            desc.bindMS = false; // For resolve texture
             RenderingUtils.ReAllocateIfNeeded(ref m_A.rtResolve, desc, m_FilterMode, TextureWrapMode.Clamp, name: m_A.name);
             RenderingUtils.ReAllocateIfNeeded(ref m_B.rtResolve, desc, m_FilterMode, TextureWrapMode.Clamp, name: m_B.name);
             cmd.SetGlobalTexture(m_A.name, m_A.rtResolve);
@@ -101,7 +102,12 @@ namespace UnityEngine.Rendering.Universal.Internal
             m_B.msaa = m_Desc.msaaSamples;
 
             if (m_Desc.msaaSamples > 1)
+            {
                 EnableMSAA(true);
+#if UNITY_ANDROID && !UNITY_EDITOR
+                m_Desc.bindMS = true; // Allow we bind this render target as MS
+#endif
+            }
         }
 
         public RTHandle GetBufferA()

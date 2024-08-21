@@ -202,7 +202,8 @@ namespace UnityEngine.Rendering.Universal
             RTHandle destination,
             RenderBufferLoadAction loadAction,
             RenderBufferStoreAction storeAction,
-            Material material, int passIndex)
+            Material material, int passIndex,
+            bool isNRP = false)
         {
             bool isRenderToBackBufferTarget = !cameraData.isSceneViewCamera;
 #if ENABLE_VR && ENABLE_XR_MODULE
@@ -215,7 +216,7 @@ namespace UnityEngine.Rendering.Universal
             // We y-flip if
             // 1) we are blitting from render texture to back buffer(UV starts at bottom) and
             // 2) renderTexture starts UV at top
-            bool yflip = isRenderToBackBufferTarget && cameraData.targetTexture == null && SystemInfo.graphicsUVStartsAtTop;
+            bool yflip = isRenderToBackBufferTarget && cameraData.targetTexture == null && SystemInfo.graphicsUVStartsAtTop && !isNRP;
             Vector4 scaleBias = yflip ? new Vector4(viewportScale.x, -viewportScale.y, 0, viewportScale.y) : new Vector4(viewportScale.x, viewportScale.y, 0, 0);
             CoreUtils.SetRenderTarget(cmd, destination, loadAction, storeAction, ClearFlag.None, Color.clear);
             if (isRenderToBackBufferTarget)

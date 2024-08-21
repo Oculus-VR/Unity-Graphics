@@ -315,7 +315,7 @@ namespace UnityEngine.Rendering.Universal
                 if (asset)
                     postProcessParams.requestHDRFormat = UniversalRenderPipeline.MakeRenderTextureGraphicsFormat(asset.supportsHDR, asset.hdrColorBufferPrecision, false);
 
-                m_PostProcessPasses = new PostProcessPasses(data.postProcessData, ref postProcessParams);
+                m_PostProcessPasses = new PostProcessPasses(data.postProcessData, ref postProcessParams, useRenderPassEnabled);
             }
 
             m_CapturePass = new CapturePass(RenderPassEvent.AfterRendering);
@@ -1188,7 +1188,7 @@ namespace UnityEngine.Rendering.Universal
                 m_RenderTransparentForwardPass.ConfigureDepthStoreAction(transparentPassDepthStoreAction);
                 EnqueuePass(m_RenderTransparentForwardPass);
             }
-            EnqueuePass(m_OnRenderObjectCallbackPass);
+            // EnqueuePass(m_OnRenderObjectCallbackPass);
 
             bool shouldRenderUI = cameraData.rendersOverlayUI;
             bool outputToHDR = cameraData.isHDROutputActive;
@@ -1275,7 +1275,7 @@ namespace UnityEngine.Rendering.Universal
                 if (cameraData.xr.enabled)
                 {
                     // active depth is depth target, we don't need a blit pass to resolve
-                    bool depthTargetResolved = m_ActiveCameraDepthAttachment.nameID == cameraData.xr.renderTarget;
+                    bool depthTargetResolved = m_ActiveCameraDepthAttachment.nameID == cameraData.xr.renderTarget || applyPostProcessing;
 
                     if (!depthTargetResolved && cameraData.xr.copyDepth)
                     {
