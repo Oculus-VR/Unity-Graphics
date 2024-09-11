@@ -4,7 +4,6 @@ using System.Linq;
 using Unity.Collections;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
-using static UnityEngine.GraphicsBuffer;
 
 namespace UnityEngine.Rendering.Universal
 {
