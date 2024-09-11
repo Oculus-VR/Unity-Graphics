@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net.Mail;
 using Unity.Collections;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
@@ -458,9 +457,9 @@ namespace UnityEngine.Rendering.Universal
 
                 // Here we know the depth attachment, bind it to the input if the renderpass needs it
                 {
-                    if (PassHasInputAttachments(renderPass) && renderPass.bindCurrentDepthBuffer != -1 && renderPass.m_InputAttachmentIndices.Length > renderPass.bindCurrentDepthBuffer)
+                    if (PassHasInputAttachments(renderPass) && renderPass.depthAttachmentIndex != ScriptableRenderPass.NO_DEPTH_INPUT && renderPass.m_InputAttachmentIndices.Length > renderPass.depthAttachmentIndex)
                     {
-                        renderPass.m_InputAttachmentIndices[renderPass.bindCurrentDepthBuffer] = validColorBuffersCount;
+                        renderPass.m_InputAttachmentIndices[renderPass.depthAttachmentIndex] = validColorBuffersCount;
                     }
                 }
 
@@ -551,8 +550,8 @@ namespace UnityEngine.Rendering.Universal
                 pass.m_InputAttachmentIndices[i] = FindAttachmentDescriptorIndexInList(pass.m_InputAttachments[i], m_ActiveColorAttachmentDescriptors);
                 if (pass.m_InputAttachmentIndices[i] == -1)
                 {
-                    // Check if we are binding the depth buffer, but we don't know th depth attachment index yet
-                    if (pass.bindCurrentDepthBuffer != i)
+                    // Check if we are binding the depth buffer, but we don't know the depth attachment index yet
+                    if (pass.depthAttachmentIndex != i)
                     {
                         Debug.LogWarning("RenderPass Input attachment not found in the current RenderPass");
                     }
@@ -737,8 +736,8 @@ namespace UnityEngine.Rendering.Universal
         {
             GetRenderTextureDescriptor(ref cameraData, renderPass, out RenderTextureDescriptor targetRT);
 
-            // Only use renderPass.depthAttachmentHandle if the renderPass does not set bindCurrentDepthBuffer, since post process pass does not actually care the depth buffer
-            var depthTarget = renderPass.overrideCameraTarget && renderPass.bindCurrentDepthBuffer == -1 ? renderPass.depthAttachmentHandle : cameraDepthTargetHandle;
+            // Only use renderPass.depthAttachmentHandle if the renderPass.bindCurrentDepthBuffer is false, since post process pass does not actually care the depth buffer
+            var depthTarget = renderPass.overrideCameraTarget && !renderPass.bindCurrentDepthBuffer ? renderPass.depthAttachmentHandle : cameraDepthTargetHandle;
             var depthID = (targetRT.graphicsFormat == GraphicsFormat.None && targetRT.depthStencilFormat != GraphicsFormat.None) ? renderPass.colorAttachmentHandle.GetHashCode() : depthTarget.GetHashCode();
 
             return new RenderPassDescriptor(targetRT.width, targetRT.height, targetRT.msaaSamples, depthID);

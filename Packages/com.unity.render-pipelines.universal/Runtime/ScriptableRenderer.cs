@@ -1782,7 +1782,7 @@ namespace UnityEngine.Rendering.Universal
                         {
                             // SetRenderTarget might alter the internal device state(winding order).
                             // Non-stereo buffer is already updated internally when switching render target. We update stereo buffers here to keep the consistency.
-                            bool renderIntoTexture = passColorAttachment.nameID != cameraData.xr.renderTarget && !useRenderPassEnabled; // Prevent Unity from flipping the v coord of the texture.
+                            bool renderIntoTexture = passColorAttachment.nameID != cameraData.xr.renderTarget && !useRenderPassEnabled; // Prevent Unity from flipping the y coord of the texture.
                             cameraData.PushBuiltinShaderConstantsXR(cmd, renderIntoTexture);
 
                             XRSystemUniversal.MarkShaderProperties(cmd, cameraData.xrUniversal, renderIntoTexture);

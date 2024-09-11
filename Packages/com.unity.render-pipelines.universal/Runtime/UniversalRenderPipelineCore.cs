@@ -1124,6 +1124,15 @@ namespace UnityEngine.Rendering.Universal
         /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 8 per pixel sample count. </summary>
         public const string DepthMsaa8 = "_DEPTH_MSAA_8";
 
+        /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 2 per pixel sample count. </summary>
+        public const string Msaa2 = "_MSAA_2";
+
+        /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 4 per pixel sample count. </summary>
+        public const string Msaa4 = "_MSAA_4";
+
+        /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 8 per pixel sample count. </summary>
+        public const string Msaa8 = "_MSAA_8";
+
         /// <summary> Keyword used for Linear to SRGB conversions. </summary>
         public const string LinearToSRGBConversion = "_LINEAR_TO_SRGB_CONVERSION";
 

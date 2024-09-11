@@ -7,9 +7,7 @@
         "GUID:7dbf32976982c98448af054f2512cb79",
         "GUID:d8b63aba1907145bea998dd612889d6b",
         "GUID:2665a8d13d1b3f18800f46e256720795",
-		"GUID:86bc95e6fdb13ff43aa04316542905ae",
-        "Unity.XR.OpenXR",
-        "Unity.XR.Oculus"
+		"GUID:86bc95e6fdb13ff43aa04316542905ae"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -68,16 +66,6 @@
             "name": "com.unity.inputsystem",
             "expression": "0.0.0",
             "define": "ENABLE_INPUT_SYSTEM_PACKAGE"
-        },
-        {
-            "name": "com.unity.xr.oculus",
-            "expression": "",
-            "define": "USING_XR_SDK_OCULUS"
-        },
-        {
-            "name": "com.unity.xr.openxr",
-            "expression": "",
-            "define": "USING_XR_SDK_OPENXR"
         }
     ],
     "noEngineReferences": false

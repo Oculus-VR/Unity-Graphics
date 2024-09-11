@@ -1277,7 +1277,7 @@ namespace UnityEngine.Rendering.Universal
                     // active depth is depth target, we don't need a blit pass to resolve
                     bool depthTargetResolved = m_ActiveCameraDepthAttachment.nameID == cameraData.xr.renderTarget || applyPostProcessing;
 
-                    if (!depthTargetResolved && cameraData.xr.copyDepth)
+                    if (!depthTargetResolved && cameraData.xr.copyDepth && !useRenderPassEnabled)
                     {
                         m_XRCopyDepthPass.Setup(m_ActiveCameraDepthAttachment, m_XRTargetHandleAlias);
                         m_XRCopyDepthPass.CopyToDepth = true;

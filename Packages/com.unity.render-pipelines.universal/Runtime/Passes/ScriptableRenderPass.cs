@@ -320,7 +320,11 @@ namespace UnityEngine.Rendering.Universal
         RTHandle[] m_ColorAttachments;
         RenderTargetIdentifier[] m_ColorAttachmentIds;
         internal RTHandle[] m_InputAttachments = new RTHandle[8];
-        internal int bindCurrentDepthBuffer = -1; // When setting up the pass, bind the current in use depth buffer.
+
+        public const int NO_DEPTH_INPUT = -1;
+        internal bool bindCurrentDepthBuffer = false; // When setting up the pass, bind the current in used depth buffer so the subpass will be merged.
+        internal int depthAttachmentIndex = NO_DEPTH_INPUT; // Bind the current in used depth buffer to this index inside render pass.
+
 
         internal bool[] m_InputAttachmentIsTransient = new bool[8];
         RTHandle m_DepthAttachment;

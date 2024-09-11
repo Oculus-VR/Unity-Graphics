@@ -15,6 +15,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
         #pragma multi_compile_fragment _ SCREEN_COORD_OVERRIDE
         #pragma multi_compile_local_fragment _ HDR_INPUT HDR_ENCODING
         #pragma multi_compile_local_fragment _ SUBPASS_INPUT_ATTACHMENT
+        #pragma multi_compile _ _MSAA_2 _MSAA_4 _MSAA_8
 
         #ifdef HDR_ENCODING
         #define HDR_INPUT 1 // this should be defined when HDR_ENCODING is defined
@@ -42,10 +43,23 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
         #endif
 
 
+        #if defined(_MSAA_2)
+            #define MSAA_SAMPLES 2
+        #elif defined(_MSAA_4)
+            #define MSAA_SAMPLES 4
+        #elif defined(_MSAA_8)
+            #define MSAA_SAMPLES 8
+        #else
+            #define MSAA_SAMPLES 1
+        #endif
+
         #if SUBPASS_INPUT_ATTACHMENT
             #define urp_cameraColor 0
-            FRAMEBUFFER_INPUT_HALF_MS(urp_cameraColor);
-            int _MSAALevel;
+            #if MSAA_SAMPLES == 1
+                FRAMEBUFFER_INPUT_HALF(urp_cameraColor);
+            #else
+                FRAMEBUFFER_INPUT_HALF_MS(urp_cameraColor);
+            #endif
         #endif
 
         TEXTURE2D_X(_Bloom_Texture);
@@ -175,11 +189,17 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #else
             {
                 #if SUBPASS_INPUT_ATTACHMENT
-                    for(int i = 0; i < _MSAALevel; ++i) {
-                        half3 col = LOAD_FRAMEBUFFER_INPUT_MS(urp_cameraColor, i, float2(0,0)).xyz;
-                        color = color + col;
-                    }
-                    color = color / _MSAALevel;
+
+                    #if MSAA_SAMPLES == 1
+                        color = LOAD_FRAMEBUFFER_INPUT(urp_cameraColor, float2(0,0)).xyz;
+                    #else
+                        UNITY_UNROLL
+                        for(int i = 0; i < MSAA_SAMPLES; ++i) {
+                            half3 col = LOAD_FRAMEBUFFER_INPUT_MS(urp_cameraColor, i, float2(0,0)).xyz;
+                            color = color + col;
+                        }
+                        color = color / MSAA_SAMPLES;
+                    #endif
 
 
                 #else

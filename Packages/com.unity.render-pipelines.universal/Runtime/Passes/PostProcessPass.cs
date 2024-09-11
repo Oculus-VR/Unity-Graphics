@@ -2,10 +2,6 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using UnityEngine.Experimental.Rendering;
 
-#if USING_XR_SDK_OCULUS
-using Unity.XR.Oculus;
-#endif
-
 namespace UnityEngine.Rendering.Universal
 {
     /// <summary>
@@ -119,10 +115,6 @@ namespace UnityEngine.Rendering.Universal
         RTHandle m_UpscaledTarget;
 
         Material m_BlitMaterial;
-
-        private bool resolveDepth;
-
-        private LocalKeyword m_shaderUseNRP;
 
         /// <summary>
         /// Creates a new <c>PostProcessPass</c> instance.
@@ -301,10 +293,8 @@ namespace UnityEngine.Rendering.Universal
 
                 // Input
                 RTHandle source = m_UseSwapBuffer ? renderer.cameraColorTargetHandle : m_Source;
-                RTHandle depth = m_UseSwapBuffer ? renderer.cameraDepthTargetHandle : m_Depth;
-
                 ConfigureInputAttachments(source);
-                bindCurrentDepthBuffer = 1; // Mark input 1 as the depth buffer, will replace inputs[1] later to be the current depth buffer
+                bindCurrentDepthBuffer = true; // Mark input 1 as the depth buffer, will replace inputs[1] later to be the current depth buffer
 
                 // output
                 RenderTargetIdentifier cameraTargetID = BuiltinRenderTextureType.CameraTarget;
@@ -323,15 +313,8 @@ namespace UnityEngine.Rendering.Universal
                 ConfigureTarget(cameraTargetHandle);
                 ConfigureColorStoreAction(RenderBufferStoreAction.Store);
 
-#if USING_XR_SDK_OCULUS && !UNITY_EDITOR
-                if(OculusSettings.s_Settings)
-                    resolveDepth |= OculusSettings.s_Settings.DepthSubmission;
-#endif
-#if USING_XR_SDK_OPENXR && !UNITY_EDITOR
-                if(UnityEngine.XR.OpenXR.OpenXRSettings.Instance)
-                    resolveDepth |= UnityEngine.XR.OpenXR.OpenXRSettings.Instance.depthSubmissionMode != UnityEngine.XR.OpenXR.OpenXRSettings.DepthSubmissionMode.None;
-#endif
-                if (resolveDepth)
+                int msaaSamples = colorAttachmentHandle.rt != null ? colorAttachmentHandle.rt.descriptor.msaaSamples : cameraData.cameraTargetDescriptor.msaaSamples;
+                if (cameraData.xr.copyDepth && msaaSamples > 1)
                     ConfigureDepthStoreAction(RenderBufferStoreAction.Resolve);
                 else
                     ConfigureDepthStoreAction(RenderBufferStoreAction.DontCare);
@@ -445,7 +428,33 @@ namespace UnityEngine.Rendering.Universal
 #if !UNITY_EDITOR
                 m_Materials.uber.EnableKeyword("SUBPASS_INPUT_ATTACHMENT");
                 int msaaSamples = colorAttachmentHandle.rt != null ? colorAttachmentHandle.rt.descriptor.msaaSamples : cameraData.cameraTargetDescriptor.msaaSamples;
-                m_Materials.uber.SetInteger("_MSAALevel", msaaSamples);
+                switch(msaaSamples)
+                {
+                    case 8:
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+
+                    case 4:
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+
+                    case 2:
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+
+                    default:
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+                }
+                
 #endif
                 // Setup other effects constants
                 // SetupLensDistortion(m_Materials.uber, isSceneViewCamera);
