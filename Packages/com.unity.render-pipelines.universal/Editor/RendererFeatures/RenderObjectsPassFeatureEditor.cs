@@ -36,6 +36,7 @@ namespace UnityEditor.Experimental.Rendering.Universal
             public static GUIContent overrideDepth = new GUIContent("Depth", "Select this option to specify how this Renderer Feature affects or uses the values in the Depth buffer.");
             public static GUIContent writeDepth = new GUIContent("Write Depth", "Choose to write depth to the screen.");
             public static GUIContent depthState = new GUIContent("Depth Test", "Choose a new depth test function.");
+            public static GUIContent depthInput = new GUIContent("Depth Input", "Choose to bind depth as an input attachment.");
 
             //Camera Settings
             public static GUIContent overrideCamera = new GUIContent("Camera", "Override camera matrices. Toggling this setting will make camera use perspective projection.");
@@ -70,6 +71,7 @@ namespace UnityEditor.Experimental.Rendering.Universal
         private SerializedProperty m_OverrideDepth;
         private SerializedProperty m_WriteDepth;
         private SerializedProperty m_DepthState;
+        private SerializedProperty m_DepthInput;
         //Stencil props
         private SerializedProperty m_StencilSettings;
         //Caemra props
@@ -124,6 +126,7 @@ namespace UnityEditor.Experimental.Rendering.Universal
             m_OverrideDepth = property.FindPropertyRelative("overrideDepthState");
             m_WriteDepth = property.FindPropertyRelative("enableWrite");
             m_DepthState = property.FindPropertyRelative("depthCompareFunction");
+            m_DepthInput = property.FindPropertyRelative("depthInput");
 
             //Stencil
             m_StencilSettings = property.FindPropertyRelative("stencilSettings");
@@ -174,6 +177,7 @@ namespace UnityEditor.Experimental.Rendering.Universal
                 //Override material
                 DoMaterialOverride(ref rect);
                 rect.y += Styles.defaultLineSpace;
+
                 //Override depth
                 DoDepthOverride(ref rect);
                 rect.y += Styles.defaultLineSpace;
@@ -262,6 +266,8 @@ namespace UnityEditor.Experimental.Rendering.Universal
                 EditorGUI.indentLevel++;
                 //Write depth
                 EditorGUI.PropertyField(rect, m_WriteDepth, Styles.writeDepth);
+                rect.y += Styles.defaultLineSpace;
+                EditorGUI.PropertyField(rect, m_DepthInput, Styles.depthInput);
                 rect.y += Styles.defaultLineSpace;
                 //Depth testing options
                 EditorGUI.PropertyField(rect, m_DepthState, Styles.depthState);

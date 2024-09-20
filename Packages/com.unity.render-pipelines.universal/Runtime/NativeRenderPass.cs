@@ -499,7 +499,7 @@ namespace UnityEngine.Rendering.Universal
                     {
                         context.EndSubPass();
                         if (PassHasInputAttachments(m_ActiveRenderPassQueue[currentPassIndex]))
-                            context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices, false, false);
+                            context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].depthAttachmentIndex != ScriptableRenderPass.NO_DEPTH_INPUT, false);
                         else
                             context.BeginSubPass(attachmentIndices);
 
@@ -508,7 +508,7 @@ namespace UnityEngine.Rendering.Universal
                     else if (PassHasInputAttachments(m_ActiveRenderPassQueue[currentPassIndex]))
                     {
                         context.EndSubPass();
-                        context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices);
+                        context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].depthAttachmentIndex != ScriptableRenderPass.NO_DEPTH_INPUT);
 
                         m_LastBeginSubpassPassIndex = currentPassIndex;
                     }

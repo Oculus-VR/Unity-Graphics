@@ -37,6 +37,8 @@ namespace UnityEngine.Experimental.Rendering.Universal
         /// </summary>
         public int overrideShaderPassIndex { get; set; }
 
+        public bool useDepthInputAttachment { get; set; } = false;
+
         List<ShaderTagId> m_ShaderTagIdList = new List<ShaderTagId>();
 
         /// <summary>
@@ -120,6 +122,20 @@ namespace UnityEngine.Experimental.Rendering.Universal
             : this(profileId.GetType().Name, renderPassEvent, shaderTags, renderQueueType, layerMask, cameraSettings)
         {
             m_ProfilingSampler = ProfilingSampler.Get(profileId);
+        }
+
+        public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
+        {
+            ref CameraData cameraData = ref renderingData.cameraData;
+            ref ScriptableRenderer renderer = ref cameraData.renderer;
+
+            bindCurrentDepthBuffer = useDepthInputAttachment;
+
+            if (useDepthInputAttachment)
+            {
+                ConfigureInputAttachments(renderingData.cameraData.renderer.cameraDepthTargetHandle);
+                depthAttachmentIndex = 0;
+            }
         }
 
         /// <inheritdoc/>
