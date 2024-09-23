@@ -175,7 +175,7 @@ namespace UnityEngine.Rendering
         {
             m_RT = rt;
             m_ExternalTexture = null;
-            m_NameID = new RenderTargetIdentifier(rt);
+            m_NameID = new RenderTargetIdentifier(rt, 0, CubemapFace.Unknown, -1);
         }
 
         internal void SetTexture(Texture tex)

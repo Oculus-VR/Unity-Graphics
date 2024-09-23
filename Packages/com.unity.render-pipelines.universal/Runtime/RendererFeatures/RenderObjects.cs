@@ -119,6 +119,11 @@ namespace UnityEngine.Experimental.Rendering.Universal
             /// The camera settings to use.
             /// </summary>
             public CustomCameraSettings cameraSettings = new CustomCameraSettings();
+
+             /// <summary>
+             /// Sets whether it should has depth as input attachment or not.
+             /// </summary>
+             public bool depthInput = false;
         }
 
         /// <summary>
@@ -223,7 +228,10 @@ namespace UnityEngine.Experimental.Rendering.Universal
             }
 
             if (settings.overrideDepthState)
+            {
+                renderObjectsPass.useDepthInputAttachment = settings.depthInput;
                 renderObjectsPass.SetDetphState(settings.enableWrite, settings.depthCompareFunction);
+            }
 
             if (settings.stencilSettings.overrideStencilState)
                 renderObjectsPass.SetStencilState(settings.stencilSettings.stencilReference,

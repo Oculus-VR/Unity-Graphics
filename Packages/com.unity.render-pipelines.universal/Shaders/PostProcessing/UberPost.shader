@@ -14,6 +14,8 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
         #pragma multi_compile_fragment _ DEBUG_DISPLAY
         #pragma multi_compile_fragment _ SCREEN_COORD_OVERRIDE
         #pragma multi_compile_local_fragment _ HDR_INPUT HDR_ENCODING
+        #pragma multi_compile_local_fragment _ SUBPASS_INPUT_ATTACHMENT
+        #pragma multi_compile _ _MSAA_2 _MSAA_4 _MSAA_8
 
         #ifdef HDR_ENCODING
         #define HDR_INPUT 1 // this should be defined when HDR_ENCODING is defined
@@ -37,6 +39,26 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #define BLOOM
             #if _BLOOM_LQ_DIRT || _BLOOM_HQ_DIRT
                 #define BLOOM_DIRT
+            #endif
+        #endif
+
+
+        #if defined(_MSAA_2)
+            #define MSAA_SAMPLES 2
+        #elif defined(_MSAA_4)
+            #define MSAA_SAMPLES 4
+        #elif defined(_MSAA_8)
+            #define MSAA_SAMPLES 8
+        #else
+            #define MSAA_SAMPLES 1
+        #endif
+
+        #if SUBPASS_INPUT_ATTACHMENT
+            #define urp_cameraColor 0
+            #if MSAA_SAMPLES == 1
+                FRAMEBUFFER_INPUT_HALF(urp_cameraColor);
+            #else
+                FRAMEBUFFER_INPUT_HALF_MS(urp_cameraColor);
             #endif
         #endif
 
@@ -140,6 +162,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             return uv;
         }
 
+
         half4 FragUberPost(Varyings input) : SV_Target
         {
             UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
@@ -165,7 +188,23 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             }
             #else
             {
-                color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, SCREEN_COORD_REMOVE_SCALEBIAS(uvDistorted)).xyz;
+                #if SUBPASS_INPUT_ATTACHMENT
+
+                    #if MSAA_SAMPLES == 1
+                        color = LOAD_FRAMEBUFFER_INPUT(urp_cameraColor, float2(0,0)).xyz;
+                    #else
+                        UNITY_UNROLL
+                        for(int i = 0; i < MSAA_SAMPLES; ++i) {
+                            half3 col = LOAD_FRAMEBUFFER_INPUT_MS(urp_cameraColor, i, float2(0,0)).xyz;
+                            color = color + col;
+                        }
+                        color = color / MSAA_SAMPLES;
+                    #endif
+
+
+                #else
+                    color = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, SCREEN_COORD_REMOVE_SCALEBIAS(uvDistorted)).xyz;
+                #endif
             }
             #endif
 
@@ -285,6 +324,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #endif
 
             return half4(color, 1.0);
+
         }
 
     ENDHLSL

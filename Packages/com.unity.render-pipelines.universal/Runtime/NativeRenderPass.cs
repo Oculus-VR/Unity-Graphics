@@ -296,9 +296,19 @@ namespace UnityEngine.Rendering.Universal
 
                 m_RenderPassesAttachmentCount[currentPassHash] = 0;
 
-                UpdateFinalStoreActions(currentMergeablePasses, ref cameraData);
+                // UpdateFinalStoreActions(currentMergeablePasses, ref cameraData);  // This does not handle the store op correctly for subpass
+                m_FinalColorStoreAction[0] = RenderBufferStoreAction.DontCare;
+                m_FinalDepthStoreAction = RenderBufferStoreAction.DontCare;
 
+                int lastPassIdx = 0;
+                foreach (var passIdx in currentMergeablePasses)
+                {
+                    if (passIdx == -1)
+                        break;
+                    lastPassIdx = passIdx;
+                }
                 int currentAttachmentIdx = 0;
+
                 foreach (var passIdx in currentMergeablePasses)
                 {
                     if (passIdx == -1)
@@ -316,21 +326,25 @@ namespace UnityEngine.Rendering.Universal
                     RenderTargetIdentifier colorAttachmentTarget;
                     // We are not rendering to Backbuffer so we have the RT and the information with it
                     // while also creating a new RenderTargetIdentifier to ignore the current depth slice (which might get bypassed in XR setup eventually)
-                    if (new RenderTargetIdentifier(passColorAttachment.nameID, 0, depthSlice: 0) != BuiltinRenderTextureType.CameraTarget)
+                    if (new RenderTargetIdentifier(pass.colorAttachmentHandle.nameID, 0, depthSlice: 0) != BuiltinRenderTextureType.CameraTarget)
                     {
-                        currentAttachmentDescriptor = new AttachmentDescriptor(depthOnly ? passColorAttachment.rt.descriptor.depthStencilFormat : passColorAttachment.rt.descriptor.graphicsFormat);
-                        samples = passColorAttachment.rt.descriptor.msaaSamples;
-                        colorAttachmentTarget = passColorAttachment.nameID;
+                        currentAttachmentDescriptor = new AttachmentDescriptor(pass.colorAttachmentHandle.rt ?
+                            depthOnly ? pass.colorAttachmentHandle.rt.descriptor.depthStencilFormat :
+                                        pass.colorAttachmentHandle.rt.descriptor.graphicsFormat:
+                            UniversalRenderPipeline.MakeRenderTextureGraphicsFormat(cameraData.isHdrEnabled, cameraData.hdrColorBufferPrecision, Graphics.preserveFramebufferAlpha)
+                            );
+                        samples = pass.colorAttachmentHandle.rt ?  pass.colorAttachmentHandle.rt.descriptor.msaaSamples: cameraData.cameraTargetDescriptor.msaaSamples;
+                        colorAttachmentTarget = pass.overrideCameraTarget ? pass.colorAttachmentHandle : m_CameraColorTarget.handle;
                     }
                     else // In this case we might be rendering the the targetTexture or the Backbuffer, so less information is available
                     {
                         currentAttachmentDescriptor = new AttachmentDescriptor(pass.renderTargetFormat[0] != GraphicsFormat.None ? pass.renderTargetFormat[0] : UniversalRenderPipeline.MakeRenderTextureGraphicsFormat(cameraData.isHdrEnabled, cameraData.hdrColorBufferPrecision, Graphics.preserveFramebufferAlpha));
-
                         samples = cameraData.cameraTargetDescriptor.msaaSamples;
-                        colorAttachmentTarget = usesTargetTexture ? new RenderTargetIdentifier(cameraData.targetTexture) : BuiltinRenderTextureType.CameraTarget;
+                        colorAttachmentTarget = usesTargetTexture ? new RenderTargetIdentifier(cameraData.targetTexture) : pass.overrideCameraTarget ? pass.colorAttachmentHandles[0] : m_CameraColorTarget.handle; // BuiltinRenderTextureType.CameraTarget;
                     }
 
                     currentAttachmentDescriptor.ConfigureTarget(colorAttachmentTarget, ((uint)finalClearFlag & (uint)ClearFlag.Color) == 0, true);
+
 
                     if (PassHasInputAttachments(pass))
                         SetupInputAttachmentIndices(pass);
@@ -351,18 +365,49 @@ namespace UnityEngine.Rendering.Universal
                     }
 
                     // resolving to the implicit color target's resolve surface TODO: handle m_CameraResolveTarget if present?
-                    if (samples > 1)
+#if UNITY_ANDROID && !UNITY_EDITOR
+                    bool lastSubpass = passIdx == lastPassIdx;
+#else
+                    bool lastSubpass = true;
+#endif
+                    // Update the final store opeartion, but only store at the last subpass if one subpass use store
+                    if (m_FinalDepthStoreAction == RenderBufferStoreAction.DontCare || pass.overriddenDepthStoreAction)
                     {
-                        currentAttachmentDescriptor.ConfigureResolveTarget(colorAttachmentTarget);
-                        if (RenderingUtils.MultisampleDepthResolveSupported())
-                            m_ActiveDepthAttachmentDescriptor.ConfigureResolveTarget(m_ActiveDepthAttachmentDescriptor.loadStoreTarget);
+                        m_FinalDepthStoreAction = pass.depthStoreAction;
                     }
 
+                    if ((m_FinalColorStoreAction[0] == RenderBufferStoreAction.DontCare || pass.overriddenColorStoreActions[0]) && pass.colorStoreActions.Length > 0)
+                        m_FinalColorStoreAction[0] = pass.colorStoreActions[0];
 
-                    if (m_UseOptimizedStoreActions)
+                    if (lastSubpass)
                     {
-                        currentAttachmentDescriptor.storeAction = m_FinalColorStoreAction[0];
+                        if (samples > 1)
+                        {
+                            if (m_FinalColorStoreAction[0] != RenderBufferStoreAction.DontCare)
+                            {
+                                currentAttachmentDescriptor.ConfigureResolveTarget(colorAttachmentTarget);
+                                currentAttachmentDescriptor.storeAction = RenderBufferStoreAction.Resolve;
+                            }
+
+                            if (m_FinalDepthStoreAction != RenderBufferStoreAction.DontCare)
+                            {
+                                if (RenderingUtils.MultisampleDepthResolveSupported())
+                                {
+                                    m_ActiveDepthAttachmentDescriptor.ConfigureResolveTarget(m_ActiveDepthAttachmentDescriptor.loadStoreTarget);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            currentAttachmentDescriptor.storeAction = RenderBufferStoreAction.Store;
+                        }
                         m_ActiveDepthAttachmentDescriptor.storeAction = m_FinalDepthStoreAction;
+                    }
+                    else
+                    {
+                        // Dont care if this is not the last subpass
+                        currentAttachmentDescriptor.storeAction = RenderBufferStoreAction.DontCare;
+                        m_ActiveDepthAttachmentDescriptor.storeAction = RenderBufferStoreAction.DontCare;
                     }
 
                     int existingAttachmentIndex = FindAttachmentDescriptorIndexInList(currentAttachmentIdx,
@@ -378,8 +423,9 @@ namespace UnityEngine.Rendering.Universal
                     }
                     else
                     {
-                        // attachment was already present
+                        // attachment was already present, update it according to the last subpass that uses it
                         pass.m_ColorAttachmentIndices[0] = existingAttachmentIndex;
+                        m_ActiveColorAttachmentDescriptors[existingAttachmentIndex] = currentAttachmentDescriptor;
                     }
                 }
             }
@@ -398,14 +444,23 @@ namespace UnityEngine.Rendering.Universal
                 var depthOnly = (renderPass.colorAttachmentHandle.rt != null && IsDepthOnlyRenderTexture(renderPass.colorAttachmentHandle.rt)) || (cameraData.targetTexture != null && IsDepthOnlyRenderTexture(cameraData.targetTexture));
                 bool useDepth = depthOnly || (!renderPass.overrideCameraTarget || (renderPass.overrideCameraTarget && renderPass.depthAttachmentHandle.nameID != BuiltinRenderTextureType.CameraTarget));// &&
 
-                var attachments =
-                    new NativeArray<AttachmentDescriptor>(useDepth && !depthOnly ? validColorBuffersCount + 1 : 1, Allocator.Temp);
+                int attachmentLen = depthOnly ? 1 : (useDepth ? validColorBuffersCount + 1 : validColorBuffersCount);
+                var attachments = new NativeArray<AttachmentDescriptor>(attachmentLen, Allocator.Temp);
 
                 for (int i = 0; i < validColorBuffersCount; ++i)
                     attachments[i] = m_ActiveColorAttachmentDescriptors[i];
 
                 if (useDepth && !depthOnly)
                     attachments[validColorBuffersCount] = m_ActiveDepthAttachmentDescriptor;
+
+
+                // Here we know the depth attachment, bind it to the input if the renderpass needs it
+                {
+                    if (PassHasInputAttachments(renderPass) && renderPass.depthAttachmentIndex != ScriptableRenderPass.NO_DEPTH_INPUT && renderPass.m_InputAttachmentIndices.Length > renderPass.depthAttachmentIndex)
+                    {
+                        renderPass.m_InputAttachmentIndices[renderPass.depthAttachmentIndex] = validColorBuffersCount;
+                    }
+                }
 
                 var rpDesc = InitializeRenderPassDescriptor(ref cameraData, renderPass);
 
@@ -444,7 +499,7 @@ namespace UnityEngine.Rendering.Universal
                     {
                         context.EndSubPass();
                         if (PassHasInputAttachments(m_ActiveRenderPassQueue[currentPassIndex]))
-                            context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices);
+                            context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].depthAttachmentIndex != ScriptableRenderPass.NO_DEPTH_INPUT, false);
                         else
                             context.BeginSubPass(attachmentIndices);
 
@@ -453,7 +508,7 @@ namespace UnityEngine.Rendering.Universal
                     else if (PassHasInputAttachments(m_ActiveRenderPassQueue[currentPassIndex]))
                     {
                         context.EndSubPass();
-                        context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices);
+                        context.BeginSubPass(attachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].m_InputAttachmentIndices, m_ActiveRenderPassQueue[currentPassIndex].depthAttachmentIndex != ScriptableRenderPass.NO_DEPTH_INPUT);
 
                         m_LastBeginSubpassPassIndex = currentPassIndex;
                     }
@@ -494,7 +549,11 @@ namespace UnityEngine.Rendering.Universal
                 pass.m_InputAttachmentIndices[i] = FindAttachmentDescriptorIndexInList(pass.m_InputAttachments[i], m_ActiveColorAttachmentDescriptors);
                 if (pass.m_InputAttachmentIndices[i] == -1)
                 {
-                    Debug.LogWarning("RenderPass Input attachment not found in the current RenderPass");
+                    // Check if we are binding the depth buffer, but we don't know the depth attachment index yet
+                    if (pass.depthAttachmentIndex != i)
+                    {
+                        Debug.LogWarning("RenderPass Input attachment not found in the current RenderPass");
+                    }
                     continue;
                 }
 
@@ -676,7 +735,8 @@ namespace UnityEngine.Rendering.Universal
         {
             GetRenderTextureDescriptor(ref cameraData, renderPass, out RenderTextureDescriptor targetRT);
 
-            var depthTarget = renderPass.overrideCameraTarget ? renderPass.depthAttachmentHandle : cameraDepthTargetHandle;
+            // Only use renderPass.depthAttachmentHandle if the renderPass.bindCurrentDepthBuffer is false, since post process pass does not actually care the depth buffer
+            var depthTarget = renderPass.overrideCameraTarget && !renderPass.bindCurrentDepthBuffer ? renderPass.depthAttachmentHandle : cameraDepthTargetHandle;
             var depthID = (targetRT.graphicsFormat == GraphicsFormat.None && targetRT.depthStencilFormat != GraphicsFormat.None) ? renderPass.colorAttachmentHandle.GetHashCode() : depthTarget.GetHashCode();
 
             return new RenderPassDescriptor(targetRT.width, targetRT.height, targetRT.msaaSamples, depthID);

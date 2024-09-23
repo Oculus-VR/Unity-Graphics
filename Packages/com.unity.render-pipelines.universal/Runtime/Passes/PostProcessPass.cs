@@ -125,9 +125,10 @@ namespace UnityEngine.Rendering.Universal
         /// <seealso cref="RenderPassEvent"/>
         /// <seealso cref="PostProcessData"/>
         /// <seealso cref="PostProcessParams"/>
-        public PostProcessPass(RenderPassEvent evt, PostProcessData data, ref PostProcessParams postProcessParams)
+        public PostProcessPass(RenderPassEvent evt, PostProcessData data, ref PostProcessParams postProcessParams, bool useNativeRenderpass=false)
         {
             base.profilingSampler = new ProfilingSampler(nameof(PostProcessPass));
+
             renderPassEvent = evt;
             m_Data = data;
             m_Materials = new MaterialLibrary(data);
@@ -162,7 +163,7 @@ namespace UnityEngine.Rendering.Universal
             }
 
             m_MRT2 = new RenderTargetIdentifier[2];
-            base.useNativeRenderPass = false;
+            base.useNativeRenderPass = useNativeRenderpass;
 
             m_BlitMaterial = postProcessParams.blitMaterial;
 
@@ -285,13 +286,57 @@ namespace UnityEngine.Rendering.Universal
         /// <inheritdoc/>
         public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
         {
-            overrideCameraTarget = true;
+            if (useNativeRenderPass)
+            {
+                ref CameraData cameraData = ref renderingData.cameraData;
+                ref ScriptableRenderer renderer = ref cameraData.renderer;
+
+                // Input
+                RTHandle source = m_UseSwapBuffer ? renderer.cameraColorTargetHandle : m_Source;
+                ConfigureInputAttachments(source);
+                bindCurrentDepthBuffer = true; // Mark input 1 as the depth buffer, will replace inputs[1] later to be the current depth buffer
+
+                // output
+                RenderTargetIdentifier cameraTargetID = BuiltinRenderTextureType.CameraTarget;
+
+#if ENABLE_VR && ENABLE_XR_MODULE
+                if (cameraData.xr.enabled)
+                {
+                    cameraTargetID = cameraData.xr.renderTarget;
+                }
+
+#endif
+                // Get RTHandle alias to use RTHandle apis
+                RenderTargetIdentifier cameraTarget = cameraData.targetTexture != null ? new RenderTargetIdentifier(cameraData.targetTexture) : cameraTargetID;
+                var cameraTargetHandle = RTHandles.Alloc(cameraTarget);
+
+                ConfigureTarget(cameraTargetHandle);
+                ConfigureColorStoreAction(RenderBufferStoreAction.Store);
+
+                int msaaSamples = colorAttachmentHandle.rt != null ? colorAttachmentHandle.rt.descriptor.msaaSamples : cameraData.cameraTargetDescriptor.msaaSamples;
+                if (cameraData.xr.copyDepth && msaaSamples > 1)
+                    ConfigureDepthStoreAction(RenderBufferStoreAction.Resolve);
+                else
+                    ConfigureDepthStoreAction(RenderBufferStoreAction.DontCare);
+            }
+            else {
+                overrideCameraTarget = true;
+            }
         }
 
         public bool CanRunOnTile()
         {
             // Check builtin & user effects here
+#if ENABLE_VR && ENABLE_XR_MODULE && !UNITY_EDITOR
+            // These effects has isTileCompatible => false
+            if(m_Bloom.IsActive() || m_ChromaticAberration.IsActive() || m_DepthOfField.IsActive() || m_LensDistortion.IsActive() || m_MotionBlur.IsActive() || m_PaniniProjection.IsActive()) {
+                return false;
+            } else {
+                return true;
+            }
+#else
             return false;
+#endif
         }
 
         /// <inheritdoc/>
@@ -322,10 +367,11 @@ namespace UnityEngine.Rendering.Universal
                     RenderFinalPass(cmd, ref renderingData);
                 }
             }
-            else if (CanRunOnTile())
+            else if (CanRunOnTile() && useNativeRenderPass)
             {
                 // TODO: Add a fast render path if only on-tile compatible effects are used and we're actually running on a platform that supports it
                 // Note: we can still work on-tile if FXAA is enabled, it'd be part of the final pass
+                RenderNativeRenderPass(context, ref renderingData);
             }
             else
             {
@@ -364,6 +410,77 @@ namespace UnityEngine.Rendering.Universal
             // If capturing, don't convert to HDR.
             // If not last in the stack, don't convert to HDR.
             return cameraData.isHDROutputActive && cameraData.captureActions == null;
+        }
+        void RenderNativeRenderPass(ScriptableRenderContext context, ref RenderingData renderingData)
+        {
+            ref CameraData cameraData = ref renderingData.cameraData;
+
+            ref ScriptableRenderer renderer = ref cameraData.renderer;
+
+            RTHandle source = m_UseSwapBuffer ? renderer.cameraColorTargetHandle : m_Source;
+
+            // The render commands
+            CommandBuffer cmd = renderingData.commandBuffer;
+            using (new ProfilingScope(cmd, m_ProfilingRenderPostProcessing))
+            {
+                // Reset uber keywords
+                m_Materials.uber.shaderKeywords = null;
+#if !UNITY_EDITOR
+                m_Materials.uber.EnableKeyword("SUBPASS_INPUT_ATTACHMENT");
+                int msaaSamples = colorAttachmentHandle.rt != null ? colorAttachmentHandle.rt.descriptor.msaaSamples : cameraData.cameraTargetDescriptor.msaaSamples;
+                switch(msaaSamples)
+                {
+                    case 8:
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+
+                    case 4:
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+
+                    case 2:
+                        cmd.EnableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+
+                    default:
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa2);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa4);
+                        cmd.DisableShaderKeyword(ShaderKeywordStrings.Msaa8);
+                        break;
+                }
+                
+#endif
+                // Setup other effects constants
+                // SetupLensDistortion(m_Materials.uber, isSceneViewCamera);
+                SetupChromaticAberration(m_Materials.uber);
+                SetupVignette(m_Materials.uber, cameraData.xr);
+                SetupColorGrading(cmd, ref renderingData, m_Materials.uber);
+
+                // Only apply dithering & grain if there isn't a final pass.
+                SetupGrain(ref cameraData, m_Materials.uber);
+                SetupDithering(ref cameraData, m_Materials.uber);
+
+                if (RequireSRGBConversionBlitToBackBuffer(ref cameraData))
+                    m_Materials.uber.EnableKeyword(ShaderKeywordStrings.LinearToSRGBConversion);
+
+                if (m_UseFastSRGBLinearConversion)
+                {
+                    m_Materials.uber.EnableKeyword(ShaderKeywordStrings.UseFastSRGBLinearConversion);
+                }
+
+                DebugHandler debugHandler = GetActiveDebugHandler(ref renderingData);
+                bool resolveToDebugScreen = debugHandler != null && debugHandler.WriteToDebugScreenTexture(ref cameraData);
+                debugHandler?.UpdateShaderGlobalPropertiesForFinalValidationPass(cmd, ref cameraData, !m_HasFinalPass && !resolveToDebugScreen);
+
+                Vector4 scaleBias = new Vector4(1.0f, 1.0f, 0.0f, 0.0f);
+                Blitter.BlitTexture(cmd, source, scaleBias, m_Materials.uber, 0);
+            }
         }
 
         void Render(CommandBuffer cmd, ref RenderingData renderingData)

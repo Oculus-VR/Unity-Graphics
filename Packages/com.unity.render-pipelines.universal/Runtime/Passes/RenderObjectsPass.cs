@@ -17,6 +17,9 @@ namespace UnityEngine.Experimental.Rendering.Universal
         string m_ProfilerTag;
         ProfilingSampler m_ProfilingSampler;
 
+        private const string DEPTH_INPUT_ATTACHMENT = "_DEPTH_INPUT_ATTACHMENT";
+        private static GlobalKeyword m_depthInputKeyword;
+
         /// <summary>
         /// The override material to use.
         /// </summary>
@@ -36,6 +39,8 @@ namespace UnityEngine.Experimental.Rendering.Universal
         /// The pass index to use with the override shader.
         /// </summary>
         public int overrideShaderPassIndex { get; set; }
+
+        public bool useDepthInputAttachment { get; set; } = false;
 
         List<ShaderTagId> m_ShaderTagIdList = new List<ShaderTagId>();
 
@@ -73,6 +78,13 @@ namespace UnityEngine.Experimental.Rendering.Universal
         }
 
         RenderStateBlock m_RenderStateBlock;
+
+        [RuntimeInitializeOnLoadMethod]
+        private static void Initialize()
+        {
+            m_depthInputKeyword = GlobalKeyword.Create(DEPTH_INPUT_ATTACHMENT);
+        }
+
 
         /// <summary>
         /// The constructor for render objects pass.
@@ -120,6 +132,22 @@ namespace UnityEngine.Experimental.Rendering.Universal
             : this(profileId.GetType().Name, renderPassEvent, shaderTags, renderQueueType, layerMask, cameraSettings)
         {
             m_ProfilingSampler = ProfilingSampler.Get(profileId);
+        }
+
+        public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
+        {
+#if !UNITY_EDITOR
+            ref CameraData cameraData = ref renderingData.cameraData;
+            ref ScriptableRenderer renderer = ref cameraData.renderer;
+
+            bindCurrentDepthBuffer = useDepthInputAttachment;
+            Shader.SetKeyword(m_depthInputKeyword, useDepthInputAttachment);
+            if (useDepthInputAttachment)
+            {   
+                ConfigureInputAttachments(renderingData.cameraData.renderer.cameraDepthTargetHandle);
+                depthAttachmentIndex = 0;
+            }
+#endif
         }
 
         /// <inheritdoc/>

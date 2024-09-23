@@ -180,13 +180,13 @@ namespace UnityEngine.Rendering.Universal.Internal
                 }
                 else
                 {
-                    FinalBlitPass.ExecutePass(ref renderingData, m_PassData.blitMaterialData, cameraTargetHandle, m_Source);
+                    FinalBlitPass.ExecutePass(ref renderingData, m_PassData.blitMaterialData, cameraTargetHandle, m_Source, isNativeRenderPass);
                     cameraData.renderer.ConfigureCameraTarget(cameraTargetHandle, cameraTargetHandle);
                 }
             }
         }
 
-        private static void ExecutePass(ref RenderingData renderingData, in BlitMaterialData blitMaterialData, RTHandle cameraTarget, RTHandle source)
+        private static void ExecutePass(ref RenderingData renderingData, in BlitMaterialData blitMaterialData, RTHandle cameraTarget, RTHandle source, bool isNRP)
         {
             var cameraData = renderingData.cameraData;
             var cmd = renderingData.commandBuffer;
@@ -203,7 +203,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 #endif
 
             int shaderPassIndex = source.rt?.filterMode == FilterMode.Bilinear ? blitMaterialData.bilinearSamplerPass : blitMaterialData.nearestSamplerPass;
-            RenderingUtils.FinalBlit(cmd, ref cameraData, source, cameraTarget, loadAction, RenderBufferStoreAction.Store, blitMaterialData.material, shaderPassIndex);
+            RenderingUtils.FinalBlit(cmd, ref cameraData, source, cameraTarget, loadAction, RenderBufferStoreAction.Store, blitMaterialData.material, shaderPassIndex, isNRP);
         }
 
         private class PassData
@@ -292,7 +292,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                         Blitter.BlitTexture(context.cmd, sourceTex, viewportScale, data.blitMaterialData.material, shaderPassIndex);
                     }
                     else
-                        ExecutePass(ref data.renderingData, data.blitMaterialData, data.destination, data.source);
+                        ExecutePass(ref data.renderingData, data.blitMaterialData, data.destination, data.source, false);
                 });
             }
         }

@@ -26,8 +26,18 @@
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareNormalsTexture.hlsl"
 #endif
 
+
+#if defined(_DEPTH_INPUT_ATTACHMENT)
+    #define depth_input 0
+    FRAMEBUFFER_INPUT_FLOAT_MS(depth_input);
+#endif
+
 float shadergraph_LWSampleSceneDepth(float2 uv)
 {
+#if defined(_DEPTH_INPUT_ATTACHMENT)
+    return LOAD_FRAMEBUFFER_INPUT_MS(depth_input, 0, float2(0,0));
+#endif
+    
 #if defined(REQUIRE_DEPTH_TEXTURE)
     return SampleSceneDepth(uv);
 #else
@@ -36,7 +46,7 @@ float shadergraph_LWSampleSceneDepth(float2 uv)
 }
 
 float3 shadergraph_LWSampleSceneColor(float2 uv)
-{
+{    
 #if defined(REQUIRE_OPAQUE_TEXTURE)
     return SampleSceneColor(uv);
 #else
