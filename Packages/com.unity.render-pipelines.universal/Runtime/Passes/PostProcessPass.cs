@@ -456,9 +456,6 @@ namespace UnityEngine.Rendering.Universal
                 }
                 
 #endif
-                // Setup other effects constants
-                // SetupLensDistortion(m_Materials.uber, isSceneViewCamera);
-                SetupChromaticAberration(m_Materials.uber);
                 SetupVignette(m_Materials.uber, cameraData.xr);
                 SetupColorGrading(cmd, ref renderingData, m_Materials.uber);
 

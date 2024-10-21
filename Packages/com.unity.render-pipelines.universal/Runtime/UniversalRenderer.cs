@@ -1188,6 +1188,8 @@ namespace UnityEngine.Rendering.Universal
                 m_RenderTransparentForwardPass.ConfigureDepthStoreAction(transparentPassDepthStoreAction);
                 EnqueuePass(m_RenderTransparentForwardPass);
             }
+
+            // Render object callback pass will prevent post-processing and draw object pass from merging.
             // EnqueuePass(m_OnRenderObjectCallbackPass);
 
             bool shouldRenderUI = cameraData.rendersOverlayUI;
