@@ -66,7 +66,9 @@ namespace UnityEngine.Experimental.Rendering
         static Matrix4x4[] s_invProjMatrix = new Matrix4x4[2];
         static Matrix4x4[] s_viewProjMatrix = new Matrix4x4[2];
         static Matrix4x4[] s_invViewProjMatrix = new Matrix4x4[2];
-        static Matrix4x4[] s_mvViewProjMatrix = new Matrix4x4[2];
+
+        private static readonly System.Collections.Generic.List<Matrix4x4[]> s_mvViewProjMatrix =
+            new System.Collections.Generic.List<Matrix4x4[]>();
         static Matrix4x4[] s_prevMVViewProjMatrix = new Matrix4x4[2];
         static Vector4[] s_worldSpaceCameraPos = new Vector4[2];
 
@@ -77,7 +79,7 @@ namespace UnityEngine.Experimental.Rendering
         /// <param name="projMatrix"></param>
         /// <param name="renderIntoTexture"></param>
         /// <param name="viewIndex"></param>
-        public static void UpdateBuiltinShaderConstants(Matrix4x4 viewMatrix, Matrix4x4 projMatrix, bool renderIntoTexture, int viewIndex, bool prevViewValid, Matrix4x4 prevViewMatrix, bool isOculusMotionVec = false)
+        public static void UpdateBuiltinShaderConstants(Matrix4x4 viewMatrix, Matrix4x4 projMatrix, bool renderIntoTexture, int passIndex, int viewIndex, bool prevViewValid, Matrix4x4 prevViewMatrix, bool isOculusMotionVec = false)
         {
 #if ENABLE_VR && ENABLE_XR_MODULE
             s_cameraProjMatrix[viewIndex] = projMatrix;
@@ -92,8 +94,11 @@ namespace UnityEngine.Experimental.Rendering
 
             if (isOculusMotionVec)
             {
-                s_prevMVViewProjMatrix[viewIndex] = s_mvViewProjMatrix[viewIndex];
-                s_mvViewProjMatrix[viewIndex] = s_viewProjMatrix[viewIndex];
+                while (s_mvViewProjMatrix.Count <= passIndex)
+                    s_mvViewProjMatrix.Add(new Matrix4x4[2]);
+
+                s_prevMVViewProjMatrix[viewIndex] = s_mvViewProjMatrix[passIndex][viewIndex];
+                s_mvViewProjMatrix[passIndex][viewIndex] = s_viewProjMatrix[viewIndex];
             }
 
             if (prevViewValid)

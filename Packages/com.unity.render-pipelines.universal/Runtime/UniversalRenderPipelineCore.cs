@@ -230,7 +230,7 @@ namespace UnityEngine.Rendering.Universal
                 {
                     for (int viewId = 0; viewId < xr.viewCount; viewId++)
                     {
-                        XRBuiltinShaderConstants.UpdateBuiltinShaderConstants(GetViewMatrix(viewId), GetProjectionMatrix(viewId), renderIntoTexture, viewId, xr.GetPrevViewValid(), xr.GetPrevViewMatrix(viewId), isOculusMotionVec);
+                        XRBuiltinShaderConstants.UpdateBuiltinShaderConstants(GetViewMatrix(viewId), GetProjectionMatrix(viewId), renderIntoTexture, xr.multipassId, viewId, xr.GetPrevViewValid(), xr.GetPrevViewMatrix(viewId), isOculusMotionVec);
                     }
                     XRBuiltinShaderConstants.SetBuiltinShaderConstants(cmd, isOculusMotionVec);
                 }
