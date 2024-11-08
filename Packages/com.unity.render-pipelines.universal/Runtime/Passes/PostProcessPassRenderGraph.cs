@@ -1811,6 +1811,7 @@ namespace UnityEngine.Rendering.Universal
             internal bool isBackbuffer;
             internal bool enableAlphaOutput;
             internal bool hasFinalPass;
+            internal bool isPassMerged;
         }
 
         TextureHandle TryGetCachedUserLutTextureHandle(RenderGraph renderGraph)
@@ -1869,9 +1870,27 @@ namespace UnityEngine.Rendering.Universal
 
                 builder.AllowGlobalStateModification(true);
                 passData.destinationTexture = destTexture;
-                builder.SetRenderAttachment(destTexture, 0, AccessFlags.Write);
-                passData.sourceTexture = sourceTexture;
-                builder.UseTexture(sourceTexture, AccessFlags.Read);
+                builder.SetRenderAttachment(destTexture, 0, AccessFlags.WriteAll);
+
+                bool tileCompatible = !(
+                    m_Bloom.IsActive() ||
+                    m_ChromaticAberration.IsActive() ||
+                    m_DepthOfField.IsActive() ||
+                    m_LensDistortion.IsActive() ||
+                    m_MotionBlur.IsActive() ||
+                    m_PaniniProjection.IsActive());
+                bool passMerged = SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan && tileCompatible;
+                   
+                
+                if (passMerged)
+                {
+                    builder.SetInputAttachment(sourceTexture, index: 0, AccessFlags.Read);
+                }
+                else
+                {
+                    passData.sourceTexture = sourceTexture;
+                    builder.UseTexture(sourceTexture, AccessFlags.Read);
+                }
                 passData.lutTexture = lutTexture;
                 builder.UseTexture(lutTexture, AccessFlags.Read);
                 passData.lutParams = lutParams;
@@ -1893,6 +1912,7 @@ namespace UnityEngine.Rendering.Universal
                 passData.isHdrGrading = hdrGrading;
                 passData.enableAlphaOutput = enableAlphaOutput;
                 passData.hasFinalPass = hasFinalPass;
+                passData.isPassMerged = passMerged; 
 
                 builder.SetRenderFunc(static (UberPostPassData data, RasterGraphContext context) =>
                 {
@@ -1922,8 +1942,42 @@ namespace UnityEngine.Rendering.Universal
 
                     CoreUtils.SetKeyword(material, ShaderKeywordStrings._ENABLE_ALPHA_OUTPUT, data.enableAlphaOutput);
 
+                    CoreUtils.SetKeyword(material, "SUBPASS_INPUT_ATTACHMENT", data.isPassMerged);
                     // Done with Uber, blit it
-                    ScaleViewportAndBlit(cmd, sourceTextureHdl, data.destinationTexture, data.cameraData, material, data.hasFinalPass);
+                    if (data.isPassMerged)
+                    {
+                        switch (data.cameraData.cameraTargetDescriptor.msaaSamples)
+                        {
+                            case 8:
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa2, false);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa4, false);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa8, true);
+                                break;
+                            case 4:
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa2, false);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa4, true);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa8, false);
+                                break;
+                            case 2:
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa2, true);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa4, false);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa8, false);
+                                break;
+                            default:
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa2, false);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa4, false);
+                                CoreUtils.SetKeyword(material, ShaderKeywordStrings.Msaa8, false);
+                                break;
+                        }
+
+
+                        Vector4 scaleBias = new Vector4(1, 1, 0, 0);
+                        Blitter.BlitTexture(cmd, scaleBias, material, 0);
+                    }
+                    else
+                    {
+                        ScaleViewportAndBlit(cmd, sourceTextureHdl, data.destinationTexture, data.cameraData, material, data.hasFinalPass);
+                    }
                 });
 
                 return;

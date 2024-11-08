@@ -133,7 +133,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 #endif
 
             CoreUtils.SetRenderTarget(renderingData.commandBuffer, m_InternalLut, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, ClearFlag.None, Color.clear);
-            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), m_PassData, m_InternalLut);
+            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), m_PassData);
         }
 
         private class PassData
@@ -147,7 +147,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             internal TextureHandle internalLut;
         }
 
-        private static void ExecutePass(RasterCommandBuffer cmd, PassData passData, RTHandle internalLutTarget)
+        private static void ExecutePass(RasterCommandBuffer cmd, PassData passData)
         {
             var lutBuilderLdr = passData.lutBuilderLdr;
             var lutBuilderHdr = passData.lutBuilderHdr;
@@ -269,7 +269,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                 passData.cameraData.xr.StopSinglePass(cmd);
 
                 // Render the lut.
-                Blitter.BlitTexture(cmd, internalLutTarget, Vector2.one, material, 0);
+                Blitter.BlitTexture(cmd, Vector2.one, material, 0);
 
                 passData.cameraData.xr.StartSinglePass(cmd);
             }
@@ -299,7 +299,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
-                    ExecutePass(context.cmd, data, data.internalLut);
+                    ExecutePass(context.cmd, data);
                 });
 
                 return;

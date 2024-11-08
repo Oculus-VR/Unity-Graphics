@@ -923,7 +923,7 @@ namespace UnityEngine.Rendering.Universal
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
-                    bool yFlip = !SystemInfo.graphicsUVStartsAtTop || data.isTargetBackbuffer;
+                    bool yFlip = !SystemInfo.graphicsUVStartsAtTop || data.isTargetBackbuffer || (renderGraph.nativeRenderPassesEnabled && SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan);
 
                     // This is still required because of the following reasons:
                     // - Camera billboard properties.
