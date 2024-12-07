@@ -1,0 +1,126 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff771ccdf4150419d9ff4d342b069aae, type: 3}
+  m_Name: BakedLightingPage3
+  m_EditorClassIdentifier: 
+  Title:
+    m_Untranslated: Generate lighting
+  m_Paragraphs:
+    m_Items:
+    - m_Type: 6
+      Title:
+        m_Untranslated: 
+      Text:
+        m_Untranslated: 
+      m_Tutorial: {fileID: 0}
+      m_Image: {fileID: 2800000, guid: 20e448dbd8012d14b93e7ee9286b18b0, type: 3}
+      m_Video: {fileID: 32900000, guid: 99f677dcf1744aa4d9ff3b0f37bf3888, type: 3}
+      m_CriteriaCompletion: 0
+      m_Criteria:
+        m_Items: []
+      m_MaskingSettings:
+        m_MaskingEnabled: 0
+        m_UnmaskedViews: []
+      m_Summary: 
+      m_Description: 
+      m_InstructionBoxTitle: 
+      m_InstructionText: 
+      m_TutorialButtonText: 
+    - m_Type: 0
+      Title:
+        m_Untranslated: 
+      Text:
+        m_Untranslated: "Let's see how you can generate (or \"bake\") the lighting
+          for this Scene, using the Progressive GPU Lightmapper.\n\n1. Open <b>Window</b>
+          > <b>Rendering</b> > <b>Lighting.</b>\n\n2. At the bottom of the <i>Lighting</i>
+          window, click on the dropdown on the right side of the <i>Generate Lighting</i>
+          button, and select  <b>Clear Baked Data.</b>\n\n3. Optionally, to speed
+          up the bake, you may reduce certain values in the <i>Lightmapping Settings</i>
+          foldout, such as the <b>Indirect Samples,</b> <b>Environment Samples</b>
+          and <b>Max Bounces.</b>\n\n4. Click the <i>Generate Lighting</i> button.
+          For the next few minutes, the lighting and reflections will be computed.\n\n\n<b>Expert
+          tips</b>\n\nThe Lightmapper settings are stored  in the <b>Lighting Settings
+          Asset,</b> near the top of the <i>Lighting</i> window in the <i>Scene</i> 
+          tab. You can duplicate these assets and assign different  <i>Lightmapping
+          Settings</i> for each one, to create different quality profiles with various
+          baking times. \n\nFor instance, you may create a \"Draft\" asset with very
+          low samples and therefore low quality and very fast baking time. Or you
+          may create a \"Final Render\" asset, with very high samples, and therefore
+          very high quality yet long baking times."
+      m_Tutorial: {fileID: 0}
+      m_Image: {fileID: 0}
+      m_Video: {fileID: 0}
+      m_CriteriaCompletion: 0
+      m_Criteria:
+        m_Items: []
+      m_MaskingSettings:
+        m_MaskingEnabled: 0
+        m_UnmaskedViews: []
+      m_Summary: 
+      m_Description: 
+      m_InstructionBoxTitle: 
+      m_InstructionText: 
+      m_TutorialButtonText: 
+  m_CameraSettings:
+    m_CameraMode: 1
+    m_FocusMode: 0
+    m_Orthographic: 0
+    m_Size: 5.4257765
+    m_Pivot: {x: 36.711098, y: 6.8519526, z: 10.485176}
+    m_Rotation: {x: 0.18312027, y: 0.31960317, z: 0.063070156, w: -0.9275819}
+    m_FrameObject:
+      m_SceneGuid: 
+      m_GameObjectGuid: 
+      m_SerializedComponentType:
+        m_TypeName: 
+      m_ComponentIndex: 0
+      m_AssetObject: {fileID: 0}
+      m_Prefab: {fileID: 0}
+    m_Enabled: 0
+  NextButton:
+    m_Untranslated: Next
+  DoneButton:
+    m_Untranslated: Done
+  m_CompletedSound: {fileID: 0}
+  m_AutoAdvance: 0
+  Showing:
+    m_PersistentCalls:
+      m_Calls: []
+  Shown:
+    m_PersistentCalls:
+      m_Calls: []
+  Staying:
+    m_PersistentCalls:
+      m_Calls: []
+  CriteriaValidated:
+    m_PersistentCalls:
+      m_Calls: []
+  MaskingSettingsChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  NonMaskingSettingsChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnBeforePageShown:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnAfterPageShown:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnTutorialPageStay:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnBeforeTutorialQuit:
+    m_PersistentCalls:
+      m_Calls: []
+  m_NextButton: 
+  m_DoneButton: 
