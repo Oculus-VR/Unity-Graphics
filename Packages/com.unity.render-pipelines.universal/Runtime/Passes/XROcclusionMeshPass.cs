@@ -34,7 +34,7 @@ namespace UnityEngine.Rendering.Universal
                 if (data.isActiveTargetBackBuffer)
                     cmd.SetViewport(data.renderingData.cameraData.xr.GetViewport());
 
-                data.renderingData.cameraData.xr.RenderOcclusionMesh(cmd);
+                data.renderingData.cameraData.xr.RenderOcclusionMesh(cmd, data.renderingData.cameraData.IsCameraProjectionMatrixFlipped());
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
             }
