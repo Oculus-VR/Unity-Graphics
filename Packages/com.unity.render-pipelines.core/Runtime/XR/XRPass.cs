@@ -287,9 +287,9 @@ namespace UnityEngine.Experimental.Rendering
         /// "XR_OCCLUSION_MESH_COMBINED" is also enabled when rendering the combined mesh.
         /// </summary>
         /// <param name="cmd"></param>
-        public void RenderOcclusionMesh(CommandBuffer cmd)
+        public void RenderOcclusionMesh(CommandBuffer cmd, bool yFlipped)
         {
-            m_OcclusionMesh.RenderOcclusionMesh(cmd);
+            m_OcclusionMesh.RenderOcclusionMesh(cmd, yFlipped);
         }
 
         /// <summary>
