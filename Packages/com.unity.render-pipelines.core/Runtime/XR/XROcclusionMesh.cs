@@ -39,12 +39,13 @@ namespace UnityEngine.Experimental.Rendering
             }
         }
 
-        internal void RenderOcclusionMesh(CommandBuffer cmd)
+        internal void RenderOcclusionMesh(CommandBuffer cmd, bool yFlipped)
         {
             if (IsOcclusionMeshSupported())
             {
                 using (new ProfilingScope(cmd, k_OcclusionMeshProfilingSampler))
                 {
+                    m_Material.SetFloat("_YFlip", yFlipped ? -1.0f : 1.0f);
                     if (m_Pass.singlePassEnabled)
                     {
                         if (m_CombinedMesh != null && SystemInfo.supportsMultiview)

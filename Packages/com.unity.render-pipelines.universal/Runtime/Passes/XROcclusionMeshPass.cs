@@ -25,7 +25,7 @@ namespace UnityEngine.Rendering.Universal
 
             if (renderingData.cameraData.xr.hasValidOcclusionMesh)
             {
-                renderingData.cameraData.xr.RenderOcclusionMesh(cmd);
+                renderingData.cameraData.xr.RenderOcclusionMesh(cmd, renderingData.cameraData.IsCameraProjectionMatrixFlipped());
                 context.ExecuteCommandBuffer(cmd);
                 cmd.Clear();
             }
