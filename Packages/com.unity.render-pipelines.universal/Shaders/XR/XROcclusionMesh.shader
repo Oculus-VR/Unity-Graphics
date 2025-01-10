@@ -1,5 +1,10 @@
 Shader "Hidden/Universal Render Pipeline/XR/XROcclusionMesh"
 {
+    Properties
+    {
+        _YFlip("YFlip", Float) = -1.0
+    }
+
     HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
@@ -30,17 +35,14 @@ Shader "Hidden/Universal Render Pipeline/XR/XROcclusionMesh"
         #endif
         };
 
+        float _YFlip;
+
         Varyings Vert(Attributes input)
         {
             UNITY_SETUP_INSTANCE_ID(input);
 
-            float yFlip = -1.0f;
-        #if defined(STEREO_MULTIVIEW_ON)
-            // for mobile multiview disable yflip
-            yFlip = 1.0f;
-        #endif
             Varyings output;
-            output.vertex = float4(input.vertex.xy * float2(2.0f, 2.0f * yFlip) + float2(-1.0f, -1.0f * yFlip), UNITY_NEAR_CLIP_VALUE, 1.0f);
+            output.vertex = float4(input.vertex.xy * float2(2.0f, 2.0f * _YFlip) + float2(-1.0f, -1.0f * _YFlip), UNITY_NEAR_CLIP_VALUE, 1.0f);
 
 
         #if USE_XR_COMBINED_MESH_RT_ARRAY_INDEX
