@@ -346,6 +346,7 @@ namespace UnityEngine.Rendering.Universal
         // Setup camera stereo buffer
         cmd.SetGlobalMatrixArray(ShaderPropertyId.previousViewProjectionNoJitterStereo, data.previousViewProjectionStereo);
         cmd.SetGlobalMatrixArray(ShaderPropertyId.viewProjectionNoJitterStereo, data.viewProjectionStereo);
+        cmd.SetGlobalMatrixArray(ShaderPropertyId.previousViewProjectionStereoLegacy, data.previousViewProjectionStereo);
 
         // If we have valid depth data, copy the data to the motionvector depth to avoid rasterizing the static objects
         if (data.hasValidXRDepth)

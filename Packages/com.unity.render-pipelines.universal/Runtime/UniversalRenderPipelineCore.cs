@@ -869,6 +869,8 @@ namespace UnityEngine.Rendering.Universal
 #if ENABLE_VR && ENABLE_XR_MODULE
         public static readonly int previousViewProjectionNoJitterStereo = Shader.PropertyToID("_PrevViewProjMatrixStereo");
         public static readonly int viewProjectionNoJitterStereo = Shader.PropertyToID("_NonJitteredViewProjMatrixStereo");
+        public static readonly int previousViewProjectionStereoLegacy = Shader.PropertyToID("unity_StereoMatrixPrevVP");
+
 #endif
 
         public static readonly int blitTexture = Shader.PropertyToID("_BlitTexture");
