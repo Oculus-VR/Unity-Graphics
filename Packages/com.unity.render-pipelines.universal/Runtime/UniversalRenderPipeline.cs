@@ -334,7 +334,6 @@ namespace UnityEngine.Rendering.Universal
             GraphicsSettings.lightsUseColorTemperature = true;
             GraphicsSettings.defaultRenderingLayerMask = k_DefaultRenderingLayerMask;
             SetupPerFrameShaderConstants();
-            XRSystem.SetDisplayMSAASamples((MSAASamples)asset.msaaSampleCount);
 
 #if UNITY_EDITOR
             // We do not want to start rendering if URP global settings are not ready (m_globalSettings is null)
@@ -1062,11 +1061,6 @@ namespace UnityEngine.Rendering.Universal
             if (camera.allowMSAA && asset.msaaSampleCount > 1 && rendererSupportsMSAA)
                 msaaSamples = (camera.targetTexture != null) ? camera.targetTexture.antiAliasing : asset.msaaSampleCount;
 
-            // Use XR's MSAA if camera is XR camera. XR MSAA needs special handle here because it is not per Camera.
-            // Multiple cameras could render into the same XR display and they should share the same MSAA level.
-            if (cameraData.xrRendering && rendererSupportsMSAA && camera.targetTexture == null)
-                msaaSamples = (int)XRSystem.GetDisplayMSAASamples();
-
             bool needsAlphaChannel = Graphics.preserveFramebufferAlpha;
 
             cameraData.hdrColorBufferPrecision = asset ? asset.hdrColorBufferPrecision : HDRColorBufferPrecision._32Bits;
@@ -1297,6 +1291,14 @@ namespace UnityEngine.Rendering.Universal
 
             cameraData.stackAnyPostProcessingEnabled = cameraData.postProcessEnabled;
             cameraData.stackLastCameraOutputToHDR = cameraData.isHDROutputActive;
+
+            // Update the MSAA setting for the XR Display. If the camera directly renders into the XR
+            // target, we should set the display MSAA level to the camera setting. Otherwise MSAA should be disabled
+            // for the XR Target to make the final copy pass as fast as possible.
+            if (cameraData.xrRendering && camera.targetTexture == null && resolveFinalTarget)
+            {
+                XRSystem.SetDisplayMSAASamples(cameraData.postProcessEnabled || cameraData.isHdrEnabled ? MSAASamples.None : (MSAASamples)cameraData.cameraTargetDescriptor.msaaSamples);
+            }
         }
 
         static void InitializeRenderingData(UniversalRenderPipelineAsset settings, ref CameraData cameraData, ref CullingResults cullResults,
