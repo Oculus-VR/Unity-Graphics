@@ -1,5 +1,12 @@
 #define GPU_RESIDENT_DRAWER_ALLOW_FORCE_ON
 
+// Because the GPUDrivenRenderer API changed in 6000.0.38, we need a way to select the version.
+// Unfortunately, the only way to select a patch version is by checking each patch version individually is defined.
+// Pre-define up to version 6000.0.45 for now.
+#if UNITY_6000_1_OR_NEWER || UNITY_6000_0_38 || UNITY_6000_0_39 || UNITY_6000_0_40 || UNITY_6000_0_41 || UNITY_6000_0_42 || UNITY_6000_0_43 || UNITY_6000_0_44 || UNITY_6000_0_45
+#define UNITY_6000_0_38_OR_NEWER
+#endif
+
 using System;
 using System.Collections.Generic;
 using Unity.Collections;
@@ -540,7 +547,7 @@ namespace UnityEngine.Rendering
         {
             if (s_Instance is null)
                 return;
-            
+
             if (m_ContextIntPtr == context.Internal_GetPtr())
             {
                 m_ContextIntPtr = IntPtr.Zero;
@@ -787,7 +794,16 @@ namespace UnityEngine.Rendering
                     return;
 
                 unsupportedMaterialIDs.Resize(changedUsedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
+#if UNITY_6000_0_38_OR_NEWER
+                // Unity Removed the FindUnsupportedMaterialIDs in 6000.0.38
+                NativeList<int> supportedMaterialIDs = new NativeList<int>(Allocator.TempJob);
+                NativeList<GPUDrivenPackedMaterialData> supportedPackedMaterialDatas = new NativeList<GPUDrivenPackedMaterialData>(Allocator.TempJob);
+                supportedMaterialIDs.Resize(changedUsedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
+                supportedPackedMaterialDatas.Resize(changedUsedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
+                int unsupportedMaterialCount = GPUDrivenProcessor.ClassifyMaterials(changedUsedMaterialIDs.AsArray(), unsupportedMaterialIDs.AsArray(), supportedMaterialIDs.AsArray(), supportedPackedMaterialDatas.AsArray());
+#else
                 int unsupportedMaterialCount = GPUDrivenProcessor.FindUnsupportedMaterialIDs(changedUsedMaterialIDs.AsArray(), unsupportedMaterialIDs.AsArray());
+#endif
                 unsupportedMaterialIDs.Resize(unsupportedMaterialCount, NativeArrayOptions.ClearMemory);
             }
         }
