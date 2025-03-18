@@ -219,7 +219,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             }
         }
 
-        private static void ExecutePass(RasterCommandBuffer cmd, PassData data, RTHandle source, RTHandle destination, UniversalCameraData cameraData, bool nrpRenderGraph=false)
+        private static void ExecutePass(RasterCommandBuffer cmd, PassData data, RTHandle source, RTHandle destination, UniversalCameraData cameraData)
         {
             bool isRenderToBackBufferTarget = !cameraData.isSceneViewCamera;
 #if ENABLE_VR && ENABLE_XR_MODULE
@@ -227,7 +227,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                 isRenderToBackBufferTarget = new RenderTargetIdentifier(destination.nameID, 0, CubemapFace.Unknown, -1) == new RenderTargetIdentifier(cameraData.xr.renderTarget, 0, CubemapFace.Unknown, -1);
 #endif
             // The final blit can't be easily avoided for the logo screen when using HDR, manually correct the scale bias when using nrp with render graph
-            Vector4 scaleBias = RenderingUtils.GetFinalBlitScaleBias(source, destination, cameraData, nrpRenderGraph);
+            Vector4 scaleBias = RenderingUtils.GetFinalBlitScaleBias(source, destination, cameraData);
 
             if (isRenderToBackBufferTarget)
                 cmd.SetViewport(cameraData.pixelRect);
@@ -344,7 +344,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                         Blitter.BlitTexture(context.cmd, sourceTex, viewportScale, data.blitMaterialData.material, shaderPassIndex);
                     }
                     else
-                        ExecutePass(context.cmd, data, data.source, data.destination, data.cameraData, renderGraph.nativeRenderPassesEnabled);
+                        ExecutePass(context.cmd, data, data.source, data.destination, data.cameraData);
                 });
             }
         }

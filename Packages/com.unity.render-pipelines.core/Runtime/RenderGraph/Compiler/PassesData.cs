@@ -639,7 +639,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             // is a 0x0 pass with no rendertargets that just sets shadow global texture pointers
             // By allowing this to be merged into the NRP we can actually ensure these passes are merged
             bool hasFragments = (passToMerge.numFragments > 0 || passToMerge.numFragmentInputs > 0);
-            if (hasFragments)
+            if (hasFragments) 
             {
                 // Easy early outs, sizes mismatch
                 if (nativePass.width != passToMerge.fragmentInfoWidth ||

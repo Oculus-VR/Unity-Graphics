@@ -47,5 +47,9 @@ namespace UnityEngine.Rendering.RenderGraphModule
                 m_RenderGraphContext.cmd.Clear();
             }
         }
+
+        public bool IsNextPassUsingRenderTarget(int passId, int resourceId) {
+            return nativeCompiler.contextData.nextNativepassFragmentsContain(passId, resourceId);
+        }
     }
 }

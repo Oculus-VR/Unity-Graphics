@@ -913,13 +913,6 @@ namespace UnityEngine.Rendering.Universal
                 resourceData.additionalShadowsTexture = m_AdditionalLightsShadowCasterPass.Render(renderGraph, frameData);
             }
 
-            // The camera need to be setup again after the shadows since those passes override some settings
-            // TODO RENDERGRAPH: move the setup code into the shadow passes
-            if (renderShadows)
-                SetupRenderGraphCameraProperties(renderGraph, resourceData.isActiveTargetBackBuffer);
-
-            RecordCustomRenderGraphPasses(renderGraph, RenderPassEvent.AfterRenderingShadows);
-
             bool requiredColorGradingLutPass = cameraData.postProcessEnabled && m_PostProcessPasses.isCreated;
             if (requiredColorGradingLutPass)
             {
@@ -927,6 +920,13 @@ namespace UnityEngine.Rendering.Universal
                 m_PostProcessPasses.colorGradingLutPass.Render(renderGraph, frameData, out internalColorLut);
                 resourceData.internalColorLut = internalColorLut;
             }
+
+            // The camera need to be setup again after the shadows since those passes override some settings
+            // TODO RENDERGRAPH: move the setup code into the shadow passes
+            if (renderShadows)
+                SetupRenderGraphCameraProperties(renderGraph, resourceData.isActiveTargetBackBuffer);
+
+            RecordCustomRenderGraphPasses(renderGraph, RenderPassEvent.AfterRenderingShadows);
         }
 
         private void UpdateInstanceOccluders(RenderGraph renderGraph, UniversalCameraData cameraData, TextureHandle depthTexture)
