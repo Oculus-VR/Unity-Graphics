@@ -441,11 +441,6 @@ namespace UnityEngine.Rendering.Universal
             // with a Viewport Rect smaller than the full screen. So the existing backbuffer contents need to be preserved in this case.
             // Finally for non-base cameras the backbuffer should never be cleared. (Note that there might still be two base cameras
             // rendering to the same screen. See e.g. test foundation 014 that renders a minimap)
-
-            // Changes for vulkan subpass:
-            // In XR, we expect that final blit pass won't exist or at least it renders the full viewport rect.
-            // m_RequiresIntermediateAttachments should be true only when having a post processing pass or a full viewport rect blit pass.
-            // In both cases, the back buffer need to be cleared (or dont care) instead of load.
             bool clearBackbufferOnFirstUse = (cameraData.renderType == CameraRenderType.Base) && !m_RequiresIntermediateAttachments;
 
             // force the clear if we are rendering to an offscreen depth texture
@@ -923,7 +918,8 @@ namespace UnityEngine.Rendering.Universal
 
             // The camera need to be setup again after the shadows since those passes override some settings
             // TODO RENDERGRAPH: move the setup code into the shadow passes
-            if (renderShadows)
+            // When using subpass, we need to call SetupRenderGraphCameraProperties before draw object pass
+            if (renderShadows || requiredColorGradingLutPass)
                 SetupRenderGraphCameraProperties(renderGraph, resourceData.isActiveTargetBackBuffer);
 
             RecordCustomRenderGraphPasses(renderGraph, RenderPassEvent.AfterRenderingShadows);
