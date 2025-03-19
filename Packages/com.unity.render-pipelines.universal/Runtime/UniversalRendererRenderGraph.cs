@@ -1188,6 +1188,8 @@ namespace UnityEngine.Rendering.Universal
 
                 // Record depthMotion pass and import XR resources into the rendergraph.
                 m_XRDepthMotionPass?.Render(renderGraph, frameData);
+                // Depth motion pass will break the subpass merge assumption, reset the projection matrix before draw opaque pass
+                SetupRenderGraphCameraProperties(renderGraph, resourceData.isActiveTargetBackBuffer);
             }
 #endif
 
