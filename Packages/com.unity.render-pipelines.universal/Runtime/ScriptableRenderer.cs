@@ -247,7 +247,7 @@ namespace UnityEngine.Rendering.Universal
             #pragma warning restore CS0618
         }
 
-        void SetPerCameraShaderVariables(RasterCommandBuffer cmd, UniversalCameraData cameraData, Vector2Int cameraTargetSizeCopy, bool isTargetFlipped)
+        public void SetPerCameraShaderVariables(RasterCommandBuffer cmd, UniversalCameraData cameraData, Vector2Int cameraTargetSizeCopy, bool isTargetFlipped)
         {
             using var profScope = new ProfilingScope(Profiling.setPerCameraShaderVariables);
 
@@ -918,14 +918,12 @@ namespace UnityEngine.Rendering.Universal
                 passData.cameraTargetSizeCopy = new Vector2Int(passData.cameraData.cameraTargetDescriptor.width, passData.cameraData.cameraTargetDescriptor.height);
                 passData.isTargetBackbuffer = isTargetBackbuffer;
 
-                passData.backBufferResourceId = frameData.Get<UniversalResourceData>().backBufferColor.GetResourceId();
-
                 builder.AllowPassCulling(false);
                 builder.AllowGlobalStateModification(true);
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
-                    bool yFlip = !SystemInfo.graphicsUVStartsAtTop || data.isTargetBackbuffer || (renderGraph.nativeRenderPassesEnabled && renderGraph.IsNextPassUsingRenderTarget(context.CurrentRGPassId(), passData.backBufferResourceId));
+                    bool yFlip = !SystemInfo.graphicsUVStartsAtTop || data.isTargetBackbuffer;
 
                     // This is still required because of the following reasons:
                     // - Camera billboard properties.
@@ -1150,8 +1148,6 @@ namespace UnityEngine.Rendering.Universal
 
             // The size of the camera target changes during the frame so we must make a copy of it here to preserve its record-time value.
             internal Vector2Int cameraTargetSizeCopy;
-
-            internal int backBufferResourceId;
         };
 
 

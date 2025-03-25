@@ -48,8 +48,9 @@ namespace UnityEngine.Rendering.RenderGraphModule
             }
         }
 
-        public bool IsNextPassUsingRenderTarget(int passId, int resourceId) {
-            return nativeCompiler.contextData.nextNativepassFragmentsContain(passId, resourceId);
+        public bool IsPassUsingRenderTarget(int passId, int resourceId)
+        {
+            return nativeCompiler.contextData.nativepassFragmentsContain(passId, resourceId);
         }
     }
 }

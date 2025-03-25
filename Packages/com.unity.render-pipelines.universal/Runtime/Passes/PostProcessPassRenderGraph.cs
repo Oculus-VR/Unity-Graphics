@@ -1812,6 +1812,10 @@ namespace UnityEngine.Rendering.Universal
             internal bool enableAlphaOutput;
             internal bool hasFinalPass;
             internal bool isPassMerged;
+
+            // For handling yFlip
+            internal int backBufferResourceId;
+            internal Vector2Int cameraTargetSizeCopy;
         }
 
         TextureHandle TryGetCachedUserLutTextureHandle(RenderGraph renderGraph)
@@ -1912,7 +1916,17 @@ namespace UnityEngine.Rendering.Universal
                 passData.isHdrGrading = hdrGrading;
                 passData.enableAlphaOutput = enableAlphaOutput;
                 passData.hasFinalPass = hasFinalPass;
-                passData.isPassMerged = passMerged; 
+                passData.isPassMerged = passMerged;
+
+                // Reset the camera data in the pre-render function where we know if the native pass need y flip or not
+                passData.cameraTargetSizeCopy = new Vector2Int(passData.cameraData.cameraTargetDescriptor.width, passData.cameraData.cameraTargetDescriptor.height);
+                passData.backBufferResourceId = frameData.Get<UniversalResourceData>().backBufferColor.GetResourceId();
+
+                builder.SetPreRenderFunc((UberPostPassData data, RasterGraphContext context) =>
+                {
+                    bool yFlip = !SystemInfo.graphicsUVStartsAtTop || (renderGraph.nativeRenderPassesEnabled && renderGraph.IsPassUsingRenderTarget(context.CurrentRGPassId(), data.backBufferResourceId));
+                    data.cameraData.renderer.SetPerCameraShaderVariables(context.cmd, data.cameraData, data.cameraTargetSizeCopy, !yFlip);
+                });
 
                 builder.SetRenderFunc(static (UberPostPassData data, RasterGraphContext context) =>
                 {

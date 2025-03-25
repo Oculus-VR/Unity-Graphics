@@ -470,6 +470,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             ((ComputeRenderGraphPass<PassData>)m_RenderPass).renderFunc = renderFunc;
         }
 
+        public void SetPreRenderFunc<PassData>(BaseRenderFunc<PassData, RasterGraphContext> preRenderFunc) where PassData : class, new()
+        {
+            ((RasterRenderGraphPass<PassData>)m_RenderPass).preRenderFunc = preRenderFunc;
+        }
         public void SetRenderFunc<PassData>(BaseRenderFunc<PassData, RasterGraphContext> renderFunc) where PassData : class, new()
         {
             ((RasterRenderGraphPass<PassData>)m_RenderPass).renderFunc = renderFunc;

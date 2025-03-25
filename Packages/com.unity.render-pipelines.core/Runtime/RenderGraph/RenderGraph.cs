@@ -230,7 +230,6 @@ namespace UnityEngine.Rendering.RenderGraphModule
     [MovedFrom(true, "UnityEngine.Experimental.Rendering.RenderGraphModule", "UnityEngine.Rendering.RenderGraphModule")]
     public delegate void BaseRenderFunc<PassData, ContextType>(PassData data, ContextType renderGraphContext) where PassData : class, new();
 
-
     /// <summary>
     /// This class is the main entry point of the Render Graph system.
     /// </summary>

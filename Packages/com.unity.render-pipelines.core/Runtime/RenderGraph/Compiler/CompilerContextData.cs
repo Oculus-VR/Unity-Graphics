@@ -138,8 +138,9 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             return passData[passId1].nativePassIndex == passData[passId2].nativePassIndex;
         }
 
-        public bool nextNativepassFragmentsContain(int passId, int fragIndex) {
-            int nativePassId = passData[passId].nativePassIndex + 1;
+        public bool nativepassFragmentsContain(int passId, int fragIndex)
+        {
+            int nativePassId = passData[passId].nativePassIndex;
             if (nativePassId <= nativePassData.Length)
             {
                 NativePassData data = nativePassData[nativePassId];
