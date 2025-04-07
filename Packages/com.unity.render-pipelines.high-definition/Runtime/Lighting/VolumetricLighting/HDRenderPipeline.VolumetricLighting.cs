@@ -84,7 +84,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
         public uint _VolumeCount;
         public uint _IsObliqueProjectionMatrix;
-        public uint _Padding1;
+        public float _HalfVoxelArcLength;
         public uint _Padding2;
     }
 
@@ -877,10 +877,12 @@ namespace UnityEngine.Rendering.HighDefinition
                 ulong cameraSceneCullingMask =  HDUtils.GetSceneCullingMaskFromCamera(hdCamera.camera);
                 foreach (var volume in volumes)
                 {
+                    var transform = volume.transform;
+                    Vector3 scaleSize = volume.GetScaledSize(transform);
                     Vector3 center = volume.transform.position;
 
                     // Reject volumes that are completely fade out or outside of the volumetric fog using bounding sphere
-                    float boundingSphereRadius = Vector3.Magnitude(volume.parameters.size);
+                    float boundingSphereRadius = Vector3.Magnitude(scaleSize);
                     float minObbDistance = Vector3.Magnitude(center - camPosition) - hdCamera.camera.nearClipPlane - boundingSphereRadius;
                     if (minObbDistance > volume.parameters.distanceFadeEnd || minObbDistance > fog.depthExtent.value)
                         continue;
@@ -892,8 +894,8 @@ namespace UnityEngine.Rendering.HighDefinition
                     // Handle camera-relative rendering.
                     center -= camOffset;
 
-                    var transform = volume.transform;
-                    var bounds = GeometryUtils.OBBToAABB(transform.right, transform.up, transform.forward, volume.parameters.size, center);
+                    
+                    var bounds = GeometryUtils.OBBToAABB(transform.right, transform.up, transform.forward, scaleSize, center);
 
                     // Frustum cull on the CPU for now. TODO: do it on the GPU.
                     // TODO: account for custom near and far planes of the V-Buffer's frustum.
@@ -903,12 +905,14 @@ namespace UnityEngine.Rendering.HighDefinition
                     {
                         if (m_VisibleLocalVolumetricFogVolumes.Count >= maxLocalVolumetricFogOnScreen)
                         {
-                            Debug.LogError($"The number of local volumetric fog in the view is above the limit: {m_VisibleLocalVolumetricFogVolumes.Count} instead of {maxLocalVolumetricFogOnScreen}. To fix this, please increase the maximum number of local volumetric fog in the view in the HDRP asset.");
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                            Debug.LogError($"The number of local volumetric fog in the view is above the limit: {m_VisibleLocalVolumetricFogVolumes.Count + 1} instead of {maxLocalVolumetricFogOnScreen}. To fix this, please increase the maximum number of local volumetric fog in the view in the HDRP asset.");
+#endif
                             break;
                         }
 
                         // TODO: cache these?
-                        var obb = new OrientedBBox(Matrix4x4.TRS(transform.position - camOffset, transform.rotation, volume.parameters.size));
+                        var obb = new OrientedBBox(Matrix4x4.TRS(transform.position - camOffset, transform.rotation, scaleSize));
                         m_VisibleVolumeBounds.Add(obb);
                         m_GlobalVolumeIndices.Add(volume.GetGlobalIndex());
                         var visibleData = volume.parameters.ConvertToEngineData();
@@ -988,6 +992,9 @@ namespace UnityEngine.Rendering.HighDefinition
             cb._MaxSliceCount = (uint)maxSliceCount;
             cb._MaxVolumetricFogDistance = fog.depthExtent.value;
             cb._VolumeCount = (uint)m_VisibleLocalVolumetricFogVolumes.Count;
+            // Compute the arc length of a single froxel at 1m from the camera.
+            // This value can be used to quickly compute the arc length of a single froxel
+            cb._HalfVoxelArcLength = Mathf.Deg2Rad * hdCamera.camera.fieldOfView / currParams.viewportSize.y / 2.0f;
 
             if (updateVoxelizationFields)
             {

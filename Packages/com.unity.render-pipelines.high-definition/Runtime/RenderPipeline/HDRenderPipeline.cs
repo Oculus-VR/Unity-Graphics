@@ -665,23 +665,10 @@ namespace UnityEngine.Rendering.HighDefinition
             m_DebugDisplaySettingsUI.RegisterDebug(HDDebugDisplaySettings.Instance);
 #endif
 
-#if UNITY_EDITOR
-            // We don't need the debug of Scene View at runtime (each camera have its own debug settings)
-            // All scene view will share the same FrameSettings for now as sometimes Dispose is called after
-            // another instance of HDRenderPipeline constructor is called.
-
-            Camera firstSceneViewCamera = UnityEditor.SceneView.sceneViews.Count > 0 ? (UnityEditor.SceneView.sceneViews[0] as UnityEditor.SceneView).camera : null;
-            if (firstSceneViewCamera != null)
-            {
-                var history = FrameSettingsHistory.RegisterDebug(null, true);
-                DebugManager.instance.RegisterData(history);
-            }
-#endif
-
             m_DepthPyramidMipLevelOffsetsBuffer = new ComputeBuffer(15, sizeof(int) * 2);
 
             m_CustomPassColorBuffer = new Lazy<RTHandle>(() => RTHandles.Alloc(Vector2.one, TextureXR.slices, dimension: TextureXR.dimension, colorFormat: GetCustomBufferFormat(), enableRandomWrite: true, useDynamicScale: true, name: "CustomPassColorBuffer"));
-            m_CustomPassDepthBuffer = new Lazy<RTHandle>(() => RTHandles.Alloc(Vector2.one, TextureXR.slices, dimension: TextureXR.dimension, colorFormat: GraphicsFormat.None, useDynamicScale: true, name: "CustomPassDepthBuffer", depthBufferBits: DepthBits.Depth32));
+            m_CustomPassDepthBuffer = new Lazy<RTHandle>(() => RTHandles.Alloc(Vector2.one, TextureXR.slices, dimension: TextureXR.dimension, colorFormat: GraphicsFormat.None, useDynamicScale: true, name: "CustomPassDepthBuffer", depthBufferBits: CoreUtils.GetDefaultDepthBufferBits()));
 
             // For debugging
             MousePositionDebug.instance.Build();
@@ -1430,6 +1417,7 @@ namespace UnityEngine.Rendering.HighDefinition
             public List<(HDProbe.RenderData, HDProbe)> viewDependentProbesData;
             public bool cullingResultIsShared;
             public XRPass xrPass;
+            public bool isLast;
         }
 
         private void VisitRenderRequestRecursive(List<RenderRequest> requests, List<int> visitStatus, int requestIndex, List<int> renderIndices)
@@ -2353,6 +2341,7 @@ namespace UnityEngine.Rendering.HighDefinition
                             bool isLast = i == renderRequestIndicesToRender.Count - 1;
                             var renderRequestIndex = renderRequestIndicesToRender[i];
                             var renderRequest = renderRequests[renderRequestIndex];
+                            renderRequest.isLast = isLast;
 
                             var cmd = CommandBufferPool.Get("");
 
@@ -2806,7 +2795,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 cameraXRSettings.viewCount = (uint)hdCamera.viewCount;
                 cameraXRSettings.viewOffset = (uint)hdCamera.xr.multipassId;
 
-                VFXManager.ProcessCameraCommand(camera, cmd, cameraXRSettings, cullingResults);
+                VFXManager.ProcessCameraCommand(camera, cmd, cameraXRSettings, cullingResults, customPassCullingResults);
 
                 if (GL.wireframe)
                 {
@@ -3382,9 +3371,9 @@ namespace UnityEngine.Rendering.HighDefinition
             {
                 SupportedRenderingFeatures.active.rendersUIOverlay = false;
             }
-            // When HDR is active and no XR we enforce UI overlay per camera as we want all UI to be calibrated to white paper inside a single pass
-            else if (HDROutputForAnyDisplayIsActive())
+            else
             {
+                // Otherwise we enforce SS UI overlay rendering in HDRP
                 SupportedRenderingFeatures.active.rendersUIOverlay = true;
             }
         }

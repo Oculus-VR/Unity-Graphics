@@ -24,7 +24,7 @@ namespace UnityEngine.Rendering
         /// <summary>
         /// Used by render pipelines to initialize XR tests.
         /// </summary>
-        public static bool enabled { get; } = activatedFromCommandLine;
+        public static bool enabled { get; set; } = activatedFromCommandLine;
 
         /// <summary>
         /// Set by automated test framework and read by render pipelines.
@@ -74,7 +74,7 @@ namespace UnityEngine.Rendering
                                 viewMatrix *= Matrix4x4.Translate(new Vector3(.34f, 0.25f, -0.08f));
                             }
 
-                            XRView xrView = new XRView(projMatrix, viewMatrix, Matrix4x4.identity, false, xrPass.GetViewport(viewId), null, xrPass.GetTextureArraySlice(viewId));
+                            XRView xrView = new XRView(projMatrix, viewMatrix, Matrix4x4.identity, false, xrPass.GetViewport(viewId), null, null, xrPass.GetTextureArraySlice(viewId));
                             xrPass.AssignView(viewId, xrView);
                         }
                     }

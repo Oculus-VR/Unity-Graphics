@@ -22,6 +22,8 @@ namespace UnityEngine.Rendering.HighDefinition
         /// </summary>
         internal DebugDisplayGPUResidentDrawer gpuResidentDrawerSettings { get; private set; }
 
+        internal DebugDisplaySettingsCamera cameraSettings { get; private set; }
+
 #if ENABLE_VIRTUALTEXTURES
         internal DebugDisplayVirtualTexturing vtSettings { get; private set; }
 #endif
@@ -34,9 +36,10 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             base.Reset();
             displayStats = Add(new DebugDisplaySettingsStats<HDProfileId>(new HDDebugDisplayStats()));
-            volumeSettings = Add(new DebugDisplaySettingsVolume(new HDVolumeDebugSettings()));
+            volumeSettings = Add(new DebugDisplaySettingsVolume());
             decalSettings = Add(new DebugDisplaySettingsDecal());
             gpuResidentDrawerSettings = Add(new DebugDisplayGPUResidentDrawer());
+            cameraSettings = Add(new DebugDisplaySettingsCamera());
 #if ENABLE_VIRTUALTEXTURES
             vtSettings = Add(new DebugDisplayVirtualTexturing());
 #endif

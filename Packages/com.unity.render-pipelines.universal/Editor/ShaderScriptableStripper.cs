@@ -111,6 +111,8 @@ namespace UnityEditor.Rendering.Universal
         Shader m_PaniniProjection = Shader.Find("Hidden/Universal Render Pipeline/PaniniProjection");
         Shader m_Bloom = Shader.Find("Hidden/Universal Render Pipeline/Bloom");
         Shader m_TerrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
+        Shader m_TerrainLitAddPass = Shader.Find("Universal Render Pipeline/Terrain/Lit (Add Pass)");
+        Shader m_TerrainLitBasePass = Shader.Find("Universal Render Pipeline/Terrain/Lit (Base Pass)");
         Shader m_StencilDeferred = Shader.Find("Hidden/Universal Render Pipeline/StencilDeferred");
         Shader m_ClusterDeferred = Shader.Find("Hidden/Universal Render Pipeline/ClusterDeferred");
         Shader m_UberPostShader = Shader.Find("Hidden/Universal Render Pipeline/UberPost");
@@ -958,7 +960,7 @@ namespace UnityEditor.Rendering.Universal
 
         internal bool StripInvalidVariants_TerrainHoles(ref IShaderScriptableStrippingData strippingData)
         {
-            if (strippingData.shader == m_TerrainLit)
+            if (strippingData.shader == m_TerrainLit || strippingData.shader == m_TerrainLitAddPass || strippingData.shader == m_TerrainLitBasePass)
                 if (!strippingData.IsShaderFeatureEnabled(ShaderFeatures.TerrainHoles) && strippingData.IsKeywordEnabled(m_AlphaTestOn))
                     return true;
             return false;
@@ -1178,28 +1180,31 @@ namespace UnityEditor.Rendering.Universal
             };
 
             // All feature sets need to have this variant unused to be stripped out.
-            bool removeInput = true;
-            for (var index = 0; index < ShaderBuildPreprocessor.supportedFeaturesList.Count; index++)
+            bool removeInput = strippingData.stripUnusedVariants;
+            if (removeInput)
             {
-                strippingData.shaderFeatures = ShaderBuildPreprocessor.supportedFeaturesList[index];
+                for (var index = 0; index < ShaderBuildPreprocessor.supportedFeaturesList.Count; index++)
+                {
+                    strippingData.shaderFeatures = ShaderBuildPreprocessor.supportedFeaturesList[index];
 
-                if (StripUnusedShaders(ref strippingData))
-                    continue;
+                    if (StripUnusedShaders(ref strippingData))
+                        continue;
 
-                if (StripUnusedPass(ref strippingData))
-                    continue;
+                    if (StripUnusedPass(ref strippingData))
+                        continue;
 
-                if (StripInvalidVariants(ref strippingData))
-                    continue;
+                    if (StripInvalidVariants(ref strippingData))
+                        continue;
 
-                if (StripUnsupportedVariants(ref strippingData))
-                    continue;
+                    if (StripUnsupportedVariants(ref strippingData))
+                        continue;
 
-                if (StripUnusedFeatures(ref strippingData))
-                    continue;
+                    if (StripUnusedFeatures(ref strippingData))
+                        continue;
 
-                removeInput = false;
-                break;
+                    removeInput = false;
+                    break;
+                }
             }
 
             // Check PostProcessing variants...

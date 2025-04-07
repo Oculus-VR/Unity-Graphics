@@ -219,10 +219,6 @@ namespace UnityEngine.Rendering.Universal.Internal
         internal GraphicsFormat[] GbufferFormats { get; set; }
         internal RTHandle DepthAttachmentHandle { get; set; }
 
-        // Render Graph only.
-        // True if GBuffer pass has previously been recorded this frame. If false, GBuffers might not contain valid data.
-        internal bool IsGBufferValid { get; set; }
-
         // Visible lights indices rendered using stencil volumes.
         NativeArray<ushort> m_stencilVisLights;
         // Offset of each type of lights in m_stencilVisLights.
@@ -347,9 +343,9 @@ namespace UnityEngine.Rendering.Universal.Internal
             else
 #endif
             {
-            // Support for dynamic resolution.
-            this.RenderWidth = camera.allowDynamicResolution ? Mathf.CeilToInt(ScalableBufferManager.widthScaleFactor * cameraTargetSizeCopy.x) : cameraTargetSizeCopy.x;
-            this.RenderHeight = camera.allowDynamicResolution ? Mathf.CeilToInt(ScalableBufferManager.heightScaleFactor * cameraTargetSizeCopy.y) : cameraTargetSizeCopy.y;
+                // Support for dynamic resolution.
+                this.RenderWidth = camera.allowDynamicResolution ? Mathf.CeilToInt(ScalableBufferManager.widthScaleFactor * cameraTargetSizeCopy.x) : cameraTargetSizeCopy.x;
+                this.RenderHeight = camera.allowDynamicResolution ? Mathf.CeilToInt(ScalableBufferManager.heightScaleFactor * cameraTargetSizeCopy.y) : cameraTargetSizeCopy.y;
             }
 
             if (!m_UseDeferredPlus)
@@ -429,10 +425,6 @@ namespace UnityEngine.Rendering.Universal.Internal
                     }
                 }
             }
-            // Once the mixed lighting mode has been discovered, we know how many MRTs we need for the gbuffer.
-            // Subtractive mixed lighting requires shadowMask output, which is actually used to store unity_ProbesOcclusion values.
-
-            CreateGbufferResources();
         }
 
         // In cases when custom pass is injected between GBuffer and Deferred passes we need to fallback
@@ -491,6 +483,39 @@ namespace UnityEngine.Rendering.Universal.Internal
                     this.GbufferAttachments[i] = this.GbufferRTHandles[i];
                     this.GbufferFormats[i] = this.GetGBufferFormat(i);
                 }
+            }
+        }
+
+        internal void CreateGbufferResourcesRenderGraph(RenderGraph renderGraph, UniversalResourceData resourceData)
+        {
+            int gbufferSliceCount = GBufferSliceCount;
+            if (GbufferTextureHandles == null || GbufferTextureHandles.Length != gbufferSliceCount)
+            {
+                GbufferFormats = new GraphicsFormat[gbufferSliceCount];
+                GbufferTextureHandles = new TextureHandle[gbufferSliceCount];
+            }
+
+            bool useCameraRenderingLayersTexture = UseRenderingLayers && !UseLightLayers;
+            Debug.Assert(resourceData.cameraColor.IsValid(), "Deferred Renderer assumes that the intermediate (color) texture is available.");
+
+            for (int i = 0; i < gbufferSliceCount; ++i)
+            {
+                GbufferFormats[i] = GetGBufferFormat(i);
+
+                if (i == GBufferNormalSmoothnessIndex && HasNormalPrepass)
+                    GbufferTextureHandles[i] = resourceData.cameraNormalsTexture;
+                else if (i == GBufferRenderingLayers && useCameraRenderingLayersTexture)
+                    GbufferTextureHandles[i] = resourceData.renderingLayersTexture;
+                else if (i != GBufferLightingIndex)
+                {
+                    var gbufferSlice = resourceData.cameraColor.GetDescriptor(renderGraph);
+                    gbufferSlice.format = GetGBufferFormat(i);
+                    gbufferSlice.name = k_GBufferNames[i];
+                    gbufferSlice.clearBuffer = true;
+                    GbufferTextureHandles[i] = renderGraph.CreateTexture(gbufferSlice);
+                }
+                else
+                    GbufferTextureHandles[i] = resourceData.cameraColor;
             }
         }
 
@@ -565,7 +590,6 @@ namespace UnityEngine.Rendering.Universal.Internal
         internal void Setup(AdditionalLightsShadowCasterPass additionalLightsShadowCasterPass)
         {
             m_AdditionalLightsShadowCasterPass = additionalLightsShadowCasterPass;
-            IsGBufferValid = false;
         }
 
         public void OnCameraCleanup(CommandBuffer cmd)
@@ -665,10 +689,10 @@ namespace UnityEngine.Rendering.Universal.Internal
             if (!UseFramebufferFetch)
             {
                 Material deferredMaterial = m_UseDeferredPlus ? m_ClusterDeferredMaterial : m_StencilDeferredMaterial;
-                for (int i = 0; i < GbufferTextureHandles.Length; i++)
+                for (int i = 0; i < GbufferRTHandles.Length; i++)
                 {
                     if (i != GBufferLightingIndex)
-                        deferredMaterial.SetTexture(k_GBufferShaderPropertyIDs[i], GbufferTextureHandles[i]);
+                        deferredMaterial.SetTexture(k_GBufferShaderPropertyIDs[i], GbufferRTHandles[i]);
                 }
             }
 
@@ -730,45 +754,51 @@ namespace UnityEngine.Rendering.Universal.Internal
             cmd.SetGlobalVector(ShaderConstants._MainLightColor, lightColor);
         }
 
-        void SetupMatrixConstants(RasterCommandBuffer cmd, UniversalCameraData cameraData)
+        internal Matrix4x4[] GetScreenToWorldMatrix(UniversalCameraData cameraData)
         {
 #if ENABLE_VR && ENABLE_XR_MODULE
             int eyeCount = cameraData.xr.enabled && cameraData.xr.singlePassEnabled ? 2 : 1;
 #else
             int eyeCount = 1;
 #endif
+
             Matrix4x4[] screenToWorld = m_ScreenToWorld; // deferred shaders expects 2 elements
+
+            // pixel coordinates to NDC coordinates.
+            Matrix4x4 screenToNDC = new Matrix4x4(
+                new Vector4(2.0f / (float)this.RenderWidth, 0.0f, 0.0f, 0.0f),
+                new Vector4(0.0f, 2.0f / (float)this.RenderHeight, 0.0f, 0.0f),
+                new Vector4(0.0f, 0.0f, 1.0f, 0.0f),
+                new Vector4(-1.0f, -1.0f, 0.0f, 1.0f)
+            );
+
+            if (DeferredConfig.IsOpenGL)
+            {
+                // We need to manunally adjust z in NDC space from [0; 1] (storage in depth texture) to [-1; 1].
+                Matrix4x4 renormalizeZ = new Matrix4x4(
+                    new Vector4(1.0f, 0.0f, 0.0f, 0.0f),
+                    new Vector4(0.0f, 1.0f, 0.0f, 0.0f),
+                    new Vector4(0.0f, 0.0f, 2.0f, 0.0f),
+                    new Vector4(0.0f, 0.0f, -1.0f, 1.0f)
+                );
+
+                screenToNDC = renormalizeZ * screenToNDC;
+            }
 
             for (int eyeIndex = 0; eyeIndex < eyeCount; eyeIndex++)
             {
-                Matrix4x4 proj = cameraData.GetProjectionMatrix(eyeIndex);
                 Matrix4x4 view = cameraData.GetViewMatrix(eyeIndex);
-                Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(proj, false);
+                Matrix4x4 gpuProj = cameraData.GetGPUProjectionMatrix(false, eyeIndex);
 
-                // xy coordinates in range [-1; 1] go to pixel coordinates.
-                Matrix4x4 toScreen = new Matrix4x4(
-                    new Vector4(0.5f * this.RenderWidth, 0.0f, 0.0f, 0.0f),
-                    new Vector4(0.0f, 0.5f * this.RenderHeight, 0.0f, 0.0f),
-                    new Vector4(0.0f, 0.0f, 1.0f, 0.0f),
-                    new Vector4(0.5f * this.RenderWidth, 0.5f * this.RenderHeight, 0.0f, 1.0f)
-                );
-
-                Matrix4x4 zScaleBias = Matrix4x4.identity;
-                if (DeferredConfig.IsOpenGL)
-                {
-                    // We need to manunally adjust z in NDC space from [-1; 1] to [0; 1] (storage in depth texture).
-                    zScaleBias = new Matrix4x4(
-                        new Vector4(1.0f, 0.0f, 0.0f, 0.0f),
-                        new Vector4(0.0f, 1.0f, 0.0f, 0.0f),
-                        new Vector4(0.0f, 0.0f, 0.5f, 0.0f),
-                        new Vector4(0.0f, 0.0f, 0.5f, 1.0f)
-                    );
-                }
-
-                screenToWorld[eyeIndex] = Matrix4x4.Inverse(toScreen * zScaleBias * gpuProj * view);
+                screenToWorld[eyeIndex] = Matrix4x4.Inverse(gpuProj * view) * screenToNDC;
             }
 
-            cmd.SetGlobalMatrixArray(ShaderConstants._ScreenToWorld, screenToWorld);
+            return screenToWorld;
+        }
+
+        void SetupMatrixConstants(RasterCommandBuffer cmd, UniversalCameraData cameraData)
+        {
+            cmd.SetGlobalMatrixArray(ShaderConstants._ScreenToWorld, GetScreenToWorldMatrix(cameraData));
         }
 
         void PrecomputeLights(

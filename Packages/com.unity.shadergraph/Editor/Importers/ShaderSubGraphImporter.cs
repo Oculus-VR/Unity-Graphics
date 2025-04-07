@@ -23,6 +23,9 @@ namespace UnityEditor.ShaderGraph
     class ShaderSubGraphImporter : ScriptedImporter
     {
         public const string Extension = "shadersubgraph";
+        const string IconBasePath = "Packages/com.unity.shadergraph/Editor/Resources/Icons/sg_subgraph_icon.png";
+
+        public static Texture2D GetIcon() => EditorGUIUtility.IconContent(IconBasePath)?.image as Texture2D;
 
         [SuppressMessage("ReSharper", "UnusedMember.Local")]
         static string[] GatherDependenciesFromSourceFile(string assetPath)
@@ -112,8 +115,7 @@ namespace UnityEditor.ShaderGraph
                 messageManager.ClearAll();
             }
 
-            Texture2D texture = Resources.Load<Texture2D>("Icons/sg_subgraph_icon");
-            ctx.AddObjectToAsset("MainAsset", graphAsset, texture);
+            ctx.AddObjectToAsset("MainAsset", graphAsset, GetIcon());
             ctx.SetMainObject(graphAsset);
 
             var metadata = ScriptableObject.CreateInstance<ShaderSubGraphMetadata>();
@@ -275,6 +277,7 @@ namespace UnityEditor.ShaderGraph
             {
                 asset.isValid = false;
                 registry.ProvideFunction(asset.functionName, sb => { });
+                outputSlots.Dispose();
                 return;
             }
 

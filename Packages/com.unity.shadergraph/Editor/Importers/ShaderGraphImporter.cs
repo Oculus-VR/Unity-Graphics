@@ -20,6 +20,7 @@ namespace UnityEditor.ShaderGraph
     {
         public const string Extension = "shadergraph";
         public const string LegacyExtension = "ShaderGraph";
+        const string IconBasePath = "Packages/com.unity.shadergraph/Editor/Resources/Icons/sg_graph_icon.png";
 
         public const string k_ErrorShader = @"
 Shader ""Hidden/GraphErrorShader2""
@@ -62,6 +63,8 @@ Shader ""Hidden/GraphErrorShader2""
     }
     Fallback Off
 }";
+
+        public static Texture2D GetIcon() => EditorGUIUtility.IconContent(IconBasePath)?.image as Texture2D;
 
         [SuppressMessage("ReSharper", "UnusedMember.Local")]
         static string[] GatherDependenciesFromSourceFile(string assetPath)
@@ -236,8 +239,7 @@ Shader ""Hidden/GraphErrorShader2""
                 mainObject = ShaderUtil.CreateShaderAsset(ctx, k_ErrorShader, false);
             }
 
-            Texture2D texture = Resources.Load<Texture2D>("Icons/sg_graph_icon");
-            ctx.AddObjectToAsset("MainAsset", mainObject, texture);
+            ctx.AddObjectToAsset("MainAsset", mainObject, GetIcon());
             ctx.SetMainObject(mainObject);
 
             var graphDataReadOnly = new GraphDataReadOnly(graph);
@@ -699,7 +701,7 @@ Shader ""Hidden/GraphErrorShader2""
                 //    foreach (var node in source.nodes)
                 //    {
                 //        message.AppendLine($"{node.name} ({node.objectId}): {node.concretePrecision}");
-                //    }                    
+                //    }
                 //    throw new InvalidOperationException(message.ToString());
                 //}
 
@@ -986,6 +988,7 @@ Shader ""Hidden/GraphErrorShader2""
             asset.inputStructName = inputStructName;
             asset.outputStructName = outputStructName;
             asset.portRequirements = portRequirements;
+            asset.SetGUID(assetGuid);
             asset.m_PropertiesStages = propertiesStages.ToArray();
             asset.concretePrecision = graph.graphDefaultConcretePrecision;
             asset.SetProperties(inputProperties);

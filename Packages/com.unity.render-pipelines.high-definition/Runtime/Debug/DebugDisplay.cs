@@ -1078,6 +1078,7 @@ namespace UnityEngine.Rendering.HighDefinition
             {
                 var container = new DebugUI.Container()
                 {
+                    displayName = "#MaterialRenderingLayers",
                     isHiddenCallback = () => !IsDebuggingRenderingLayers(),
                     children =
                     {
@@ -1099,45 +1100,17 @@ namespace UnityEngine.Rendering.HighDefinition
                     }
                 };
 
-                var field = new DebugUI.BitField
+                var renderingLayersField = new DebugUI.RenderingLayerField()
                 {
                     nameAndTooltip = LightingStrings.LightLayersFilterLayers,
-                    getter = () => data.lightingDebugSettings.debugLightLayersFilterMask,
-                    setter = value => data.lightingDebugSettings.debugLightLayersFilterMask = (RenderingLayerMask)value,
-                    enumType = typeof(RenderingLayerMask),
-                    isHiddenCallback = () => data.lightingDebugSettings.debugSelectionLightLayers
+                    getter = () => (uint)data.lightingDebugSettings.debugLightLayersFilterMask,
+                    setter = value => data.lightingDebugSettings.debugLightLayersFilterMask = (RenderingLayerMask)(uint)value,
+                    getRenderingLayerColor = index => data.lightingDebugSettings.debugRenderingLayersColors[index],
+                    setRenderingLayerColor = (value, index) => data.lightingDebugSettings.debugRenderingLayersColors[index] = value,
+                    isHiddenCallback = () => data.lightingDebugSettings.debugSelectionLightLayers,
                 };
 
-                var renderingLayers = new List<string>();
-                for (int i = 0; i < 32; i++)
-                    renderingLayers.Add($"Unused Rendering Layer {i}");
-
-                var names = UnityEngine.RenderingLayerMask.GetDefinedRenderingLayerNames();
-                for (int i = 0; i < names.Length; i++)
-                {
-                    var index = UnityEngine.RenderingLayerMask.NameToRenderingLayer(names[i]);
-                    renderingLayers[index] = names[i];
-                }
-
-                for (int i = 0; i < field.enumNames.Length - 1; i++)
-                    field.enumNames[i + 1].text = renderingLayers[i];
-
-                container.children.Add(field);
-
-                var layersColor = new DebugUI.Foldout() { nameAndTooltip = LightingStrings.LightLayersColor, flags = DebugUI.Flags.EditorOnly };
-                for (int i = 0; i < renderingLayers.Count; i++)
-                {
-                    int index = i;
-                    layersColor.children.Add(new DebugUI.ColorField
-                    {
-                        displayName = renderingLayers[i],
-                        flags = DebugUI.Flags.EditorOnly,
-                        getter = () => data.lightingDebugSettings.debugRenderingLayersColors[index],
-                        setter = value => data.lightingDebugSettings.debugRenderingLayersColors[index] = value
-                    });
-                }
-
-                container.children.Add(layersColor);
+                container.children.Add(renderingLayersField);
                 list.Add(container);
             }
 
@@ -1247,7 +1220,6 @@ namespace UnityEngine.Rendering.HighDefinition
             public static readonly NameAndTooltip LightLayersUseSelectedLight = new() { name = "Filter Light Layers by Light", tooltip = "Highlight Renderers affected by the selected light." };
             public static readonly NameAndTooltip LightLayersSwitchToLightShadowLayers = new() { name = "Use Light's Shadow Layer Mask", tooltip = "Highlight Renderers that cast shadows for the selected light." };
             public static readonly NameAndTooltip LightLayersFilterLayers = new() { name = "Filter Layers", tooltip = "Use the drop-down to filter light layers that you want to visialize." };
-            public static readonly NameAndTooltip LightLayersColor = new() { name = "Layers Color", tooltip = "Select the display color of each light layer." };
 
             // Material Overrides
             public static readonly NameAndTooltip OverrideSmoothness = new() { name = "Override Smoothness", tooltip = "Enable the checkbox to override the smoothness for the entire Scene." };
@@ -1427,37 +1399,6 @@ namespace UnityEngine.Rendering.HighDefinition
 
                     lighting.children.Add(exposureFoldout);
                 }
-
-                var hdrFoldout = new DebugUI.Foldout
-                {
-                    nameAndTooltip = LightingStrings.HDROutput,
-                    children =
-                    {
-                        new DebugUI.MessageBox
-                        {
-                            displayName = "No HDR monitor detected.",
-                            style = DebugUI.MessageBox.Style.Warning,
-                            isHiddenCallback = () => HDRenderPipeline.HDROutputForMainDisplayIsActive()
-                        },
-                        new DebugUI.MessageBox
-                        {
-                            displayName = "To display the Gamut View, Gamut Clip, Paper White modes without affecting them, the overlay will be hidden.",
-                            style = DebugUI.MessageBox.Style.Info,
-                            isHiddenCallback = () => !HDRenderPipeline.HDROutputForMainDisplayIsActive()
-                        },
-                        new DebugUI.EnumField
-                        {
-                            nameAndTooltip = LightingStrings.HDROutputDebugMode,
-                            getter = () => (int)data.lightingDebugSettings.hdrDebugMode,
-                            setter = value => SetHDRDebugMode((HDRDebugMode)value),
-                            autoEnum = typeof(HDRDebugMode),
-                            getIndex = () => data.hdrDebugModeEnumIndex,
-                            setIndex = value => data.hdrDebugModeEnumIndex = value
-                        },
-                    }
-                };
-
-                lighting.children.Add(hdrFoldout);
 
                 lighting.children.Add(new DebugUI.EnumField { nameAndTooltip = LightingStrings.LightingDebugMode, getter = () => (int)data.lightingDebugSettings.debugLightingMode, setter = value => SetDebugLightingMode((DebugLightingMode)value), autoEnum = typeof(DebugLightingMode), getIndex = () => data.lightingDebugModeEnumIndex, setIndex = value => { data.ResetExclusiveEnumIndices(); data.lightingDebugModeEnumIndex = value; } });
 
@@ -1750,6 +1691,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
         static class RenderingStrings
         {
+            public static readonly NameAndTooltip RenderingSettings = new() { name = "Rendering Debug", tooltip = "General rendering debug settings" };
             public static readonly NameAndTooltip FullscreenDebugMode = new() { name = "Fullscreen Debug Mode", tooltip = "Use the drop-down to select a rendering mode to display as an overlay on the screen." };
             public static readonly NameAndTooltip MaxOverdrawCount = new() { name = "Max Overdraw Count", tooltip = "Maximum overdraw count allowed for a single pixel." };
             public static readonly NameAndTooltip MaxQuadCost = new() { name = "Max Quad Cost", tooltip = "The scale of the quad mode overdraw heat map." };
@@ -1804,12 +1746,23 @@ namespace UnityEngine.Rendering.HighDefinition
 
             widgetList.Add(new DebugUI.RuntimeDebugShadersMessageBox());
 
-            widgetList.Add(
+            string url = DocumentationInfo.GetPackageLink(Documentation.packageName, Documentation.version, "rendering-debugger-window-reference", "rendering-panel");
+            var renderingSettings = new DebugUI.Foldout
+            {
+                nameAndTooltip = RenderingStrings.RenderingSettings,
+                opened = true, // By default this general section is opened
+                order = int.MinValue,
+                documentationUrl = url,
+            };
+
+            widgetList.Add(renderingSettings);
+
+            renderingSettings.children.Add(
                 new DebugUI.EnumField { nameAndTooltip = RenderingStrings.FullscreenDebugMode, getter = () => (int)data.fullScreenDebugMode, setter = value => SetFullScreenDebugMode((FullScreenDebugMode)value), enumNames = s_RenderingFullScreenDebugStrings, enumValues = s_RenderingFullScreenDebugValues, getIndex = () => data.renderingFulscreenDebugModeEnumIndex, setIndex = value => { data.ResetExclusiveEnumIndices(); data.renderingFulscreenDebugModeEnumIndex = value; } }
             );
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => data.fullScreenDebugMode != FullScreenDebugMode.TransparencyOverdraw,
                     children =
@@ -1820,7 +1773,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => data.fullScreenDebugMode != FullScreenDebugMode.QuadOverdraw,
                     children =
@@ -1831,7 +1784,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => data.fullScreenDebugMode != FullScreenDebugMode.VertexDensity,
                     children =
@@ -1842,7 +1795,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => data.fullScreenDebugMode != FullScreenDebugMode.ComputeThickness,
                     children =
@@ -1855,7 +1808,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => (data.fullScreenDebugMode != FullScreenDebugMode.MotionVectors || data.fullScreenDebugMode != FullScreenDebugMode.MotionVectorsIntensity),
                     children =
@@ -1863,7 +1816,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         new DebugUI.FloatField {displayName = "Min Motion Vector Length (in pixels)", getter = () => data.minMotionVectorLength, setter = value => data.minMotionVectorLength = value, min = () => 0}
                     }
                 });
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => (data.fullScreenDebugMode != FullScreenDebugMode.MotionVectorsIntensity),
                     children =
@@ -1876,7 +1829,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                    isHiddenCallback = () => (data.fullScreenDebugMode != FullScreenDebugMode.HighQualityLines),
                    children =
@@ -1887,7 +1840,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                    isHiddenCallback = () => (data.fullScreenDebugMode != FullScreenDebugMode.STP),
                    children =
@@ -1898,7 +1851,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     displayName = "Mipmap Streaming",
                     children =
@@ -1993,8 +1946,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 });
             }
 
-            widgetList.AddRange(new[]
-            {
+            renderingSettings.children.Add(
                 new DebugUI.Container
                 {
                     displayName = "Color Picker",
@@ -2004,12 +1956,11 @@ namespace UnityEngine.Rendering.HighDefinition
                         new DebugUI.EnumField  { nameAndTooltip = RenderingStrings.ColorPickerDebugMode, getter = () => (int)data.colorPickerDebugSettings.colorPickerMode, setter = value => data.colorPickerDebugSettings.colorPickerMode = (ColorPickerDebugMode)value, autoEnum = typeof(ColorPickerDebugMode), getIndex = () => data.colorPickerDebugModeEnumIndex, setIndex = value => data.colorPickerDebugModeEnumIndex = value },
                         new DebugUI.ColorField { nameAndTooltip = RenderingStrings.ColorPickerFontColor, flags = DebugUI.Flags.EditorOnly, getter = () => data.colorPickerDebugSettings.fontColor, setter = value => data.colorPickerDebugSettings.fontColor = value }
                     }
-                }
-            });
+                });
 
-            widgetList.Add(new DebugUI.BoolField { nameAndTooltip = RenderingStrings.FalseColorMode, getter = () => data.falseColorDebugSettings.falseColor, setter = value => data.falseColorDebugSettings.falseColor = value});
+            renderingSettings.children.Add(new DebugUI.BoolField { nameAndTooltip = RenderingStrings.FalseColorMode, getter = () => data.falseColorDebugSettings.falseColor, setter = value => data.falseColorDebugSettings.falseColor = value});
             {
-                widgetList.Add(new DebugUI.Container
+                renderingSettings.children.Add(new DebugUI.Container
                 {
                     isHiddenCallback = () => !data.falseColorDebugSettings.falseColor,
                     flags = DebugUI.Flags.EditorOnly,
@@ -2023,12 +1974,9 @@ namespace UnityEngine.Rendering.HighDefinition
                 });
             }
 
-            widgetList.AddRange(new DebugUI.Widget[]
-            {
-                new DebugUI.EnumField { nameAndTooltip = RenderingStrings.FreezeCameraForCulling, getter = () => data.debugCameraToFreeze, setter = value => data.debugCameraToFreeze = value, enumNames = s_CameraNamesStrings, enumValues = s_CameraNamesValues, getIndex = () => data.debugCameraToFreezeEnumIndex, setIndex = value => data.debugCameraToFreezeEnumIndex = value },
-            });
+            renderingSettings.children.Add(new DebugUI.EnumField { nameAndTooltip = RenderingStrings.FreezeCameraForCulling, getter = () => data.debugCameraToFreeze, setter = value => data.debugCameraToFreeze = value, enumNames = s_CameraNamesStrings, enumValues = s_CameraNamesValues, getIndex = () => data.debugCameraToFreezeEnumIndex, setIndex = value => data.debugCameraToFreezeEnumIndex = value });
 
-            widgetList.Add(new DebugUI.Container
+            renderingSettings.children.Add(new DebugUI.Container
             {
                 displayName = "Color Monitors",
                 children    =
@@ -2090,21 +2038,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 }
             });
 
-            widgetList.Add(new DebugUI.Container
-            {
-                displayName = "HDR Output",
-                children =
-                {
-                    new DebugUI.MessageBox
-                    {
-                        displayName = "The values on the Rendering Debugger editor window might not be accurate. Please use the playmode debug UI (Ctrl+Backspace).",
-                        style = DebugUI.MessageBox.Style.Warning,
-                    },
-                    DebugDisplaySettingsHDROutput.CreateHDROuputDisplayTable()
-                }
-            });
-
-            widgetList.Add(new DebugUI.Container
+            renderingSettings.children.Add(new DebugUI.Container
             {
                 displayName = "History Buffers",
                 children =
@@ -2136,12 +2070,51 @@ namespace UnityEngine.Rendering.HighDefinition
                 }
             });
 
+            var hdrFoldout = new DebugUI.Foldout
+            {
+                nameAndTooltip = LightingStrings.HDROutput,
+                opened = true,
+                order = int.MinValue + 1,
+                children =
+                {
+                    new DebugUI.MessageBox
+                    {
+                        displayName = "No HDR monitor detected.",
+                        style = DebugUI.MessageBox.Style.Warning,
+                        isHiddenCallback = () => HDRenderPipeline.HDROutputForMainDisplayIsActive()
+                    },
+                    new DebugUI.MessageBox
+                    {
+                        displayName = "The values on the Rendering Debugger editor window might not be accurate. Please use the playmode debug UI (Ctrl+Backspace).",
+                        style = DebugUI.MessageBox.Style.Warning,
+                    },
+                    new DebugUI.MessageBox
+                    {
+                        displayName = "To display the Gamut View, Gamut Clip, Paper White modes without affecting them, the overlay will be hidden.",
+                        style = DebugUI.MessageBox.Style.Info,
+                        isHiddenCallback = () => !HDRenderPipeline.HDROutputForMainDisplayIsActive()
+                    },
+                    new DebugUI.EnumField
+                    {
+                        nameAndTooltip = LightingStrings.HDROutputDebugMode,
+                        getter = () => (int)data.lightingDebugSettings.hdrDebugMode,
+                        setter = value => SetHDRDebugMode((HDRDebugMode)value),
+                        autoEnum = typeof(HDRDebugMode),
+                        getIndex = () => data.hdrDebugModeEnumIndex,
+                        setIndex = value => data.hdrDebugModeEnumIndex = value
+                    },
+                    DebugDisplaySettingsHDROutput.CreateHDROuputDisplayTable()
+                }
+            };
+
+            widgetList.Add(hdrFoldout);
+
 #if ENABLE_NVIDIA && ENABLE_NVIDIA_MODULE
             widgetList.Add(nvidiaDebugView.CreateWidget());
 #endif
 
             m_DebugRenderingItems = widgetList.ToArray();
-            var panel = DebugManager.instance.GetPanel(k_PanelRendering, true);
+            var panel = DebugManager.instance.GetPanel(k_PanelRendering,true);
             panel.children.Add(m_DebugRenderingItems);
         }
 
@@ -2233,39 +2206,6 @@ namespace UnityEngine.Rendering.HighDefinition
             {
                 strings[i] = new GUIContent(string.Format("Slot {0}", i));
                 values[i] = i;
-            }
-        }
-
-        internal static void RegisterCamera(IFrameSettingsHistoryContainer container)
-        {
-            string name = container.panelName;
-            if (s_CameraNames.FindIndex(x => x.text.Equals(name)) < 0)
-            {
-                s_CameraNames.Add(new GUIContent(name));
-                needsRefreshingCameraFreezeList = true;
-            }
-
-            if (!FrameSettingsHistory.IsRegistered(container))
-            {
-                var history = FrameSettingsHistory.RegisterDebug(container);
-                DebugManager.instance.RegisterData(history);
-            }
-        }
-
-        internal static void UnRegisterCamera(IFrameSettingsHistoryContainer container)
-        {
-            string name = container.panelName;
-            int indexOfCamera = s_CameraNames.FindIndex(x => x.text.Equals(name));
-            if (indexOfCamera > 0)
-            {
-                s_CameraNames.RemoveAt(indexOfCamera);
-                needsRefreshingCameraFreezeList = true;
-            }
-
-            if (FrameSettingsHistory.IsRegistered(container))
-            {
-                DebugManager.instance.UnregisterData(container);
-                FrameSettingsHistory.UnRegisterDebug(container);
             }
         }
 

@@ -301,7 +301,6 @@ namespace UnityEngine.Rendering.Universal.Internal
                     builder.UseRendererList(passData.objectsWithErrorRendererListHdl);
                 }
 
-                builder.AllowPassCulling(false);
                 builder.AllowGlobalStateModification(true);
 
                 if (cameraData.xr.enabled)
@@ -315,7 +314,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                     // Currently we only need to call this additional pass when the user
                     // doesn't want transparent objects to receive shadows
                     if (!data.isOpaque && !data.shouldTransparentsReceiveShadows)
-                        TransparentSettingsPass.ExecutePass(context.cmd, data.shouldTransparentsReceiveShadows);
+                        TransparentSettingsPass.ExecutePass(context.cmd);
 
                     bool yFlip = data.cameraData.IsRenderTargetProjectionMatrixFlipped(data.albedoHdl, data.depthHdl);
 
@@ -452,7 +451,6 @@ namespace UnityEngine.Rendering.Universal.Internal
                     builder.UseRendererList(passData.basePassData.objectsWithErrorRendererListHdl);
                 }
 
-                builder.AllowPassCulling(false);
                 // Required here because of RenderingLayerUtils.SetupProperties
                 builder.AllowGlobalStateModification(true);
 
@@ -472,7 +470,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                     // Currently we only need to call this additional pass when the user
                     // doesn't want transparent objects to receive shadows
                     if (!data.basePassData.isOpaque && !data.basePassData.shouldTransparentsReceiveShadows)
-                        TransparentSettingsPass.ExecutePass(context.cmd, data.basePassData.shouldTransparentsReceiveShadows);
+                        TransparentSettingsPass.ExecutePass(context.cmd);
 
                     bool yFlip = data.basePassData.cameraData.IsRenderTargetProjectionMatrixFlipped(data.basePassData.albedoHdl, data.basePassData.depthHdl);
 

@@ -2,7 +2,7 @@
 
 Use the Light component to create light sources in your [Scene](https://docs.unity3d.com/Manual/CreatingScenes.html). The Light component controls the shape, color, and intensity of the light. It also controls whether or not the Light casts shadows in your Scene, and more advanced settings.
 
-![](Images/HDRPFeatures-LightTypes.png)
+![Lights in a scene.](Images/HDRPFeatures-LightTypes.png)
 
 ## Create Lights
 
@@ -39,8 +39,6 @@ To make a Light work with the **Animation window**, when you click on the **Add 
 
 <a name="AreaLight"></a>
 
-| **- Flare Tint** | Controls the tint of the flare of the celestial body. |
-| **- Flare Multiplier** | Multiplier applied on the flare intensity. |
 HDRP allows you to use a RenderTexture as a light cookie. However, for the sake of performance, if you make any changes to the RenderTexture, HDRP doesn't automatically update the cookie atlas. To notify the system that the RenderTexture content has changed and so make the system upload the change to the cookie atlas, call `IncrementUpdateCount()` on the RenderTexture. If you don't do this, the system doesn't update the cookie.
 
 ## Preset

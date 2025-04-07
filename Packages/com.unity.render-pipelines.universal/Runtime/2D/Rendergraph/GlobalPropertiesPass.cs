@@ -16,8 +16,10 @@ namespace UnityEngine.Rendering.Universal
             internal Vector2Int screenParams;
         }
 
-        internal static void Setup(RenderGraph graph, UniversalCameraData cameraData)
+        internal static void Setup(RenderGraph graph, ContextContainer frameData, Renderer2DData rendererData, UniversalCameraData cameraData)
         {
+            Universal2DResourceData universal2DResourceData = frameData.Get<Universal2DResourceData>();
+
             using (var builder = graph.AddRasterRenderPass<PassData>(k_SetGlobalProperties, out var passData, m_SetGlobalPropertiesProfilingSampler))
             {
                 // Set screenParams when pixel perfect camera is used with the reference resolution
@@ -36,7 +38,9 @@ namespace UnityEngine.Rendering.Universal
                 builder.SetGlobalTextureAfterPass(graph.defaultResources.whiteTexture, k_DefaultWhiteTextureID);
 #endif
 
-                builder.AllowPassCulling(false);
+                if (rendererData.useCameraSortingLayerTexture)
+                    builder.SetGlobalTextureAfterPass(universal2DResourceData.cameraSortingLayerTexture, CopyCameraSortingLayerPass.k_CameraSortingLayerTextureId);
+
                 builder.AllowGlobalStateModification(true);
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>

@@ -1710,6 +1710,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         {
             { Pragma.Target(ShaderModel.Target20) },
             { Pragma.ExcludeRenderers(new[] { Platform.D3D9 }) },
+            { Pragma.MultiCompileInstancing },
             { Pragma.Vertex("vert") },
             { Pragma.Fragment("frag") },
         };
@@ -2269,6 +2270,16 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             definition = KeywordDefinition.MultiCompile,
             scope = KeywordScope.Global,
             stages = KeywordShaderStage.Fragment,
+        };
+
+        public static readonly KeywordDescriptor UseSkinnedSprite = new KeywordDescriptor()
+        {
+            displayName = "GPU Sprite Skinning",
+            referenceName = "SKINNED_SPRITE",
+            type = KeywordType.Boolean,
+            definition = KeywordDefinition.MultiCompile,
+            scope = KeywordScope.Global,
+            stages = KeywordShaderStage.Vertex,
         };
 
         public static readonly KeywordDescriptor SceneSelectionPass = new KeywordDescriptor()

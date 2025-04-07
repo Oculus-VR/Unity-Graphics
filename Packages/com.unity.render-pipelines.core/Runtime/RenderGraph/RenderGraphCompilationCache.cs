@@ -38,7 +38,7 @@ class RenderGraphCompilationCache
         for (int i = 0; i < k_CachedGraphCount; ++i)
         {
             m_CompiledGraphPool.Push(new RenderGraph.CompiledGraph());
-            m_NativeCompiledGraphPool.Push(new CompilerContextData(NativePassCompiler.k_EstimatedPassCount));
+            m_NativeCompiledGraphPool.Push(new CompilerContextData());
         }
     }
 
@@ -49,7 +49,7 @@ class RenderGraphCompilationCache
         where T : RenderGraph.ICompiledGraph
     {
         s_Hash = hash;
-        int index = hashEntries.FindIndex(0, hashEntries.size, (value) => value.hash == s_Hash);
+        int index = hashEntries.FindIndex(value => value.hash == s_Hash);
         if (index != -1)
         {
             ref var entry = ref hashEntries[index];

@@ -1152,6 +1152,7 @@ namespace UnityEditor.VFX.Test
             
             var expected = @"
 VFXRenderer:m_Enabled
+VFXRenderer:m_MeshLodSelectionBias
 VFXRenderer:m_ReceiveShadows
 VFXRenderer:m_RendererPriority
 VFXRenderer:m_SortingOrder
@@ -1184,6 +1185,64 @@ VisualEffect:Vector4.animation_expected_vector4.z
             var dumpActual = dump.ToString();
             Assert.AreEqual(expected, dumpActual, "Unexpected Curve Listing:" + dumpActual);
             yield return null;
+        }
+
+        public static string[] kModifyPropertyAndInsureSerializedUpdatedCases = new[] { "Float", "Int32", "Float3", "Curve", "ColorGradient", "Mesh", "Texture2D", "Texture3D" };
+
+        [UnityTest, Description("Cover UUM-96024")]
+        public IEnumerator ModifySinglePropertyAndInsureSerializedUpdated([ValueSource(nameof(kModifyPropertyAndInsureSerializedUpdatedCases))] string typeCase)
+        {
+            var graph = VFXTestCommon.MakeTemporaryGraph();
+
+            bool success = Enum.TryParse(typeof(VFXValueType), typeCase, false, out var r);
+            Assert.IsTrue(success);
+            Assert.AreNotEqual(VFXValueType.None, r);
+            var valueType = (VFXValueType)r;
+
+            var exposedPropertyName = "wxcv_" + typeCase;
+            var desc = VFXLibrary.GetParameters().FirstOrDefault(o => VFXExpression.GetVFXValueTypeFromType(o.model.type) == valueType);
+            Assert.IsNotNull(desc);
+
+            var currentParameterType = desc.model.type;
+            var currentParameter = desc.CreateInstance();
+            currentParameter.SetSettingValue("m_ExposedName", exposedPropertyName);
+            currentParameter.SetSettingValue("m_Exposed", true);
+            var value = GetValue_A_Type(currentParameter.type);
+            Assert.IsNotNull(value);
+            currentParameter.value = value;
+            graph.AddChild(currentParameter);
+
+            Assert.IsNotNull(currentParameterType);
+            Assert.IsTrue(graph.children.OfType<VFXParameter>().First() == currentParameter);
+
+            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(graph));
+            yield return null;
+
+            while (m_mainObject.GetComponent<VisualEffect>() != null)
+                UnityEngine.Object.DestroyImmediate(m_mainObject.GetComponent<VisualEffect>());
+            var vfx = m_mainObject.AddComponent<VisualEffect>();
+            vfx.visualEffectAsset = graph.visualEffectResource.asset;
+
+            Assert.IsTrue(fnHas_UsingBindings(valueType, vfx, exposedPropertyName));
+
+            var baseValue = GetValue_A_Type(currentParameterType);
+            var newValue = GetValue_B_Type(currentParameterType);
+            Assert.AreNotEqual(baseValue, newValue);
+
+            var readValue = fnGet_UsingSerializedProperty(valueType, vfx, exposedPropertyName);
+            Assert.AreEqual(readValue, null);
+
+            readValue = fnGet_UsingBindings(valueType, vfx, exposedPropertyName);
+            Assert.AreEqual(readValue, baseValue);
+
+            //Change the single value through bindings
+            fnSet_UsingBindings((VFXValueType)r, vfx, exposedPropertyName, newValue);
+
+            readValue = fnGet_UsingSerializedProperty(valueType, vfx, exposedPropertyName);
+            Assert.AreEqual(readValue, newValue);
+
+            readValue = fnGet_UsingBindings(valueType, vfx, exposedPropertyName);
+            Assert.AreEqual(readValue, newValue);
         }
 
         [UnityTest]

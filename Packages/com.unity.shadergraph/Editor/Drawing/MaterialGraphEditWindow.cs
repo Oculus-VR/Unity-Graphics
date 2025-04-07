@@ -183,6 +183,7 @@ namespace UnityEditor.ShaderGraph.Drawing
             return (saved || okToClose);
         }
 
+        bool firstUpdate = true;
         void Update()
         {
             if (m_HasError)
@@ -381,13 +382,14 @@ namespace UnityEditor.ShaderGraph.Drawing
                     graphEditorView.inspectorView.RefreshInspectables();
                 }
 
-                if (updateTitle)
+                if (updateTitle && !firstUpdate)
                     UpdateTitle();
+                firstUpdate = false;
             }
             catch (Exception e)
             {
                 m_HasError = true;
-                m_GraphEditorView = null;
+                graphEditorView = null;
                 graphObject = null;
                 Debug.LogException(e);
                 throw;
@@ -416,9 +418,17 @@ namespace UnityEditor.ShaderGraph.Drawing
             }
         }
 
+        void OnPlayMode(PlayModeStateChange change)
+        {
+            if (change == PlayModeStateChange.ExitingEditMode)
+                graphEditorView = null;
+        }
+
         void OnEnable()
         {
             this.SetAntiAliasing(4);
+
+            EditorApplication.playModeStateChanged += OnPlayMode;
         }
 
         void OnDisable()
@@ -431,6 +441,8 @@ namespace UnityEditor.ShaderGraph.Drawing
             Resources.UnloadUnusedAssets();
 
             WereWindowResourcesDisposed = true;
+
+            EditorApplication.playModeStateChanged -= OnPlayMode;
         }
 
         // returns true only when the file on disk doesn't match the graph we last loaded or saved to disk (i.e. someone else changed it)
@@ -474,7 +486,7 @@ namespace UnityEditor.ShaderGraph.Drawing
             UpdateTitle();
         }
 
-        public void UpdateTitle()
+        public void UpdateTitle(bool ignoreUnsavedChanges = false)
         {
             string assetPath = AssetDatabase.GUIDToAssetPath(selectedGuid);
             string shaderName = Path.GetFileNameWithoutExtension(assetPath);
@@ -489,7 +501,7 @@ namespace UnityEditor.ShaderGraph.Drawing
                 title = title + " (nothing loaded)";
             else
             {
-                if (GraphHasChangedSinceLastSerialization())
+                if (!ignoreUnsavedChanges && GraphHasChangedSinceLastSerialization())
                 {
                     hasUnsavedChanges = true;
                     // This is the message EditorWindow will show when prompting to close while dirty
@@ -1196,7 +1208,7 @@ namespace UnityEditor.ShaderGraph.Drawing
             {
                 Debug.LogException(e);
                 m_HasError = true;
-                m_GraphEditorView = null;
+                graphEditorView = null;
                 graphObject = null;
                 throw;
             }
@@ -1248,6 +1260,7 @@ namespace UnityEditor.ShaderGraph.Drawing
                 using (GraphLoadMarker.Auto())
                 {
                     m_LastSerializedFileContents = File.ReadAllText(path, Encoding.UTF8);
+
                     graphObject = CreateInstance<GraphObject>();
                     graphObject.hideFlags = HideFlags.HideAndDontSave;
                     graphObject.graph = new GraphData
@@ -1256,6 +1269,7 @@ namespace UnityEditor.ShaderGraph.Drawing
                         isSubGraph = isSubGraph,
                         messageManager = messageManager
                     };
+
                     MultiJson.Deserialize(graphObject.graph, m_LastSerializedFileContents);
                     graphObject.graph.OnEnable();
                     graphObject.graph.ValidateGraph();
@@ -1269,14 +1283,13 @@ namespace UnityEditor.ShaderGraph.Drawing
                     };
                 }
 
-                UpdateTitle();
-
+                UpdateTitle(ignoreUnsavedChanges: true);
                 Repaint();
             }
             catch (Exception)
             {
                 m_HasError = true;
-                m_GraphEditorView = null;
+                graphEditorView = null;
                 graphObject = null;
                 throw;
             }

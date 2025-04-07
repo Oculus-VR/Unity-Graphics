@@ -63,6 +63,7 @@ namespace UnityEditor.ShaderGraph.Drawing
         Vector3 lkgScale;
         void OnTransformChanged(GraphView graphView)
         {
+#pragma warning disable CS0618 // Type or member is obsolete
             if (!graphView.viewTransform.position.Equals(Vector3.zero))
             {
                 lkgPosition = graphView.viewTransform.position;
@@ -72,6 +73,7 @@ namespace UnityEditor.ShaderGraph.Drawing
             {
                 graphView.UpdateViewTransform(lkgPosition, lkgScale);
             }
+#pragma warning restore CS0618 // Type or member is obsolete
         }
 
         protected internal override bool canCutSelection
@@ -413,8 +415,8 @@ namespace UnityEditor.ShaderGraph.Drawing
             // We can manually add them back in here (although the context menu ordering is different).
             if (evt.target is StickyNote)
             {
-                evt.menu.AppendAction("Copy %d", (e) => CopySelectionCallback(), (a) => canCopySelection ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
-                evt.menu.AppendAction("Cut %d", (e) => CutSelectionCallback(), (a) => canCutSelection ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
+                evt.menu.AppendAction("Copy %c", (e) => CopySelectionCallback(), (a) => canCopySelection ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
+                evt.menu.AppendAction("Cut %x", (e) => CutSelectionCallback(), (a) => canCutSelection ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
                 evt.menu.AppendAction("Duplicate %d", (e) => DuplicateSelectionCallback(), (a) => canDuplicateSelection ? DropdownMenuAction.Status.Normal : DropdownMenuAction.Status.Disabled);
             }
 
@@ -965,7 +967,8 @@ namespace UnityEditor.ShaderGraph.Drawing
 
         bool CanPasteSerializedDataImplementation(string serializedData)
         {
-            return CopyPasteGraph.FromJson(serializedData, graph) != null;
+            var json = CopyPasteGraph.FromJson(serializedData, graph);
+            return json != null && !json.IsEmpty();
         }
 
         void UnserializeAndPasteImplementation(string operationName, string serializedData)

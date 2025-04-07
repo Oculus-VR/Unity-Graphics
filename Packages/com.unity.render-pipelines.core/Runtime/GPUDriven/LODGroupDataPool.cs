@@ -27,6 +27,7 @@ namespace UnityEngine.Rendering
         public fixed float transitionDistances[LODGroupData.k_MaxLODLevelsCount]; // todo - make this a separate data struct (CPUOnly, as we do not support dithering on GPU..)
         public float worldSpaceSize;// SpeedTree crossfade.
         public fixed bool percentageFlags[LODGroupData.k_MaxLODLevelsCount];// SpeedTree crossfade.
+        public byte forceLODMask;
     }
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
@@ -64,14 +65,14 @@ namespace UnityEngine.Rendering
                 {
                     float lodHeight = lodGroup->screenRelativeTransitionHeights[i];
 
-                    var lodDist = LODGroupRenderingUtils.CalculateLODDistance(lodHeight, worldSpaceSize);
+                    var lodDist = LODRenderingUtils.CalculateLODDistance(lodHeight, worldSpaceSize);
                     lodGroupTransformResult->sqrDistances[i] = lodDist * lodDist;
 
                     if (supportDitheringCrossFade && !lodGroupTransformResult->percentageFlags[i])
                     {
                         float prevLODHeight = i != 0 ? lodGroup->screenRelativeTransitionHeights[i - 1] : 1.0f;
                         float transitionHeight = lodHeight + lodGroup->fadeTransitionWidth[i] * (prevLODHeight - lodHeight);
-                        var transitionDistance = lodDist - LODGroupRenderingUtils.CalculateLODDistance(transitionHeight, worldSpaceSize);
+                        var transitionDistance = lodDist - LODRenderingUtils.CalculateLODDistance(transitionHeight, worldSpaceSize);
                         transitionDistance = Mathf.Max(0.0f, transitionDistance);
                         lodGroupTransformResult->transitionDistances[i] = transitionDistance;
                     }
@@ -82,52 +83,6 @@ namespace UnityEngine.Rendering
 
                 }
             }
-        }
-    }
-
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    internal unsafe struct AllocateOrGetLODGroupDataInstancesJob : IJob
-    {
-        [ReadOnly] public NativeArray<int> lodGroupsID;
-
-        public NativeList<LODGroupData> lodGroupsData;
-        public NativeList<LODGroupCullingData> lodGroupCullingData;
-        public NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataHash;
-        public NativeList<GPUInstanceIndex> freeLODGroupDataHandles;
-
-        [WriteOnly] public NativeArray<GPUInstanceIndex> lodGroupInstances;
-
-        [NativeDisableUnsafePtrRestriction] public int* previousRendererCount;
-
-        public void Execute()
-        {
-            int freeHandlesCount = freeLODGroupDataHandles.Length;
-            int lodDataLength = lodGroupsData.Length;
-
-            for (int i = 0; i < lodGroupsID.Length; ++i)
-            {
-                int lodGroupID = lodGroupsID[i];
-
-                if (!lodGroupDataHash.TryGetValue(lodGroupID, out var lodGroupInstance))
-                {
-                    if (freeHandlesCount == 0)
-                        lodGroupInstance = new GPUInstanceIndex() { index = lodDataLength++ };
-                    else
-                        lodGroupInstance = freeLODGroupDataHandles[--freeHandlesCount];
-
-                    lodGroupDataHash.TryAdd(lodGroupID, lodGroupInstance);
-                }
-                else
-                {
-                    *previousRendererCount += lodGroupsData.ElementAt(lodGroupInstance.index).rendererCount;
-                }
-
-                lodGroupInstances[i] = lodGroupInstance;
-            }
-
-            freeLODGroupDataHandles.ResizeUninitialized(freeHandlesCount);
-            lodGroupsData.ResizeUninitialized(lodDataLength);
-            lodGroupCullingData.ResizeUninitialized(lodDataLength);
         }
     }
 
@@ -155,6 +110,7 @@ namespace UnityEngine.Rendering
             var worldReferencePoint = inputData.worldSpaceReferencePoint[index];
             var worldSpaceSize = inputData.worldSpaceSize[index];
             var lastLODIsBillboard = inputData.lastLODIsBillboard[index];
+            var forceLODMask = inputData.forceLODMask[index];
             var useDitheringCrossFade = fadeMode != LODFadeMode.None && supportDitheringCrossFade;
             var useSpeedTreeCrossFade = fadeMode == LODFadeMode.SpeedTree;
 
@@ -166,6 +122,7 @@ namespace UnityEngine.Rendering
             lodGroupData->rendererCount = useDitheringCrossFade ? renderersCount : 0;
             lodGroupCullingData->worldSpaceSize = worldSpaceSize;
             lodGroupCullingData->worldSpaceReferencePoint = worldReferencePoint;
+            lodGroupCullingData->forceLODMask = forceLODMask;
             lodGroupCullingData->lodCount = lodCount;
 
             rendererCount.Add(lodGroupData->rendererCount);
@@ -189,7 +146,7 @@ namespace UnityEngine.Rendering
             {
                 var lodIndex = lodOffset + i;
                 var lodHeight = inputData.lodScreenRelativeTransitionHeight[lodIndex];
-                var lodDist = LODGroupRenderingUtils.CalculateLODDistance(lodHeight, worldSpaceSize);
+                var lodDist = LODRenderingUtils.CalculateLODDistance(lodHeight, worldSpaceSize);
 
                 lodGroupData->screenRelativeTransitionHeights[i] = lodHeight;
                 lodGroupData->fadeTransitionWidth[i] = 0.0f;
@@ -206,43 +163,11 @@ namespace UnityEngine.Rendering
                     var fadeTransitionWidth = inputData.lodFadeTransitionWidth[lodIndex];
                     var prevLODHeight = i != 0 ? inputData.lodScreenRelativeTransitionHeight[lodIndex - 1] : 1.0f;
                     var transitionHeight = lodHeight + fadeTransitionWidth * (prevLODHeight - lodHeight);
-                    var transitionDistance = lodDist - LODGroupRenderingUtils.CalculateLODDistance(transitionHeight, worldSpaceSize);
+                    var transitionDistance = lodDist - LODRenderingUtils.CalculateLODDistance(transitionHeight, worldSpaceSize);
                     transitionDistance = Mathf.Max(0.0f, transitionDistance);
 
                     lodGroupData->fadeTransitionWidth[i] = fadeTransitionWidth;
                     lodGroupCullingData->transitionDistances[i] = transitionDistance;
-                }
-            }
-        }
-    }
-
-    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-    internal unsafe struct FreeLODGroupDataJob : IJob
-    {
-        [ReadOnly] public NativeArray<int> destroyedLODGroupsID;
-
-        public NativeList<LODGroupData> lodGroupsData;
-        public NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataHash;
-        public NativeList<GPUInstanceIndex> freeLODGroupDataHandles;
-
-        [NativeDisableUnsafePtrRestriction] public int* removedRendererCount;
-
-        public void Execute()
-        {
-            foreach (int lodGroupID in destroyedLODGroupsID)
-            {
-                if (lodGroupDataHash.TryGetValue(lodGroupID, out var lodGroupInstance))
-                {
-                    Assert.IsTrue(lodGroupInstance.valid);
-
-                    lodGroupDataHash.Remove(lodGroupID);
-                    freeLODGroupDataHandles.Add(lodGroupInstance);
-
-                    ref LODGroupData lodGroupData = ref lodGroupsData.ElementAt(lodGroupInstance.index);
-                    Assert.IsTrue(lodGroupData.valid);
-
-                    *removedRendererCount += lodGroupData.rendererCount;
-                    lodGroupData.valid = false;
                 }
             }
         }
@@ -326,18 +251,9 @@ namespace UnityEngine.Rendering
 
             var lodGroupInstances = new NativeArray<GPUInstanceIndex>(inputData.lodGroupID.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
-            int previousRendererCount = 0;
-
-            new AllocateOrGetLODGroupDataInstancesJob
-            {
-                lodGroupsID = inputData.lodGroupID,
-                lodGroupsData = m_LODGroupData,
-                lodGroupCullingData = m_LODGroupCullingData,
-                lodGroupDataHash = m_LODGroupDataHash,
-                freeLODGroupDataHandles = m_FreeLODGroupDataHandles,
-                lodGroupInstances = lodGroupInstances,
-                previousRendererCount = &previousRendererCount
-            }.Run();
+            int previousRendererCount = LODGroupDataPoolBurst.AllocateOrGetLODGroupDataInstances(inputData.lodGroupID,
+                ref m_LODGroupData, ref m_LODGroupCullingData,
+                ref m_LODGroupDataHash, ref m_FreeLODGroupDataHandles, ref lodGroupInstances);
 
             m_CrossfadedRendererCount -= previousRendererCount;
             Assert.IsTrue(m_CrossfadedRendererCount >= 0);
@@ -364,21 +280,12 @@ namespace UnityEngine.Rendering
             lodGroupInstances.Dispose();
         }
 
-        public unsafe void FreeLODGroupData(NativeArray<int> destroyedLODGroupsID)
+        public void FreeLODGroupData(NativeArray<int> destroyedLODGroupsID)
         {
             if (destroyedLODGroupsID.Length == 0)
                 return;
 
-            int removedRendererCount = 0;
-
-            new FreeLODGroupDataJob
-            {
-                destroyedLODGroupsID = destroyedLODGroupsID,
-                lodGroupsData = m_LODGroupData,
-                lodGroupDataHash = m_LODGroupDataHash,
-                freeLODGroupDataHandles = m_FreeLODGroupDataHandles,
-                removedRendererCount = &removedRendererCount
-            }.Run();
+            int removedRendererCount = LODGroupDataPoolBurst.FreeLODGroupData(destroyedLODGroupsID, ref m_LODGroupData, ref m_LODGroupDataHash, ref m_FreeLODGroupDataHandles);
 
             m_CrossfadedRendererCount -= removedRendererCount;
             Assert.IsTrue(m_CrossfadedRendererCount >= 0);

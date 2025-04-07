@@ -213,6 +213,8 @@ namespace UnityEngine.Rendering.HighDefinition
 
                     RenderForwardOpaque(m_RenderGraph, hdCamera, colorBuffer, lightingBuffers, gpuLightListOutput, prepassOutput, vtFeedbackBuffer, shadowResult, cullingResults);
 
+                    RenderCustomPass(m_RenderGraph, hdCamera, colorBuffer, prepassOutput, customPassCullingResults, cullingResults, CustomPassInjectionPoint.AfterOpaqueColor, aovRequest, aovCustomPassBuffers, lightingBuffers);
+
                     if (IsComputeThicknessNeeded(hdCamera))
                         // Compute the thickness for All Transparent which can be occluded by opaque written on the DepthBuffer (which includes the Forward Opaques).
                         RenderThickness(m_RenderGraph, cullingResults, thicknessTexture, prepassOutput.depthPyramidTexture, hdCamera, HDRenderQueue.k_RenderQueue_AllTransparent, true);
@@ -227,7 +229,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     // Send all the geometry graphics buffer to client systems if required (must be done after the pyramid and before the transparent depth pre-pass)
                     SendGeometryGraphicsBuffers(m_RenderGraph, prepassOutput.normalBuffer, prepassOutput.depthPyramidTexture, hdCamera);
 
-                    RenderCustomPass(m_RenderGraph, hdCamera, colorBuffer, prepassOutput, customPassCullingResults, cullingResults, CustomPassInjectionPoint.AfterOpaqueAndSky, aovRequest, aovCustomPassBuffers);
+                    RenderCustomPass(m_RenderGraph, hdCamera, colorBuffer, prepassOutput, customPassCullingResults, cullingResults, CustomPassInjectionPoint.AfterOpaqueAndSky, aovRequest, aovCustomPassBuffers, lightingBuffers);
 
                     DoUserAfterOpaqueAndSky(m_RenderGraph, hdCamera, colorBuffer, prepassOutput.resolvedDepthBuffer, prepassOutput.resolvedNormalBuffer, prepassOutput.resolvedMotionVectorsBuffer);
 
@@ -336,7 +338,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 // At this point, the color buffer has been filled by either debug views are regular rendering so we can push it here.
                 var colorPickerTexture = PushColorPickerDebugTexture(m_RenderGraph, colorBuffer);
 
-                RenderCustomPass(m_RenderGraph, hdCamera, colorBuffer, prepassOutput, customPassCullingResults, cullingResults, CustomPassInjectionPoint.BeforePostProcess, aovRequest, aovCustomPassBuffers);
+                RenderCustomPass(m_RenderGraph, hdCamera, colorBuffer, prepassOutput, customPassCullingResults, cullingResults, CustomPassInjectionPoint.BeforePostProcess, aovRequest, aovCustomPassBuffers, lightingBuffers);
 
                 if (aovRequest.isValid)
                 {
@@ -434,7 +436,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 // Stop XR single pass before rendering screenspace UI
                 StopXRSinglePass(m_RenderGraph, hdCamera);
 
-                RenderScreenSpaceOverlayUI(m_RenderGraph, hdCamera, backBuffer);
+                if (renderRequest.isLast)
+                    RenderScreenSpaceOverlayUI(m_RenderGraph, hdCamera, backBuffer);
             }
         }
 
@@ -537,6 +540,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         if (data.hdrOutputParmeters.x >= 0)
                         {
                             data.blitMaterial.SetInt(HDShaderIDs._NeedsFlip, data.flip ? 1 : 0);
+                            propertyBlock.SetVector(HDShaderIDs._SrcOffset, new Vector4(data.viewport.x, data.viewport.y, Screen.width, Screen.height));
                             propertyBlock.SetTexture(HDShaderIDs._UITexture, data.uiTexture);
                             propertyBlock.SetTexture(HDShaderIDs._InputTexture, sourceTexture);
 
@@ -1002,7 +1006,7 @@ namespace UnityEngine.Rendering.HighDefinition
         TextureHandle CreateOffscreenUIDepthBuffer(RenderGraph renderGraph, MSAASamples msaaSamples, Rect viewport)
         {
             return renderGraph.CreateTexture(new TextureDesc((int)viewport.width, (int)viewport.height, false, true)
-                { format = GraphicsFormat.D32_SFloat_S8_UInt, clearBuffer = true, msaaSamples = msaaSamples, name = "UI Depth Buffer" });
+                { format = CoreUtils.GetDefaultDepthStencilFormat(), clearBuffer = true, msaaSamples = msaaSamples, name = "UI Depth Buffer" });
         }
 
 
@@ -1165,7 +1169,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     // if refraction is disabled, we did not create a copy of the depth buffer, so we need to create a dummy one here.
                     passData.depthAndStencil = builder.CreateTransientTexture(new TextureDesc(Vector2.one, true, true)
-                    { format = GraphicsFormat.D32_SFloat_S8_UInt, bindTextureMS = hdCamera.msaaSamples != MSAASamples.None, msaaSamples = hdCamera.msaaSamples, clearBuffer = false, name = "Dummy Depth", disableFallBackToImportedTexture = true, fallBackToBlackTexture = false});
+                    { format = CoreUtils.GetDefaultDepthStencilFormat(), bindTextureMS = hdCamera.msaaSamples != MSAASamples.None, msaaSamples = hdCamera.msaaSamples, clearBuffer = false, name = "Dummy Depth", disableFallBackToImportedTexture = true, fallBackToBlackTexture = false});
                 }
                 else
                 {
@@ -1588,7 +1592,7 @@ namespace UnityEngine.Rendering.HighDefinition
             if (hasWater)
             {
                 // Render the water gbuffer (and prepare for the transparent SSR pass)
-                output.waterGBuffer = m_WaterSystem.RenderWaterGBuffer(renderGraph, cullingResults, hdCamera, prepassOutput.depthBuffer, prepassOutput.normalBuffer, currentColorPyramid, prepassOutput.depthPyramidTexture, lightLists);
+                output.waterGBuffer = m_WaterSystem.RenderWaterGBuffer(renderGraph, cullingResults, hdCamera, prepassOutput.depthBuffer, prepassOutput.normalBuffer, currentColorPyramid, output.depthBufferPreRefraction, lightLists);
 
                 // Render Water Line
                 m_WaterSystem.RenderWaterLine(renderGraph, hdCamera, prepassOutput.depthBuffer, ref output);
@@ -2259,7 +2263,8 @@ namespace UnityEngine.Rendering.HighDefinition
             CullingResults cameraCullingResults,
             CustomPassInjectionPoint injectionPoint,
             AOVRequestData aovRequest,
-            List<RTHandle> aovCustomPassBuffers)
+            List<RTHandle> aovCustomPassBuffers,
+            in LightingBuffers lightingBuffers = default)
         {
             if (!hdCamera.frameSettings.IsEnabled(FrameSettingsField.CustomPass))
                 return false;
@@ -2282,6 +2287,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 motionVectorBufferRG = prepassOutput.resolvedMotionVectorsBuffer,
                 renderingLayerMaskRG = renderingLayerMaskBuffer,
                 shadingRateImageRG = prepassOutput.shadingRateImage,
+                sssBuffer = lightingBuffers.sssBuffer,
+                diffuseLightingBuffer = lightingBuffers.diffuseLightingBuffer,
                 waterLineRG = prepassOutput.waterLine,
             };
 

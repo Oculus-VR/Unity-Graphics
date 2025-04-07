@@ -1067,6 +1067,9 @@ namespace UnityEditor.ShaderGraph
             {
                 graphDefines.AppendLine("#define SHADERPASS {0}", pass.referenceName);
 
+                if (m_OutputNode == null && m_Mode == GenerationMode.Preview)
+                    graphDefines.AppendLine("#define SHADERGRAPH_PREVIEW_MAIN");
+
                 if (pass.defines != null)
                 {
                     foreach (DefineCollection.Item define in pass.defines)

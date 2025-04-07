@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Unity.Collections;
 using static UnityEngine.Rendering.DebugUI;
 using static UnityEngine.Rendering.DebugUI.Widget;
@@ -9,6 +10,7 @@ namespace UnityEngine.Rendering
     /// <summary>
     /// GPU Resident Drawer Rendering Debugger settings.
     /// </summary>
+    [CurrentPipelineHelpURL("gpu-resident-drawer")]
     public class DebugDisplayGPUResidentDrawer : IDebugDisplaySettingsData
     {
         const string k_FormatString = "{0}";
@@ -223,16 +225,20 @@ namespace UnityEngine.Rendering
             };
         }
 
-
-        [DisplayInfo(name = "GPU Resident Drawer", order = 5)]
+        [DisplayInfo(name = "Rendering", order = 5)]
         private class SettingsPanel : DebugDisplaySettingsPanel
         {
-            public override string PanelName => "GPU Resident Drawer";
-
             public override DebugUI.Flags Flags => DebugUI.Flags.EditorForceUpdate;
 
             public SettingsPanel(DebugDisplayGPUResidentDrawer data)
             {
+                var foldout = new DebugUI.Foldout()
+                {
+                    displayName = Strings.drawerSettingsContainerName,
+                    documentationUrl = typeof(DebugDisplayGPUResidentDrawer).GetCustomAttribute<HelpURLAttribute>()?.URL
+                };
+                AddWidget(foldout);
+
                 var helpBox = new DebugUI.MessageBox()
                 {
                     displayName = "Not Supported",
@@ -244,10 +250,9 @@ namespace UnityEngine.Rendering
                     },
                     isHiddenCallback = () => GPUResidentDrawer.IsEnabled()
                 };
+                foldout.children.Add(helpBox);
 
-                AddWidget(helpBox);
-
-                AddWidget(new Container()
+                foldout.children.Add(new Container()
                 {
                     displayName = Strings.occlusionCullingTitle,
                     isHiddenCallback = () => !GPUResidentDrawer.IsEnabled(),
@@ -265,14 +270,12 @@ namespace UnityEngine.Rendering
                 });
                 AddOcclusionContextStatsWidget(data);
 
-                AddWidget(new DebugUI.Container()
+                foldout.children.Add(new DebugUI.BoolField
                 {
-                    displayName = Strings.drawerSettingsContainerName,
-                    isHiddenCallback = () => !GPUResidentDrawer.IsEnabled(),
-                    children =
-                    {
-                        new DebugUI.BoolField { nameAndTooltip = Strings.displayBatcherStats, getter = () => data.displayBatcherStats, setter = value => data.displayBatcherStats = value},
-                    }
+                    nameAndTooltip = Strings.displayBatcherStats,
+                    getter = () => data.displayBatcherStats,
+                    setter = value => data.displayBatcherStats = value,
+                    isHiddenCallback = () => !GPUResidentDrawer.IsEnabled()
                 });
 
                 AddInstanceCullingStatsWidget(data);

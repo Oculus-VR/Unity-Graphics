@@ -99,6 +99,9 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                 case PassBreakReason.DifferentShadingRateStates:
                     message += $"{prevPassName} uses different shading rate states than {passName}.";
                     break;
+                case PassBreakReason.PassMergingDisabled:
+                    message += "The pass merging is disabled.";
+                    break;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -159,6 +162,22 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                             if (read.type == (RenderGraphResourceType) type && read.index == resIndex)
                             {
                                 var pair = ((RenderGraphResourceType) type, resIndex);
+                                if (!resourceWriteLists.ContainsKey(pair))
+                                    resourceWriteLists[pair] = new List<int>();
+                                resourceWriteLists[pair].Add(renderGraphPass.index);
+                            }
+                        }
+                        foreach (var read in renderGraphPass.transientResourceList[type])
+                        {
+                            if (read.type == (RenderGraphResourceType)type && read.index == resIndex)
+                            {
+                                // Transient resources are assumed to be read and write
+
+                                var pair = ((RenderGraphResourceType)type, resIndex);
+                                if (!resourceReadLists.ContainsKey(pair))
+                                    resourceReadLists[pair] = new List<int>();
+                                resourceReadLists[pair].Add(renderGraphPass.index);
+
                                 if (!resourceWriteLists.ContainsKey(pair))
                                     resourceWriteLists[pair] = new List<int>();
                                 resourceWriteLists[pair].Add(renderGraphPass.index);

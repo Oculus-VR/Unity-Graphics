@@ -154,9 +154,6 @@ namespace UnityEngine.Rendering.Universal
             {
                 renderPassEvent = m_CurrentSettings.AfterOpaque ? RenderPassEvent.AfterRenderingOpaques : RenderPassEvent.AfterRenderingGbuffer;
 
-                if (renderPassEvent == RenderPassEvent.AfterRenderingGbuffer)
-                    breakGBufferAndDeferredRenderPass = true;
-
                 m_CurrentSettings.Source = ScreenSpaceAmbientOcclusionSettings.DepthSource.DepthNormals;
             }
             else
@@ -339,7 +336,6 @@ namespace UnityEngine.Rendering.Universal
             {
                 // Shader keyword changes are considered as global state modifications
                 builder.AllowGlobalStateModification(true);
-                builder.AllowPassCulling(false);
 
                 // Fill in the Pass data...
                 InitSSAOPassData(ref passData);

@@ -15,9 +15,30 @@ using UnityEditor.Rendering;
 namespace UnityEngine.Rendering
 {
     /// <summary>
-    /// A global manager that tracks all the Volumes in the currently loaded Scenes and does all the
-    /// interpolation work.
+    /// The <see cref="VolumeManager"/> is a global manager responsible for tracking and managing all Volume settings across the currently loaded Scenes.
+    /// It handles interpolation and blending of Volume settings at runtime, ensuring smooth transitions between different states of the volumes.
+    /// This includes managing post-processing effects, lighting settings, and other environmental effects based on volume profiles.
     /// </summary>
+    /// <remarks>
+    ///
+    /// The <see cref="VolumeManager"/> is initialized with two VolumeProfiles:
+    /// 1. The default VolumeProfile defined in the Graphics Settings.
+    /// 2. The default VolumeProfile defined in the Quality Settings.
+    ///
+    /// These profiles represent the baseline state of all volume parameters, and the VolumeManager interpolates values between them to create a final blended VolumeStack for each camera.
+    /// Every frame, the VolumeManager updates the parameters of local and global VolumeComponents attached to game objects and ensures that the correct interpolation is applied across different volumes.
+    /// The VolumeManager acts as the central "point of truth" for all VolumeComponent parameters in a scene.
+    /// It provides default states for volume settings and dynamically interpolates between different VolumeProfiles to manage changes during runtime. This system is used to handle dynamic environmental and post-processing effects in Unity, ensuring smooth transitions across scene changes and camera views.
+    ///
+    /// The VolumeManager integrates seamlessly with Unity's Scriptable Render Pipelines, applying the appropriate settings for rendering effects such as lighting, bloom, exposure, etc., in real time.
+    /// </remarks>
+    /// <seealso cref="Volume"/>
+    /// <seealso cref="VolumeProfile"/>
+    /// <seealso cref="VolumeStack"/>
+    /// <seealso cref="VolumeComponent"/>
+    /// <seealso cref="VolumeParameter"/>
+    /// <seealso cref="QualitySettings"/>
+    /// <seealso cref="GraphicsSettings"/>
     public sealed partial class VolumeManager
     {
         static readonly ProfilerMarker k_ProfilerMarkerUpdate = new ("VolumeManager.Update");
@@ -531,9 +552,17 @@ namespace UnityEngine.Rendering
             m_VolumeCollection.ChangeLayer(volume, prevLayer, newLayer);
         }
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+        internal bool renderingDebuggerAttached { get; set; }
+        internal event Action<VolumeStack, Camera> beginVolumeStackUpdate;
+        internal event Action<VolumeStack, Camera> endVolumeStackUpdate;
+        internal event Action<VolumeStack, Volume, float> overrideVolumeStackData;
+#endif
+
         // Go through all listed components and lerp overridden values in the global state
-        void OverrideData(VolumeStack stack, List<VolumeComponent> components, float interpFactor)
+        void OverrideData(VolumeStack stack, Volume volume, float interpFactor)
         {
+            var components = volume.profileRef.components;
             var numComponents = components.Count;
             for (int i = 0; i < numComponents; i++)
             {
@@ -547,6 +576,12 @@ namespace UnityEngine.Rendering
                     component.Override(state, interpFactor);
                 }
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (renderingDebuggerAttached)
+                overrideVolumeStackData?.Invoke(stack, volume, interpFactor);
+#endif
+
         }
 
         // Faster version of OverrideData to force replace values in the global state.
@@ -683,6 +718,11 @@ namespace UnityEngine.Rendering
             if (!onlyGlobal)
                 trigger.TryGetComponent<Camera>(out camera);
 
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (renderingDebuggerAttached)
+                beginVolumeStackUpdate?.Invoke(stack, camera);
+#endif
+
             // Traverse all volumes
             int numVolumes = volumes.Count;
             for (int i = 0; i < numVolumes; i++)
@@ -704,7 +744,7 @@ namespace UnityEngine.Rendering
                 // Global volumes always have influence
                 if (volume.isGlobal)
                 {
-                    OverrideData(stack, volume.profileRef.components, Mathf.Clamp01(volume.weight));
+                    OverrideData(stack, volume, Mathf.Clamp01(volume.weight));
                     continue;
                 }
 
@@ -751,8 +791,13 @@ namespace UnityEngine.Rendering
                     interpFactor = 1f - (closestDistanceSqr / blendDistSqr);
 
                 // No need to clamp01 the interpolation factor as it'll always be in [0;1[ range
-                OverrideData(stack, volume.profileRef.components, interpFactor * Mathf.Clamp01(volume.weight));
+                OverrideData(stack, volume, interpFactor * Mathf.Clamp01(volume.weight));
             }
+
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            if (renderingDebuggerAttached)
+                endVolumeStackUpdate?.Invoke(stack, camera);
+#endif
         }
 
         /// <summary>

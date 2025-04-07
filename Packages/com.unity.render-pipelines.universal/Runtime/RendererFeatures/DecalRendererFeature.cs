@@ -1,7 +1,10 @@
 using System.Diagnostics;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering.Universal.Internal;
+using System;
+
 #if UNITY_EDITOR
+using UnityEditor.Rendering;
 using ShaderKeywordFilter = UnityEditor.ShaderKeywordFilter;
 #endif
 
@@ -98,6 +101,9 @@ namespace UnityEngine.Rendering.Universal
                 DecalProjector.onDecalPropertyChange += OnDecalPropertyChange;
                 DecalProjector.onDecalMaterialChange += OnDecalMaterialChange;
                 DecalProjector.onAllDecalPropertyChange += OnAllDecalPropertyChange;
+#if UNITY_EDITOR
+                RenderPipelineEditorUtility.onRenderingLayerCountChanged += OnAllDecalPropertyChange;
+#endif
             }
 
             m_ReferenceCounter++;
@@ -129,6 +135,9 @@ namespace UnityEngine.Rendering.Universal
             DecalProjector.onDecalPropertyChange -= OnDecalPropertyChange;
             DecalProjector.onDecalMaterialChange -= OnDecalMaterialChange;
             DecalProjector.onAllDecalPropertyChange -= OnAllDecalPropertyChange;
+#if UNITY_EDITOR
+            RenderPipelineEditorUtility.onRenderingLayerCountChanged -= OnAllDecalPropertyChange;
+#endif
         }
 
         private void OnDecalAdd(DecalProjector decalProjector)
@@ -217,9 +226,6 @@ namespace UnityEngine.Rendering.Universal
         /// <inheritdoc />
         public override void Create()
         {
-#if UNITY_EDITOR
-            ResourceReloader.TryReloadAllNullIn(this, UniversalRenderPipelineAsset.packagePath);
-#endif
             m_DecalPreviewPass = new DecalPreviewPass();
             m_RecreateSystems = true;
         }
@@ -509,7 +515,7 @@ namespace UnityEngine.Rendering.Universal
                 else
                 {
                     m_CopyDepthPass.CopyToDepth = true;
-                    m_CopyDepthPass.MssaSamples = 1;
+                    m_CopyDepthPass.MsaaSamples = 1;
                 }
             }
 
@@ -536,6 +542,7 @@ namespace UnityEngine.Rendering.Universal
         }
 
         /// <inheritdoc />
+        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
         public override void SetupRenderPasses(ScriptableRenderer renderer, in RenderingData renderingData)
         {
             // Disable obsolete warning for internal usage
@@ -567,7 +574,7 @@ namespace UnityEngine.Rendering.Universal
                         m_DBufferRenderPass.dBufferDepth
                     );
                     m_CopyDepthPass.CopyToDepth = true;
-                    m_CopyDepthPass.MssaSamples = 1;
+                    m_CopyDepthPass.MsaaSamples = 1;
                 }
             }
             else if (m_Technique == DecalTechnique.GBuffer && m_DeferredLights.UseFramebufferFetch)

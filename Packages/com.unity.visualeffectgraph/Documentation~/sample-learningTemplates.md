@@ -13,7 +13,7 @@ This sample content is compatible with both URP and HDRP projects, for VFX Graph
 To install this sample, first [install the Visual Effect Graph](https://docs.unity3d.com/Packages/com.unity.visualeffectgraph@17.0/manual/GettingStarted.html#installing-visual-effect-graph), then:
 
 
- 1. Go to **Window > Package Manager.**
+ 1. Go to **Window** > **Package Management** > **Package Manager**.
  1. From the [Package list view](https://docs.unity3d.com/2023.3/Documentation/Manual/upm-ui.html), select **Visual Effect Graph**.
 
 1. If it is not there: 
@@ -95,6 +95,8 @@ To start exploring the content of this sample:
 
 Each VFX covers a feature or aspect of VFX Graph, and illustrates what you can do with those features. Each VFX is accompanied by documentation and embedded explanations to help you in your learning journey.
 
+<a name="sample-showcase"></a>
+
 ### Sample Showcase window
 
 To open the Sample Showcase window:
@@ -136,17 +138,15 @@ To open a VFX asset, you can do one of the following:
    1. In the [Inspector](https://docs.unity3d.com/Manual/UsingTheInspector.html), find the Visual Effect component.
    1. Select **Edit**.
 
-- From the **Sample Showcase window**:
+- From the [Sample Showcase window](#sample-showcase):
 
-   1. Open the [Sample Showcase window](#Inspector). 
    1. Use the drop-down menu or arrow button to select the desired VFX.
    1. Select **Open VFX**.   
 
-- From the **Template window**:
+- From the [Template window](Templates-window.md):
 
-   1. Open the [Sample Showcase window](#Inspector). 
-   1. Use the drop-down menu or arrow button to select the desired VFX.
-   1. Select **Open VFX**.    
+   1. Select the desired VFX.
+   1. Select **Create**.   
 
 <img width="500" height="auto" src="Images/LearningSample_WindowTemplate.png" />
 

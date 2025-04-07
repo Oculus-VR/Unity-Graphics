@@ -113,7 +113,7 @@ namespace UnityEngine.Rendering
         public static void ReinitializeIfNeeded()
         {
 #if UNITY_EDITOR
-            if (!IsForcedOnViaCommandLine() && (IsProjectSupported() != IsEnabled()))
+            if (!IsForcedOnViaCommandLine() && !MaintainContext && (IsProjectSupported() != IsEnabled()))
             {
                 Reinitialize();
             }
@@ -269,6 +269,8 @@ namespace UnityEngine.Rendering
 #endif
         }
 
+        internal static bool MaintainContext { get; set; } = false;
+
         internal static void Reinitialize()
         {
             var settings = GetGlobalSettingsFromRPAsset();
@@ -334,7 +336,7 @@ namespace UnityEngine.Rendering
         private NativeList<int> m_FrameCameraIDs;
         private bool m_FrameUpdateNeeded = false;
 
-        private bool m_SelectionChanged;
+        private bool m_IsSelectionDirty;
 
         static GPUResidentDrawer()
         {
@@ -392,13 +394,16 @@ namespace UnityEngine.Rendering
             m_Dispatcher.EnableTypeTracking<LODGroup>(TypeTrackingFlags.SceneObjects);
             m_Dispatcher.EnableTypeTracking<Mesh>();
             m_Dispatcher.EnableTypeTracking<Material>();
-            m_Dispatcher.EnableTransformTracking<LODGroup>(TransformTrackingType.GlobalTRS);
             m_Dispatcher.EnableTypeTracking<MeshRenderer>(TypeTrackingFlags.SceneObjects);
+            m_Dispatcher.EnableTypeTracking<Camera>(TypeTrackingFlags.SceneObjects | TypeTrackingFlags.EditorOnlyObjects);
+
             m_Dispatcher.EnableTransformTracking<MeshRenderer>(TransformTrackingType.GlobalTRS);
+            m_Dispatcher.EnableTransformTracking<LODGroup>(TransformTrackingType.GlobalTRS);
 
 #if UNITY_EDITOR
             AssemblyReloadEvents.beforeAssemblyReload += OnAssemblyReload;
             m_FrameCameraIDs = new NativeList<int>(1, Allocator.Persistent);
+            m_IsSelectionDirty = true; // Force at least one selection update
 #endif
             SceneManager.sceneLoaded += OnSceneLoaded;
 
@@ -429,6 +434,7 @@ namespace UnityEngine.Rendering
 #endif
             SceneManager.sceneLoaded -= OnSceneLoaded;
 
+            // Note: Those RenderPipelineManager callbacks do not run when using built-in editor debug views such as lightmap, shadowmask etc
             RenderPipelineManager.beginContextRendering -= OnBeginContextRendering;
             RenderPipelineManager.endContextRendering -= OnEndContextRendering;
             RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
@@ -487,6 +493,7 @@ namespace UnityEngine.Rendering
         // If running in the editor the player loop might not run
         // In order to still have a single frame update we keep track of the camera ids
         // A frame update happens in case the first camera is rendered again
+        // Note: This doesn't run when using built-in debug views such as lightmaps, shadowmask and etc
         private void EditorFrameUpdate(List<Camera> cameras)
         {
             bool newFrame = false;
@@ -508,21 +515,16 @@ namespace UnityEngine.Rendering
                 else
                     m_FrameUpdateNeeded = true;
             }
-
-            ProcessSelection();
         }
 
         private void OnSelectionChanged()
         {
-            m_SelectionChanged = true;
+            m_IsSelectionDirty = true;
         }
 
-        private void ProcessSelection()
+        private void UpdateSelection()
         {
-            if(!m_SelectionChanged)
-                return;
-
-            m_SelectionChanged = false;
+            Profiler.BeginSample("GPUResidentDrawer.UpdateSelection");
 
             Object[] renderers = Selection.GetFiltered(typeof(MeshRenderer), SelectionMode.Deep);
 
@@ -534,6 +536,8 @@ namespace UnityEngine.Rendering
             m_Batcher.UpdateSelectedRenderers(rendererIDs);
 
             rendererIDs.Dispose();
+
+            Profiler.EndSample();
         }
 #endif
 
@@ -567,6 +571,7 @@ namespace UnityEngine.Rendering
             var lodGroupTransformData = m_Dispatcher.GetTransformChangesAndClear<LODGroup>(TransformTrackingType.GlobalTRS, Allocator.TempJob);
             var lodGroupData = m_Dispatcher.GetTypeChangesAndClear<LODGroup>(Allocator.TempJob, noScriptingArray: true);
             var meshDataSorted = m_Dispatcher.GetTypeChangesAndClear<Mesh>(Allocator.TempJob, sortByInstanceID: true, noScriptingArray: true);
+            var cameraChanges = m_Dispatcher.GetTypeChangesAndClear<Camera>(Allocator.TempJob, noScriptingArray: true);
             var materialData = m_Dispatcher.GetTypeChangesAndClear<Material>(Allocator.TempJob);
             var rendererData = m_Dispatcher.GetTypeChangesAndClear<MeshRenderer>(Allocator.TempJob, noScriptingArray: true);
             Profiler.EndSample();
@@ -593,6 +598,10 @@ namespace UnityEngine.Rendering
             ProcessLODGroups(lodGroupData.changedID, lodGroupData.destroyedID, lodGroupTransformData.transformedID);
             Profiler.EndSample();
 
+            Profiler.BeginSample("GPUResidentDrawer.ProcessCameras");
+            ProcessCameras(cameraChanges.changedID, cameraChanges.destroyedID);
+            Profiler.EndSample();
+
             Profiler.BeginSample("GPUResidentDrawer.ProcessRenderers");
             ProcessRenderers(rendererData, unsupportedRenderers.AsArray());
             Profiler.EndSample();
@@ -605,6 +614,7 @@ namespace UnityEngine.Rendering
             lodGroupData.Dispose();
             meshDataSorted.Dispose();
             materialData.Dispose();
+            cameraChanges.Dispose();
             rendererData.Dispose();
             unsupportedChangedMaterials.Dispose();
             unsupportedRenderers.Dispose();
@@ -612,10 +622,15 @@ namespace UnityEngine.Rendering
             supportedChangedPackedMaterialDatas.Dispose();
 
             m_BatchersContext.UpdateInstanceMotions();
-
             m_Batcher.UpdateFrame();
 
 #if UNITY_EDITOR
+            if (m_IsSelectionDirty)
+            {
+                UpdateSelection();
+                m_IsSelectionDirty = false;
+            }
+
             m_FrameUpdateNeeded = false;
 #endif
         }
@@ -627,6 +642,12 @@ namespace UnityEngine.Rendering
 
             if (unsupportedMaterials.Length > 0)
                 m_Batcher.DestroyMaterials(unsupportedMaterials);
+        }
+
+        private void ProcessCameras(NativeArray<int> changedIDs, NativeArray<int> destroyedIDs)
+        {
+            m_BatchersContext.UpdateCameras(changedIDs);
+            m_BatchersContext.FreePerCameraInstanceData(destroyedIDs);
         }
 
         private void ProcessMeshes(NativeArray<int> destroyedID)
@@ -809,14 +830,8 @@ namespace UnityEngine.Rendering
 
             if (materials.Length > 0)
             {
-                new ClassifyMaterialsJob
-                {
-                    materialIDs = materials.AsReadOnly(),
-                    batchMaterialHash = m_Batcher.instanceCullingBatcher.batchMaterialHash.AsReadOnly(),
-                    unsupportedMaterialIDs = unsupportedMaterials,
-                    supportedMaterialIDs = supportedMaterials,
-                    supportedPackedMaterialDatas = supportedPackedMaterialDatas
-                }.Run();
+                GPUResidentDrawerBurst.ClassifyMaterials(materials, m_Batcher.instanceCullingBatcher.batchMaterialHash.AsReadOnly(),
+                                                         ref supportedMaterials, ref unsupportedMaterials, ref supportedPackedMaterialDatas);
             }
         }
 
@@ -826,13 +841,8 @@ namespace UnityEngine.Rendering
 
             if (unsupportedMaterials.Length > 0)
             {
-                new FindUnsupportedRenderersJob
-                {
-                    unsupportedMaterials = unsupportedMaterials.AsReadOnly(),
-                    materialIDArrays = m_BatchersContext.sharedInstanceData.materialIDArrays,
-                    rendererGroups = m_BatchersContext.sharedInstanceData.rendererGroupIDs,
-                    unsupportedRenderers = unsupportedRenderers,
-                }.Run();
+                GPUResidentDrawerBurst.FindUnsupportedRenderers(unsupportedMaterials, m_BatchersContext.sharedInstanceData.materialIDArrays,
+                    m_BatchersContext.sharedInstanceData.rendererGroupIDs, ref unsupportedRenderers);
             }
 
             return unsupportedRenderers;
@@ -842,13 +852,8 @@ namespace UnityEngine.Rendering
         {
             NativeHashSet<int> filteredMaterials = new NativeHashSet<int>(materials.Length, allocator);
 
-            new GetMaterialsWithChangedPackedMaterialJob
-            {
-                materialIDs = materials.AsReadOnly(),
-                packedMaterialDatas = packedMaterialDatas.AsReadOnly(),
-                packedMaterialHash = batcher.instanceCullingBatcher.packedMaterialHash.AsReadOnly(),
-                filteredMaterials = filteredMaterials
-            }.Run();
+            GPUResidentDrawerBurst.GetMaterialsWithChangedPackedMaterial(materials, packedMaterialDatas,
+                batcher.instanceCullingBatcher.packedMaterialHash.AsReadOnly(), ref filteredMaterials);
 
             return filteredMaterials;
         }
@@ -869,79 +874,6 @@ namespace UnityEngine.Rendering
             jobHandle.Complete();
 
             return renderers;
-        }
-
-        [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        private struct ClassifyMaterialsJob : IJob
-        {
-            [ReadOnly] public NativeParallelHashMap<int, BatchMaterialID>.ReadOnly  batchMaterialHash;
-            [ReadOnly] public NativeArray<int>.ReadOnly  materialIDs;
-
-            public NativeList<int> supportedMaterialIDs;
-            public NativeList<int> unsupportedMaterialIDs;
-            public NativeList<GPUDrivenPackedMaterialData> supportedPackedMaterialDatas;
-
-            public void Execute()
-            {
-                var usedMaterialIDs = new NativeList<int>(4, Allocator.TempJob);
-
-                foreach (var materialID in materialIDs)
-                {
-                    if (batchMaterialHash.ContainsKey(materialID))
-                        usedMaterialIDs.Add(materialID);
-                }
-
-                if (usedMaterialIDs.IsEmpty)
-                {
-                    usedMaterialIDs.Dispose();
-                    return;
-                }
-
-                unsupportedMaterialIDs.Resize(usedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
-                supportedMaterialIDs.Resize(usedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
-                supportedPackedMaterialDatas.Resize(usedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
-
-                int unsupportedMaterialCount = GPUDrivenProcessor.ClassifyMaterials(usedMaterialIDs.AsArray(), unsupportedMaterialIDs.AsArray(), supportedMaterialIDs.AsArray(), supportedPackedMaterialDatas.AsArray());
-
-                unsupportedMaterialIDs.Resize(unsupportedMaterialCount, NativeArrayOptions.ClearMemory);
-                supportedMaterialIDs.Resize(usedMaterialIDs.Length - unsupportedMaterialCount, NativeArrayOptions.ClearMemory);
-                supportedPackedMaterialDatas.Resize(supportedMaterialIDs.Length, NativeArrayOptions.ClearMemory);
-
-                usedMaterialIDs.Dispose();
-            }
-        }
-
-        [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        private struct FindUnsupportedRenderersJob : IJob
-        {
-            [ReadOnly] public NativeArray<int>.ReadOnly unsupportedMaterials;
-            [ReadOnly] public NativeArray<SmallIntegerArray>.ReadOnly materialIDArrays;
-            [ReadOnly] public NativeArray<int>.ReadOnly rendererGroups;
-
-            public NativeList<int> unsupportedRenderers;
-
-            public unsafe void Execute()
-            {
-                if (unsupportedMaterials.Length == 0)
-                    return;
-
-                for (int arrayIndex = 0; arrayIndex < materialIDArrays.Length; arrayIndex++)
-                {
-                    var materialIDs = materialIDArrays[arrayIndex];
-                    int rendererID = rendererGroups[arrayIndex];
-
-                    for (int i = 0; i < materialIDs.Length; i++)
-                    {
-                        int materialID = materialIDs[i];
-
-                        if (unsupportedMaterials.Contains(materialID))
-                        {
-                            unsupportedRenderers.Add(rendererID);
-                            break;
-                        }
-                    }
-                }
-            }
         }
 
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
@@ -985,31 +917,6 @@ namespace UnityEngine.Rendering
                 }
 
                 selectedRenderGroups.AddRangeNoResize(renderersToAddPtr, renderersToAdd.Length);
-            }
-        }
-
-        [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        private struct GetMaterialsWithChangedPackedMaterialJob : IJob
-        {
-            [ReadOnly] public NativeArray<int>.ReadOnly materialIDs;
-            [ReadOnly] public NativeArray<GPUDrivenPackedMaterialData>.ReadOnly packedMaterialDatas;
-            [ReadOnly] public NativeParallelHashMap<int, GPUDrivenPackedMaterialData>.ReadOnly packedMaterialHash;
-
-            [WriteOnly] public NativeHashSet<int> filteredMaterials;
-
-            public void Execute()
-            {
-                for (int index = 0; index < materialIDs.Length ; index++)
-                {
-                    var materialID = materialIDs[index];
-                    var newPackedMaterialData = packedMaterialDatas[index];
-
-                    // Has its packed material changed? If the material isn't in the packed material cache, consider the material has changed.
-                    if (packedMaterialHash.TryGetValue(materialID, out var packedMaterial) && packedMaterial.Equals(newPackedMaterialData))
-                        continue;
-
-                    filteredMaterials.Add(materialID);
-                }
             }
         }
     }

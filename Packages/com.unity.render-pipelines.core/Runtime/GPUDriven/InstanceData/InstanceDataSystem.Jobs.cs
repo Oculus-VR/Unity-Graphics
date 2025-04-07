@@ -483,213 +483,6 @@ namespace UnityEngine.Rendering
         }
 
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        private struct ReallocateInstancesJob : IJob
-        {
-            [ReadOnly] public bool implicitInstanceIndices;
-            [ReadOnly] public NativeArray<int> rendererGroupIDs;
-            [ReadOnly] public NativeArray<GPUDrivenPackedRendererData> packedRendererData;
-            [ReadOnly] public NativeArray<int> instanceOffsets;
-            [ReadOnly] public NativeArray<int> instanceCounts;
-
-            public InstanceAllocators instanceAllocators;
-            public CPUInstanceData instanceData;
-            public CPUSharedInstanceData sharedInstanceData;
-            public NativeArray<InstanceHandle> instances;
-            public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-
-            public void Execute()
-            {
-                for (int i = 0; i < rendererGroupIDs.Length; ++i)
-                {
-                    var rendererGroupID = rendererGroupIDs[i];
-                    var hasTree = packedRendererData[i].hasTree;
-
-                    int instanceCount;
-                    int instanceOffset;
-
-                    if (implicitInstanceIndices)
-                    {
-                        instanceCount = 1;
-                        instanceOffset = i;
-                    }
-                    else
-                    {
-                        instanceCount = instanceCounts[i];
-                        instanceOffset = instanceOffsets[i];
-                    }
-
-                    SharedInstanceHandle sharedInstance;
-
-                    if (rendererGroupInstanceMultiHash.TryGetFirstValue(rendererGroupID, out var instance, out var it))
-                    {
-                        sharedInstance = instanceData.Get_SharedInstance(instance);
-
-                        int currentInstancesCount = sharedInstanceData.Get_RefCount(sharedInstance);
-                        int instancesToFreeCount = currentInstancesCount - instanceCount;
-
-                        if (instancesToFreeCount > 0)
-                        {
-                            bool success = true;
-                            int freedInstancesCount = 0;
-
-                            for (int j = 0; j < instanceCount; ++j)
-                                success = rendererGroupInstanceMultiHash.TryGetNextValue(out instance, ref it);
-
-                            Assert.IsTrue(success);
-
-                            while (success)
-                            {
-                                instanceData.Remove(instance);
-                                instanceAllocators.FreeInstance(instance);
-
-                                rendererGroupInstanceMultiHash.Remove(it);
-                                ++freedInstancesCount;
-                                success = rendererGroupInstanceMultiHash.TryGetNextValue(out instance, ref it);
-                            }
-
-                            Assert.AreEqual(instancesToFreeCount, freedInstancesCount);
-                        }
-                    }
-                    else
-                    {
-                        sharedInstance = instanceAllocators.AllocateSharedInstance();
-                        sharedInstanceData.AddNoGrow(sharedInstance);
-                    }
-
-                    if (instanceCount > 0)
-                    {
-                        sharedInstanceData.Set_RefCount(sharedInstance, instanceCount);
-
-                        for (int j = 0; j < instanceCount; ++j)
-                        {
-                            int instanceIndex = instanceOffset + j;
-
-                            if (instances[instanceIndex].valid)
-                                continue;
-
-                            InstanceHandle newInstance;
-
-                            if (!hasTree)
-                                newInstance = instanceAllocators.AllocateInstance(InstanceType.MeshRenderer);
-                            else
-                                newInstance = instanceAllocators.AllocateInstance(InstanceType.SpeedTree);
-
-                            instanceData.AddNoGrow(newInstance);
-                            int index = instanceData.InstanceToIndex(newInstance);
-                            instanceData.sharedInstances[index] = sharedInstance;
-                            instanceData.movedInCurrentFrameBits.Set(index, false);
-                            instanceData.movedInPreviousFrameBits.Set(index, false);
-                            instanceData.visibleInPreviousFrameBits.Set(index, false);
-
-                            rendererGroupInstanceMultiHash.Add(rendererGroupID, newInstance);
-                            instances[instanceIndex] = newInstance;
-                        }
-                    }
-                    else
-                    {
-                        sharedInstanceData.Remove(sharedInstance);
-                        instanceAllocators.FreeSharedInstance(sharedInstance);
-                    }
-                }
-            }
-        }
-
-        [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        private struct FreeInstancesJob : IJob
-        {
-            [ReadOnly] public NativeArray<InstanceHandle> instances;
-
-            public InstanceAllocators instanceAllocators;
-            public CPUInstanceData instanceData;
-            public CPUSharedInstanceData sharedInstanceData;
-            public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-
-            public void Execute()
-            {
-                foreach (var instance in instances)
-                {
-                    if (!instanceData.IsValidInstance(instance))
-                        continue;
-
-                    int instanceIndex = instanceData.InstanceToIndex(instance);
-                    SharedInstanceHandle sharedInstance = instanceData.sharedInstances[instanceIndex];
-                    int sharedInstanceIndex = sharedInstanceData.SharedInstanceToIndex(sharedInstance);
-                    int refCount = sharedInstanceData.refCounts[sharedInstanceIndex];
-                    var rendererGroupID = sharedInstanceData.rendererGroupIDs[sharedInstanceIndex];
-
-                    Assert.IsTrue(refCount > 0);
-
-                    if (refCount > 1)
-                    {
-                        sharedInstanceData.refCounts[sharedInstanceIndex] = refCount - 1;
-                    }
-                    else
-                    {
-                        sharedInstanceData.Remove(sharedInstance);
-                        instanceAllocators.FreeSharedInstance(sharedInstance);
-                    }
-
-                    instanceData.Remove(instance);
-                    instanceAllocators.FreeInstance(instance);
-
-                    //@ This will have quadratic cost. Optimize later.
-                    for (bool success = rendererGroupInstanceMultiHash.TryGetFirstValue(rendererGroupID, out var i, out var it); success;)
-                    {
-                        if (instance.Equals(i))
-                        {
-                            rendererGroupInstanceMultiHash.Remove(it);
-                            break;
-                        }
-                        success = rendererGroupInstanceMultiHash.TryGetNextValue(out i, ref it);
-                    }
-                }
-            }
-        }
-
-        [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        private struct FreeRendererGroupInstancesJob : IJob
-        {
-            [ReadOnly] public NativeArray<int> rendererGroupsID;
-
-            public InstanceAllocators instanceAllocators;
-            public CPUInstanceData instanceData;
-            public CPUSharedInstanceData sharedInstanceData;
-            public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-
-            public void Execute()
-            {
-                foreach (var rendererGroupID in rendererGroupsID)
-                {
-                    for (bool success = rendererGroupInstanceMultiHash.TryGetFirstValue(rendererGroupID, out var instance, out var it); success;)
-                    {
-                        SharedInstanceHandle sharedInstance = instanceData.Get_SharedInstance(instance);
-                        int sharedInstanceIndex = sharedInstanceData.SharedInstanceToIndex(sharedInstance);
-                        int refCount = sharedInstanceData.refCounts[sharedInstanceIndex];
-
-                        Assert.IsTrue(refCount > 0);
-
-                        if (refCount > 1)
-                        {
-                            sharedInstanceData.refCounts[sharedInstanceIndex] = refCount - 1;
-                        }
-                        else
-                        {
-                            sharedInstanceData.Remove(sharedInstance);
-                            instanceAllocators.FreeSharedInstance(sharedInstance);
-                        }
-
-                        instanceData.Remove(instance);
-                        instanceAllocators.FreeInstance(instance);
-
-                        success = rendererGroupInstanceMultiHash.TryGetNextValue(out instance, ref it);
-                    }
-
-                    rendererGroupInstanceMultiHash.Remove(rendererGroupID);
-                }
-            }
-        }
-
-        [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
         private unsafe struct UpdateRendererInstancesJob : IJobParallelFor
         {
             public const int k_BatchSize = 128;
@@ -701,6 +494,7 @@ namespace UnityEngine.Rendering
 
             [NativeDisableParallelForRestriction][NativeDisableContainerSafetyRestriction, NoAlias] public CPUInstanceData instanceData;
             [NativeDisableParallelForRestriction][NativeDisableContainerSafetyRestriction, NoAlias] public CPUSharedInstanceData sharedInstanceData;
+            [NativeDisableParallelForRestriction][NativeDisableContainerSafetyRestriction, NoAlias] public CPUPerCameraInstanceData perCameraInstanceData;
 
             public void Execute(int index)
             {
@@ -715,6 +509,7 @@ namespace UnityEngine.Rendering
                 int materialCount = rendererData.materialsCount[index];
 
                 int meshID = rendererData.meshID[meshIndex];
+                var meshLodInfo = rendererData.meshLodInfo[meshIndex];
 
                 const int k_LightmapIndexMask = 0xFFFF;
                 const int k_LightmapIndexNotLightmapped = 0xFFFF;
@@ -748,6 +543,9 @@ namespace UnityEngine.Rendering
                     default:
                         break;
                 }
+
+                if (meshLodInfo.lodSelectionActive)
+                    instanceFlags |= InstanceFlags.HasMeshLod;
 
                 // If the object is light mapped, or has the special influence-only value, it affects lightmaps
                 if (lmIndexMasked != k_LightmapIndexNotLightmapped)
@@ -794,7 +592,7 @@ namespace UnityEngine.Rendering
                         materialIDs[i] = materialInstanceID;
                     }
 
-                    sharedInstanceData.Set(sharedInstance, rendererGroupID, materialIDs, meshID, localAABB, transformUpdateFlags, instanceFlags, lodGroupAndMask, gameObjectLayer,
+                    sharedInstanceData.Set(sharedInstance, rendererGroupID, materialIDs, meshID, localAABB, transformUpdateFlags, instanceFlags, lodGroupAndMask, meshLodInfo, gameObjectLayer,
                         sharedInstanceData.Get_RefCount(sharedInstance));
 
                     for (int i = 0; i < instancesCount; ++i)
@@ -811,6 +609,7 @@ namespace UnityEngine.Rendering
                         bool isFlipped = (det < 0.0f);
 
                         int instanceIndex = instanceData.InstanceToIndex(instance);
+                        perCameraInstanceData.SetDefault(instanceIndex);
                         instanceData.localToWorldIsFlippedBits.Set(instanceIndex, isFlipped);
                         instanceData.worldAABBs[instanceIndex] = worldAABB;
                         instanceData.tetrahedronCacheIndices[instanceIndex] = -1;
@@ -818,6 +617,7 @@ namespace UnityEngine.Rendering
                         instanceData.editorData.sceneCullingMasks[instanceIndex] = rendererData.editorData[index].sceneCullingMask;
                         // Store more editor instance data here if needed.
 #endif
+                        instanceData.meshLodData[instanceIndex] = rendererData.meshLodData[index];
                     }
                 }
             }
