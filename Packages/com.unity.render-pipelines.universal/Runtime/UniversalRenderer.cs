@@ -1883,7 +1883,9 @@ namespace UnityEngine.Rendering.Universal
             int msaaSamples = cameraTargetDescriptor.msaaSamples;
             bool isScaledRender = cameraData.imageScalingMode != ImageScalingMode.None;
             bool isCompatibleBackbufferTextureDimension = cameraTargetDescriptor.dimension == TextureDimension.Tex2D;
-            bool requiresExplicitMsaaResolve = msaaSamples > 1 && PlatformRequiresExplicitMsaaResolve();
+            // In XR when the eye buffer have msaa auto resolve (the render target has msaa samples > 1), we don't need an explicit resolve.
+            // This will avoid the finalBlit pass when using MSAA.
+            bool requiresExplicitMsaaResolve = msaaSamples > 1 && !(cameraData.xr.enabled && cameraData.xr.renderTargetDesc.msaaSamples > 1) && PlatformRequiresExplicitMsaaResolve();
             bool isOffscreenRender = cameraData.targetTexture != null && !isSceneViewCamera;
             bool isCapturing = cameraData.captureActions != null;
 

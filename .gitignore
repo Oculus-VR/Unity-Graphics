@@ -38,7 +38,6 @@
 ShaderGraph/DebugOutput.meta
 ShaderGraph/DebugOutput/**
 ShaderGraph/Testing/IntegrationTests/.Failed
-TestProjects/*/ProjectSettings/ProjectVersion.txt
 TestProjects/VisualEffectGraph_HDRP/GraphViz/
 
 */manifest-updater.py

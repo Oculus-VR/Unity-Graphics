@@ -1,0 +1,87 @@
+.Root {
+    -unity-font-definition: initial;
+    -unity-font: url('project://database/Packages/com.unity.render-pipelines.core/Runtime/Debugging/Prefabs/Fonts/PerfectDOSVGA437.ttf?fileID=12800000&guid=74a5091d8707f334b9a5c31ef71a64ba&type=3#PerfectDOSVGA437');
+    -unity-font-style: normal;
+    color: rgb(255, 255, 255);
+    font-size: 16px;
+}
+
+Button {
+    border-left-width: 1px;
+    border-right-width: 1px;
+    border-top-width: 1px;
+    border-bottom-width: 1px;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    color: rgb(27, 27, 27);
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-left: 6px;
+    padding-right: 6px;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-left-color: rgb(119, 119, 119);
+    border-right-color: rgb(119, 119, 119);
+    border-top-color: rgb(119, 119, 119);
+    border-bottom-color: rgb(119, 119, 119);
+    background-color: rgb(204, 204, 204);
+}
+
+Label {
+    padding-left: 1px;
+    padding-right: 1px;
+    padding-top: 1px;
+    padding-bottom: 1px;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.TimingsGraph {
+    width: 100%;
+    height: 100%;
+    min-width: 100%;
+    min-height: 100%;
+}
+
+.SingleStat {
+    font-size: 100%;
+    flex-direction: row;
+}
+
+.Timing_Col1 {
+    width: 140px;
+}
+
+.Timing_Col2 {
+    width: 60px;
+}
+
+.StatLine {
+    background-color: rgba(0, 0, 0, 0);
+    margin-top: -0.5px;
+    width: 100%;
+    height: 1px;
+    position: absolute;
+    bottom: 15%;
+}
+
+.SmallButton {
+    width: 20px;
+    height: 20px;
+    -unity-text-align: middle-center;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 2px;
+    padding-bottom: 0;
+    align-self: center;
+}

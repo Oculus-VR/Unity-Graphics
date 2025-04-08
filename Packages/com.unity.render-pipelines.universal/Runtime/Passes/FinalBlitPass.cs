@@ -226,7 +226,9 @@ namespace UnityEngine.Rendering.Universal.Internal
             if (cameraData.xr.enabled)
                 isRenderToBackBufferTarget = new RenderTargetIdentifier(destination.nameID, 0, CubemapFace.Unknown, -1) == new RenderTargetIdentifier(cameraData.xr.renderTarget, 0, CubemapFace.Unknown, -1);
 #endif
+            // The final blit can't be easily avoided for the logo screen when using HDR, manually correct the scale bias when using nrp with render graph
             Vector4 scaleBias = RenderingUtils.GetFinalBlitScaleBias(source, destination, cameraData);
+
             if (isRenderToBackBufferTarget)
                 cmd.SetViewport(cameraData.pixelRect);
 

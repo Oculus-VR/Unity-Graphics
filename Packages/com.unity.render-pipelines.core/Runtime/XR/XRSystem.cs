@@ -463,6 +463,7 @@ namespace UnityEngine.Experimental.Rendering
             rtDesc.volumeDepth  = xrDesc.volumeDepth;
             rtDesc.vrUsage      = xrDesc.vrUsage;
             rtDesc.sRGB         = xrDesc.sRGB;
+            rtDesc.msaaSamples  = xrDesc.msaaSamples;
             rtDesc.shadowSamplingMode = xrDesc.shadowSamplingMode;
             return rtDesc;
         }
