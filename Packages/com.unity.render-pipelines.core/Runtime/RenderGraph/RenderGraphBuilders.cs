@@ -402,7 +402,7 @@ namespace UnityEngine.Rendering.RenderGraphModule
 
         public void SetInputAttachment(TextureHandle tex, int index, AccessFlags flags, int mipLevel, int depthSlice)
         {
-            // Depth texture can be bind as input attachment, bypass the depth format check inside CheckUseFragment
+            // Depth texture can be bound as input attachment, bypass the depth format check inside CheckUseFragment
             m_Resources.GetRenderTargetInfo(tex.handle, out var info);
             bool isDepth = GraphicsFormatUtility.IsDepthFormat(info.format);
             // Bypass the already used check for texture read, so that an attachment can be used as depth and input in one subpass
