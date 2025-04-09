@@ -954,7 +954,13 @@ namespace UnityEngine.Rendering.Universal
 
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (cameraData.xr.hasValidOcclusionMesh)
+            {
+                if (SystemInfo.usesLoadStoreActions)
+                    m_XROcclusionMeshPass.ConfigureClear(ClearFlag.All, Color.black);
+
+                m_XROcclusionMeshPass.ConfigureDepthStoreAction(RenderBufferStoreAction.DontCare);
                 EnqueuePass(m_XROcclusionMeshPass);
+            }
 #endif
 
 #if !UNITY_EDITOR

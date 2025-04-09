@@ -35,6 +35,11 @@ namespace UnityEngine.Experimental.Rendering
         // MSAA level (number of samples per pixel) shared by all XR displays
         static MSAASamples s_MSAASamples = MSAASamples.None;
 
+#if ENABLE_VR && ENABLE_XR_MODULE
+        // Occlusion Mesh scaling factor
+        static float s_OcclusionMeshScaling = 1.0f;
+#endif
+
         // Internal resources used by XR rendering
         static Material s_OcclusionMeshMaterial;
         static Material s_MirrorViewMaterial;
@@ -127,6 +132,29 @@ namespace UnityEngine.Experimental.Rendering
         public static MSAASamples GetDisplayMSAASamples()
         {
             return s_MSAASamples;
+        }
+
+        /// <summary>
+        /// Used by the render pipeline to scale all occlusion meshes used by all XRPasses.
+        /// </summary>
+        /// <param name="occlusionMeshScale">A value of 1.0f represents 100% of the original mesh size. A value less or equal to 0.0f disables occlusion mesh draw. </param>
+        public static void SetOcclusionMeshScale(float occlusionMeshScale)
+        {
+#if ENABLE_VR && ENABLE_XR_MODULE
+            s_OcclusionMeshScaling = occlusionMeshScale;
+#endif
+        }
+
+        /// <summary>
+        /// Returned value used by the render pipeline to scale all occlusion meshes used by all XRPasses.
+        /// </summary>
+        public static float GetOcclusionMeshScale()
+        {
+#if ENABLE_VR && ENABLE_XR_MODULE
+            return s_OcclusionMeshScaling;
+#else
+            return 1.0f;
+#endif
         }
 
         /// <summary>
@@ -373,6 +401,7 @@ namespace UnityEngine.Experimental.Rendering
                 cullingParameters           = cullingParameters,
                 motionVectorRenderTarget    = XRPassCreateInfo.mvInvalidRT,
                 occlusionMeshMaterial       = s_OcclusionMeshMaterial,
+                occlusionMeshScale          = GetOcclusionMeshScale(),
                 foveatedRenderingInfo       = xrRenderPass.foveatedRenderingInfo,
                 multipassId                 = s_Layout.GetActivePasses().Count,
                 cullingPassId               = xrRenderPass.cullingPassIndex,
