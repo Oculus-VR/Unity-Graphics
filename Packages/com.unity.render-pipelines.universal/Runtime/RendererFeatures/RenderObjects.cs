@@ -229,7 +229,11 @@ namespace UnityEngine.Rendering.Universal
 
             if (settings.overrideDepthState)
             {
-                renderObjectsPass.useDepthInputAttachment = settings.depthInput;
+                // In edit mode, the camera being used is the sceneview camera. Which causes issue for depth input
+                if (Application.isPlaying)
+                {
+                    renderObjectsPass.useDepthInputAttachment = settings.depthInput;
+                }
                 renderObjectsPass.SetDepthState(settings.enableWrite, settings.depthCompareFunction);
             }
 
