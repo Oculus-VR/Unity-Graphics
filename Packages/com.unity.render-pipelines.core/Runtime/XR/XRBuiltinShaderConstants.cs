@@ -1,3 +1,4 @@
+using System;
 using UnityEngine.Rendering;
 
 namespace UnityEngine.Experimental.Rendering
@@ -78,6 +79,23 @@ namespace UnityEngine.Experimental.Rendering
         /// <param name="viewMatrix"></param>
         /// <param name="projMatrix"></param>
         /// <param name="renderIntoTexture"></param>
+        /// <param name="viewIndex"></param>
+        [Obsolete]
+        public static void UpdateBuiltinShaderConstants(Matrix4x4 viewMatrix, Matrix4x4 projMatrix,
+            bool renderIntoTexture, int viewIndex, bool prevViewValid, Matrix4x4 prevViewMatrix,
+            bool isOculusMotionVec = false)
+        {
+            UpdateBuiltinShaderConstants(viewMatrix, projMatrix, renderIntoTexture, 0, viewIndex, prevViewValid,
+                prevViewMatrix, isOculusMotionVec);
+        }
+
+        /// <summary>
+        /// Update the shader constant data used by the C++ builtin renderer.
+        /// </summary>
+        /// <param name="viewMatrix"></param>
+        /// <param name="projMatrix"></param>
+        /// <param name="renderIntoTexture"></param>
+        /// <param name="passIndex"></param>
         /// <param name="viewIndex"></param>
         public static void UpdateBuiltinShaderConstants(Matrix4x4 viewMatrix, Matrix4x4 projMatrix, bool renderIntoTexture, int passIndex, int viewIndex, bool prevViewValid, Matrix4x4 prevViewMatrix, bool isOculusMotionVec = false)
         {
