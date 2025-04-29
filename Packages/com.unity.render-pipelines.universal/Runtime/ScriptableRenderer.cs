@@ -981,17 +981,17 @@ namespace UnityEngine.Rendering.Universal
             if (!Handles.ShouldRenderGizmos() || cameraData.camera.sceneViewFilterMode == Camera.SceneViewFilterMode.ShowFiltered)
                 return;
 
-            using (var builder = renderGraph.AddRasterRenderPass<DrawGizmosPassData>("Draw Gizmos Pass", out var passData,
+            using (var builder = renderGraph.AddUnsafePass<DrawGizmosPassData>("Draw Gizmos Pass", out var passData,
                 Profiling.drawGizmos))
             {
-                builder.SetRenderAttachment(color, 0, AccessFlags.Write);
-                builder.SetRenderAttachmentDepth(depth, AccessFlags.ReadWrite);
+                builder.UseTexture(color, AccessFlags.Write);
+                builder.UseTexture(depth, AccessFlags.ReadWrite);
 
                 passData.gizmoRenderList = renderGraph.CreateGizmoRendererList(cameraData.camera, gizmoSubset);
                 builder.UseRendererList(passData.gizmoRenderList);
                 builder.AllowPassCulling(false);
 
-                builder.SetRenderFunc((DrawGizmosPassData data, RasterGraphContext rgContext) =>
+                builder.SetRenderFunc((DrawGizmosPassData data, UnsafeGraphContext rgContext) =>
                 {
                     using (new ProfilingScope(rgContext.cmd, Profiling.drawGizmos))
                     {
