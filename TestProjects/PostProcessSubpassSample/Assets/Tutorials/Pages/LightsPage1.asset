@@ -1,0 +1,130 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ff771ccdf4150419d9ff4d342b069aae, type: 3}
+  m_Name: LightsPage1
+  m_EditorClassIdentifier: 
+  Title:
+    m_Untranslated: Directional light
+  m_Paragraphs:
+    m_Items:
+    - m_Type: 6
+      Title:
+        m_Untranslated: 
+      Text:
+        m_Untranslated: 
+      m_Tutorial: {fileID: 0}
+      m_Image: {fileID: 2800000, guid: 1468eefb51890cc45b92aafcab5073d7, type: 3}
+      m_Video: {fileID: 0}
+      m_CriteriaCompletion: 0
+      m_Criteria:
+        m_Items: []
+      m_MaskingSettings:
+        m_MaskingEnabled: 0
+        m_UnmaskedViews: []
+      m_Summary: 
+      m_Description: 
+      m_InstructionBoxTitle: 
+      m_InstructionText: 
+      m_TutorialButtonText: 
+    - m_Type: 0
+      Title:
+        m_Untranslated: 
+      Text:
+        m_Untranslated: "<b>Lights</b> are added to the Scene with the <i>GameObject</i>
+          menu or with the right-click menu in the <i>Hierarchy.</i>\n\nThe sunlight
+          is simulated with a <b>Directional Light,</b> a type of light with an infinite
+          range and no intensity falloff. Let\u2019s see how it is set up in this
+          Scene.\n\n1. In the <i>Hierarchy,</i> select <b>Root</b>  > <b>Lighting</b>
+          > <b>Outdoor</b> > <b>MainLight.</b>\n\n2. In the <i>Inspector,</i> in
+          the <b>Light</b> component, in the <b>General</b> foldout, notice that
+          the <b>Type</b> is set to <b>Directional.</b> \n\n3. Change the <b>Type</b>
+          to <b>Spot</b> and observe that most of the Scene is not illuminated anymore,
+          as the Spot light only affects the area defined by its cone. Undo your
+          change.\n\n4. In the <b>Emission</b> foldout, see that the color of the
+          light can be defined using the <b>Filter and Temperature</b> mode. This
+          mode provides a physically based way to control the light's color.\n\n5.
+          Experiment with various <b>Color</b> and <b>Intensity</b> properties to
+          understand how they affect the Scene.\n\n6. Undo your changes.\n\n\n<b>Expert
+          Tips</b>\n\nUnlike HDRP, URP does not provide physically-based intensity
+          units. Therefore, there are no particular rules when selecting an intensity,
+          as long as it fits the art direction. \n\nThe intensity value you decide
+          to use is primarily influenced by your post-processing settings, notably
+          the <b>Post Exposure</b> in the <b>Color Adjustements</b> Volume override,
+          as it greatly affects the perceived brightness of the Scene."
+      m_Tutorial: {fileID: 0}
+      m_Image: {fileID: 0}
+      m_Video: {fileID: 0}
+      m_CriteriaCompletion: 0
+      m_Criteria:
+        m_Items: []
+      m_MaskingSettings:
+        m_MaskingEnabled: 0
+        m_UnmaskedViews: []
+      m_Summary: 
+      m_Description: 
+      m_InstructionBoxTitle: 
+      m_InstructionText: 
+      m_TutorialButtonText: 
+  m_CameraSettings:
+    m_CameraMode: 1
+    m_FocusMode: 0
+    m_Orthographic: 0
+    m_Size: 10
+    m_Pivot: {x: 7.3574047, y: -5.1580844, z: -10.541923}
+    m_Rotation: {x: -0.06636536, y: -0.93259335, z: 0.22704615, w: -0.27261335}
+    m_FrameObject:
+      m_SceneGuid: 
+      m_GameObjectGuid: 
+      m_SerializedComponentType:
+        m_TypeName: 
+      m_ComponentIndex: 0
+      m_AssetObject: {fileID: 0}
+      m_Prefab: {fileID: 0}
+    m_Enabled: 1
+  NextButton:
+    m_Untranslated: Next
+  DoneButton:
+    m_Untranslated: Done
+  m_CompletedSound: {fileID: 0}
+  m_AutoAdvance: 0
+  Showing:
+    m_PersistentCalls:
+      m_Calls: []
+  Shown:
+    m_PersistentCalls:
+      m_Calls: []
+  Staying:
+    m_PersistentCalls:
+      m_Calls: []
+  CriteriaValidated:
+    m_PersistentCalls:
+      m_Calls: []
+  MaskingSettingsChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  NonMaskingSettingsChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnBeforePageShown:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnAfterPageShown:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnTutorialPageStay:
+    m_PersistentCalls:
+      m_Calls: []
+  m_OnBeforeTutorialQuit:
+    m_PersistentCalls:
+      m_Calls: []
+  m_NextButton: 
+  m_DoneButton: 

@@ -1,0 +1,116 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2842044123614818796
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 174369136901342378}
+  m_Layer: 0
+  m_Name: LandscapeStone_02_Prefab
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 2147483647
+  m_IsActive: 1
+--- !u!4 &174369136901342378
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2842044123614818796}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 5240346785785719020}
+  m_Father: {fileID: 0}
+  m_RootOrder: 0
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &5707128209320136455
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 174369136901342378}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_RootOrder
+      value: -1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -6184844409878456674, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 126
+      objectReference: {fileID: 0}
+    - target: {fileID: 125201348713844454, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_Name
+      value: LandscapeStone_02_Mesh
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 2147483647
+      objectReference: {fileID: 0}
+    - target: {fileID: 1703268734037122505, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: f38edd26005c311418a650001f3254c4, type: 2}
+    - target: {fileID: 4189121674412032178, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: f38edd26005c311418a650001f3254c4, type: 2}
+    - target: {fileID: 4742473837712756890, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_FadeMode
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 4742473837712756890, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_AnimateCrossFading
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 5221808938652040249, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_Materials.Array.data[0]
+      value: 
+      objectReference: {fileID: 2100000, guid: f38edd26005c311418a650001f3254c4, type: 2}
+    - target: {fileID: 5859144124543990704, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 126
+      objectReference: {fileID: 0}
+    - target: {fileID: 6887364561120714862, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 126
+      objectReference: {fileID: 0}
+    - target: {fileID: 7835734913438182804, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+      propertyPath: m_StaticEditorFlags
+      value: 126
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+--- !u!4 &5240346785785719020 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: b5824c3b7057b964ea15030cb03ac972, type: 3}
+  m_PrefabInstance: {fileID: 5707128209320136455}
+  m_PrefabAsset: {fileID: 0}
