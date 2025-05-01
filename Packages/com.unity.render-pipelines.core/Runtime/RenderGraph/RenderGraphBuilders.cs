@@ -316,7 +316,7 @@ namespace UnityEngine.Rendering.RenderGraphModule
 
         // Shared validation between SetRenderAttachment/SetRenderAttachmentDepth
         [Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]
-        private void CheckUseFragment(TextureHandle tex, bool isDepth)
+        private void CheckUseFragment(TextureHandle tex, bool isDepth, bool ignoreReadTextureCheck=false)
         {
             if(RenderGraph.enableValidityChecks)
             {
@@ -328,15 +328,18 @@ namespace UnityEngine.Rendering.RenderGraphModule
                 // SetRenderAttachment()
                 // UseTexture(grab)
                 // will work but not the other way around
-                for (int i = 0; i < m_RenderPass.resourceReadLists[tex.handle.iType].Count; i++)
+                if (!ignoreReadTextureCheck)
                 {
-                    if (m_RenderPass.resourceReadLists[tex.handle.iType][i].index == tex.handle.index)
+                    for (int i = 0; i < m_RenderPass.resourceReadLists[tex.handle.iType].Count; i++)
                     {
-                        alreadyUsed = true;
-                        break;
+                        if (m_RenderPass.resourceReadLists[tex.handle.iType][i].index == tex.handle.index)
+                        {
+                            alreadyUsed = true;
+                            break;
+                        }
                     }
-                }
 
+                }
                 for (int i = 0; i < m_RenderPass.resourceWriteLists[tex.handle.iType].Count; i++)
                 {
                     if (m_RenderPass.resourceWriteLists[tex.handle.iType][i].index == tex.handle.index)
@@ -399,7 +402,12 @@ namespace UnityEngine.Rendering.RenderGraphModule
 
         public void SetInputAttachment(TextureHandle tex, int index, AccessFlags flags, int mipLevel, int depthSlice)
         {
-            CheckUseFragment(tex, false);
+            // Depth texture can be bound as input attachment, bypass the depth format check inside CheckUseFragment
+            m_Resources.GetRenderTargetInfo(tex.handle, out var info);
+            bool isDepth = GraphicsFormatUtility.IsDepthFormat(info.format);
+            // Bypass the already used check for texture read, so that an attachment can be used as depth and input in one subpass
+            bool ignoreReadTextureCheck = true; 
+            CheckUseFragment(tex, isDepth, ignoreReadTextureCheck);
             ResourceHandle result = UseResource(tex.handle, flags);
             // Note the version for the attachments is a bit arbitrary so we just use the latest for now
             // it doesn't really matter as it's really the Read/Write lists that determine that
@@ -462,6 +470,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             ((ComputeRenderGraphPass<PassData>)m_RenderPass).renderFunc = renderFunc;
         }
 
+        public void SetPreRenderFunc<PassData>(BaseRenderFunc<PassData, RasterGraphContext> preRenderFunc) where PassData : class, new()
+        {
+            ((RasterRenderGraphPass<PassData>)m_RenderPass).preRenderFunc = preRenderFunc;
+        }
         public void SetRenderFunc<PassData>(BaseRenderFunc<PassData, RasterGraphContext> renderFunc) where PassData : class, new()
         {
             ((RasterRenderGraphPass<PassData>)m_RenderPass).renderFunc = renderFunc;

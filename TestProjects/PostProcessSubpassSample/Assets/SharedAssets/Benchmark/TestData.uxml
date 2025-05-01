@@ -1,0 +1,62 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/SharedAssets/Benchmark/BenchmarkUI.uss?fileID=7433441132597879392&amp;guid=83e88789f4e4cd840be5d4567148e6d0&amp;type=3#BenchmarkUI" />
+    <ui:VisualElement name="TestGroup" class="Root" style="flex-grow: 1; padding-top: 5px; margin-top: 20px; border-left-color: rgba(255, 255, 255, 0.75); border-right-color: rgba(255, 255, 255, 0.75); border-top-color: rgba(255, 255, 255, 0.75); border-bottom-color: rgba(255, 255, 255, 0.75); border-top-width: 1px;">
+        <ui:VisualElement name="v_Header" style="flex-direction: row; justify-content: space-between; align-items: flex-end; padding-left: 10px; padding-right: 10px; margin-bottom: 10px;">
+            <ui:Label tabindex="-1" text="Test Name" display-tooltip-when-elided="true" name="TestName" style="font-size: 24px; width: 25%;" />
+            <ui:Label tabindex="-1" text="Status" display-tooltip-when-elided="true" name="Status" style="width: 15%;" />
+            <ui:VisualElement name="ProgressContainer" style="flex-direction: row;">
+                <ui:Label tabindex="-1" text="Progess: " display-tooltip-when-elided="true" />
+                <ui:Label tabindex="-1" text="Label" display-tooltip-when-elided="true" name="ProgressLabel" />
+                <ui:Label tabindex="-1" text=" %" display-tooltip-when-elided="true" />
+                <ui:VisualElement name="v_ProgressBox" style="width: 200px; border-left-color: rgb(255, 255, 255); border-right-color: rgb(255, 255, 255); border-top-color: rgb(255, 255, 255); border-bottom-color: rgb(255, 255, 255); border-left-width: 1px; border-right-width: 1px; border-top-width: 1px; border-bottom-width: 1px;">
+                    <ui:VisualElement name="ProgressBar" style="width: 50%; height: 100%; background-color: rgba(255, 255, 255, 0.75); margin-top: 2px; margin-bottom: 2px;" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:Button text="Cancel" display-tooltip-when-elided="true" name="CancelButton" />
+        </ui:VisualElement>
+        <ui:VisualElement style="background-color: rgba(0, 0, 0, 0); flex-direction: row;">
+            <ui:VisualElement name="Graph_Quartiles" style="background-color: rgba(0, 0, 0, 0); flex-direction: row; flex-grow: 1;">
+                <ui:VisualElement name="TimingsGraph" style="background-image: url(&apos;project://database/Assets/SharedAssets/Benchmark/TestGraph.png?fileID=2800000&amp;guid=aa323e4c9ad043f4aa4ccddc9cb40a0a&amp;type=3#TestGraph&apos;); flex-grow: 1;">
+                    <ui:VisualElement name="StatLine" class="StatLine" style="background-color: rgb(255, 0, 0);" />
+                </ui:VisualElement>
+                <ui:VisualElement name="Quartiles" style="width: 20px; margin-right: 5px; margin-left: 5px;">
+                    <ui:VisualElement name="MinMaxRange" style="border-top-color: rgb(255, 255, 255); border-bottom-color: rgb(255, 255, 255); width: 50%; border-left-color: rgb(255, 255, 255); border-right-color: rgb(255, 255, 255); border-top-width: 1px; border-bottom-width: 1px; left: 25%; bottom: 20%; top: 5%; position: absolute;">
+                        <ui:VisualElement name="VerticalBar" style="background-color: rgb(255, 255, 255); width: 1px; left: 50%; height: 100%; position: absolute;" />
+                    </ui:VisualElement>
+                    <ui:VisualElement name="QuartilesRange" style="background-color: rgb(255, 255, 255); position: absolute; left: 0; right: 0; top: 15%; bottom: 60%;">
+                        <ui:VisualElement name="Median" style="height: 1px; background-color: rgb(0, 0, 0); margin-top: -0.5px; top: 50%;" />
+                    </ui:VisualElement>
+                </ui:VisualElement>
+            </ui:VisualElement>
+            <ui:VisualElement name="Timings">
+                <ui:VisualElement name="Unit" class="SingleStat" style="flex-direction: row-reverse;">
+                    <ui:Label tabindex="-1" text="ms" display-tooltip-when-elided="true" name="UnitText" enable-rich-text="true" class="Timing_Col2" style="flex-shrink: 1; -unity-text-align: upper-center;" />
+                </ui:VisualElement>
+                <ui:VisualElement name="Max" class="SingleStat" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:Label tabindex="-1" text="Maximum:" display-tooltip-when-elided="true" class="Timing_Col1" />
+                    <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="MaxText" class="Timing_Col2" />
+                </ui:VisualElement>
+                <ui:VisualElement name="UpQuartile" class="SingleStat" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:Label tabindex="-1" text="Upper Quartile:" display-tooltip-when-elided="true" class="Timing_Col1" />
+                    <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="UpperQuartileText" class="Timing_Col2" />
+                </ui:VisualElement>
+                <ui:VisualElement name="Median" class="SingleStat" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:Label tabindex="-1" text="Median:" display-tooltip-when-elided="true" class="Timing_Col1" />
+                    <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="MedianText" class="Timing_Col2" />
+                </ui:VisualElement>
+                <ui:VisualElement name="Mean" class="SingleStat" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:Label tabindex="-1" text="Mean:" display-tooltip-when-elided="true" class="Timing_Col1" />
+                    <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="AvgText" class="Timing_Col2" />
+                </ui:VisualElement>
+                <ui:VisualElement name="LowQuartile" class="SingleStat" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:Label tabindex="-1" text="Lower Quartile:" display-tooltip-when-elided="true" class="Timing_Col1" />
+                    <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="LowerQuartileText" class="Timing_Col2" />
+                </ui:VisualElement>
+                <ui:VisualElement name="Min" class="SingleStat" style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);">
+                    <ui:Label tabindex="-1" text="Minimum:" display-tooltip-when-elided="true" class="Timing_Col1" />
+                    <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="MinText" class="Timing_Col2" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

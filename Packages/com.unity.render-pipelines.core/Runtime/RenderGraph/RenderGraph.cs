@@ -133,6 +133,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             rastercmd.m_ExecutingPass = context.executingPass;
             cmd = rastercmd;
         }
+
+        public int CurrentRGPassId() {
+            return cmd.m_ExecutingPass.index;
+        }
     }
 
     /// <summary>
@@ -225,7 +229,6 @@ namespace UnityEngine.Rendering.RenderGraphModule
     /// <param name="renderGraphContext">Global Render Graph context.</param>
     [MovedFrom(true, "UnityEngine.Experimental.Rendering.RenderGraphModule", "UnityEngine.Rendering.RenderGraphModule")]
     public delegate void BaseRenderFunc<PassData, ContextType>(PassData data, ContextType renderGraphContext) where PassData : class, new();
-
 
     /// <summary>
     /// This class is the main entry point of the Render Graph system.

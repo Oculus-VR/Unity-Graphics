@@ -407,7 +407,7 @@ namespace UnityEngine.Rendering.Universal
             {
                 m_TargetColorHandle = RTHandles.Alloc(targetColorId, "Backbuffer color");
             }
-            else if(m_TargetColorHandle.nameID != targetColorId)
+            else if (m_TargetColorHandle.nameID != targetColorId)
             {
                 RTHandleStaticHelpers.SetRTHandleUserManagedWrapper(ref m_TargetColorHandle, targetColorId);
             }
@@ -511,6 +511,13 @@ namespace UnityEngine.Rendering.Universal
                 importInfoDepth = importInfo;
 
                 importInfoDepth.format = cameraData.cameraTargetDescriptor.depthStencilFormat;
+#if UNITY_EDITOR
+                // In game window, Unity will use the scaled resolution, but the back buffer is still using pixel resolution
+                // This will prevent the subpass from working as the camera target's resolution is different from the backbuffer
+                cameraData.cameraTargetDescriptor.width = Screen.width;
+                cameraData.cameraTargetDescriptor.height = Screen.height;
+                cameraData.cameraTargetDescriptor.msaaSamples = numSamples;
+#endif
             }
             else
             {
@@ -547,6 +554,11 @@ namespace UnityEngine.Rendering.Universal
                 }
             }
 
+            if (importInfo.msaaSamples > 1)
+            {
+                // This will discard the MSAA texture and store the resolved texture
+                importBackbufferColorParams.discardOnLastUse = true;
+            }
             // TODO: Don't think the backbuffer color and depth should be imported at all if !isBuiltinTexture, double check
             if (!isCameraTargetOffscreenDepth)
                 resourceData.backBufferColor = renderGraph.ImportTexture(m_TargetColorHandle, importInfo, importBackbufferColorParams);
@@ -561,6 +573,7 @@ namespace UnityEngine.Rendering.Universal
                 cameraTargetDescriptor.useMipMap = false;
                 cameraTargetDescriptor.autoGenerateMips = false;
                 cameraTargetDescriptor.depthStencilFormat = GraphicsFormat.None;
+                cameraTargetDescriptor.bindMS = importInfo.msaaSamples > 1; // When using MSAA and post processing, the _CameraTargetAttachment should be a MSAA only texture, as we don't need to resolve it.
 
                 RenderingUtils.ReAllocateHandleIfNeeded(ref m_RenderGraphCameraColorHandles[0], cameraTargetDescriptor, FilterMode.Bilinear, TextureWrapMode.Clamp, name: _CameraTargetAttachmentAName);
                 RenderingUtils.ReAllocateHandleIfNeeded(ref m_RenderGraphCameraColorHandles[1], cameraTargetDescriptor, FilterMode.Bilinear, TextureWrapMode.Clamp, name: _CameraTargetAttachmentBName);
@@ -577,6 +590,9 @@ namespace UnityEngine.Rendering.Universal
                 }
 
                 importColorParams.discardOnLastUse = lastCameraInTheStack;
+
+                // We don't need to store the camera target
+                importColorParams.discardOnLastUse = true;
                 resourceData.cameraColor = renderGraph.ImportTexture(currentRenderGraphCameraColorHandle, importColorParams);
                 resourceData.activeColorID = UniversalResourceData.ActiveID.Camera;
 
@@ -1171,6 +1187,8 @@ namespace UnityEngine.Rendering.Universal
 
                 // Record depthMotion pass and import XR resources into the rendergraph.
                 m_XRDepthMotionPass?.Render(renderGraph, frameData);
+                // Depth motion pass will break the subpass merge assumption, reset the projection matrix before draw opaque pass
+                SetupRenderGraphCameraProperties(renderGraph, resourceData.isActiveTargetBackBuffer);
             }
 #endif
 
@@ -1453,7 +1471,6 @@ namespace UnityEngine.Rendering.Universal
 
             bool resolvePostProcessingToCameraTarget = !hasCaptureActions && !hasPassesAfterPostProcessing && !applyFinalPostProcessing;
             bool needsColorEncoding = DebugHandler == null || !DebugHandler.HDRDebugViewIsActive(cameraData.resolveFinalTarget);
-            bool xrDepthTargetResolved = resourceData.activeDepthID == UniversalResourceData.ActiveID.BackBuffer;
 
             DebugHandler debugHandler = ScriptableRenderPass.GetActiveDebugHandler(cameraData);
             bool resolveToDebugScreen = debugHandler != null && debugHandler.WriteToDebugScreenTexture(cameraData.resolveFinalTarget);
@@ -1607,6 +1624,8 @@ namespace UnityEngine.Rendering.Universal
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (cameraData.xr.enabled)
             {
+                // resolve might happens in post processing pass
+                bool xrDepthTargetResolved = resourceData.activeDepthID == UniversalResourceData.ActiveID.BackBuffer;
                 // Populate XR depth as requested by XR provider.
                 if (!xrDepthTargetResolved && cameraData.xr.copyDepth)
                 {

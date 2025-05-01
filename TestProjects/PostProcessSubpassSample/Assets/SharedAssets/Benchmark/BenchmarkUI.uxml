@@ -1,0 +1,21 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements" xmlns:uie="UnityEditor.UIElements" xsi="http://www.w3.org/2001/XMLSchema-instance" engine="UnityEngine.UIElements" editor="UnityEditor.UIElements" noNamespaceSchemaLocation="../../../UIElementsSchema/UIElements.xsd" editor-extension-mode="False">
+    <Style src="project://database/Assets/Testing/Benchmark/BenchmarkUI.uss?fileID=7433441132597879392&amp;guid=83e88789f4e4cd840be5d4567148e6d0&amp;type=3#BenchmarkUI" />
+    <ui:VisualElement name="Root" class="Root" style="background-color: rgba(0, 0, 0, 0.75); margin-left: 50px; margin-right: 50px; margin-top: 50px; margin-bottom: 50px; flex-grow: 1; padding-left: 5px; padding-right: 5px; padding-top: 5px; padding-bottom: 5px; border-top-left-radius: 5px; border-bottom-left-radius: 5px; border-top-right-radius: 5px; border-bottom-right-radius: 5px; border-left-width: 1px; border-right-width: 1px; border-top-width: 1px; border-bottom-width: 1px;">
+        <ui:VisualElement style="background-color: rgba(0, 0, 0, 0); flex-direction: row; margin-bottom: 5px; align-items: flex-end; margin-left: 30px; margin-right: 30px;">
+            <ui:Label tabindex="-1" text="Benchmark" display-tooltip-when-elided="true" style="font-size: 32px;" />
+            <ui:VisualElement style="flex-grow: 1; background-color: rgba(0, 0, 0, 0);" />
+            <ui:VisualElement name="VisualElement" style="background-color: rgba(0, 0, 0, 0); flex-direction: row;">
+                <ui:Label tabindex="-1" text="Showing:" display-tooltip-when-elided="true" name="l_Showing" />
+                <ui:Button text="◂" display-tooltip-when-elided="true" name="ChangeDataButtonPrev" class="SmallButton" />
+                <ui:Label tabindex="-1" display-tooltip-when-elided="true" name="DataTypeLabel" text="Label" style="width: 200px; -unity-text-align: upper-center;" />
+                <ui:Button text="▸" display-tooltip-when-elided="true" name="ChangeDataButtonNext" class="SmallButton" />
+                <ui:Label tabindex="-1" text="Current:" display-tooltip-when-elided="true" name="l_Current" style="margin-left: 50px;" />
+                <ui:Label tabindex="-1" text="XXX" display-tooltip-when-elided="true" name="CurrentTiming" />
+                <ui:Label tabindex="-1" text="ms" display-tooltip-when-elided="true" name="CurrentTimingUnit" style="margin-left: 2px;" />
+            </ui:VisualElement>
+            <ui:VisualElement style="background-color: rgba(0, 0, 0, 0); flex-grow: 1;" />
+        </ui:VisualElement>
+        <ui:ScrollView name="TestsList" />
+        <ui:Button text="Close" display-tooltip-when-elided="true" name="CloseButton" style="align-self: center;" />
+    </ui:VisualElement>
+</ui:UXML>
