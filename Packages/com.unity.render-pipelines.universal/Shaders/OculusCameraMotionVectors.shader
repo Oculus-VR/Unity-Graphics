@@ -58,6 +58,7 @@ Shader "Hidden/Universal Render Pipeline/CameraMotionVectors"
             }
 
             TEXTURE2D_X(_CameraDepthTexture);
+            float4 _CameraDepthTextureScaleBias;
             SamplerState sampler_PointClamp;
 
             // -------------------------------------
@@ -66,17 +67,17 @@ Shader "Hidden/Universal Render Pipeline/CameraMotionVectors"
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(input);
 
-                float2 uv = input.uv;
+                float2 uv = _CameraDepthTextureScaleBias.xy * UnityStereoTransformScreenSpaceTex(input.uv) + _CameraDepthTextureScaleBias.zw;
 
             #if _SUBSAMPLE_DEPTH
-                float4 depth4 = GATHER_RED_TEXTURE2D_X(_CameraDepthTexture, sampler_PointClamp, UnityStereoTransformScreenSpaceTex(uv));
+                float4 depth4 = GATHER_RED_TEXTURE2D_X(_CameraDepthTexture, sampler_PointClamp, uv);
                 #if UNITY_REVERSED_Z
                     float depth = min(min(depth4.x, depth4.y), min(depth4.z, depth4.w));
                 #else
                     float depth = max(max(depth4.x, depth4.y), max(depth4.z, depth4.w));
                 #endif
             #else
-                float depth = SAMPLE_TEXTURE2D_X(_CameraDepthTexture, sampler_PointClamp, UnityStereoTransformScreenSpaceTex(uv)).x;
+                float depth = SAMPLE_TEXTURE2D_X(_CameraDepthTexture, sampler_PointClamp, uv).x;
             #endif
 
                 // This is required to avoid artifacts from the motion vector pass outputting the same z
