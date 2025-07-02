@@ -16,6 +16,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 
         private static readonly ShaderTagId s_MotionVectorTag = new ShaderTagId("MotionVectors");
         private static readonly string kCameraDepthTextureName = "_CameraDepthTexture";
+        private static readonly string kCameraDepthTextureScaleBiasName = "_CameraDepthTextureScaleBias";
         private static readonly string kSubsampleDepthKeyword = "_SUBSAMPLE_DEPTH";
         private Material m_CameraMaterial;
 
@@ -77,7 +78,12 @@ namespace UnityEngine.Rendering.Universal.Internal
                 // using the main path depth information.
                 if (renderingData.cameraData.xr.copyDepth)
                 {
+                    Vector2 viewportScale = depthTextureHandle.useScaling ? new Vector2(depthTextureHandle.rtHandleProperties.rtHandleScale.x, depthTextureHandle.rtHandleProperties.rtHandleScale.y) : Vector2.one;
+                    bool yflip = renderingData.cameraData.IsHandleYFlipped(motionVectorDepthHandle) == renderingData.cameraData.IsHandleYFlipped(depthTextureHandle);
+                    Vector4 scaleBias = yflip ? new Vector4(viewportScale.x, -viewportScale.y, 0, viewportScale.y) : new Vector4(viewportScale.x, viewportScale.y, 0, 0);
+
                     cmd.SetGlobalTexture(kCameraDepthTextureName, depthTextureHandle, RenderTextureSubElement.Depth);
+                    cmd.SetGlobalVector(kCameraDepthTextureScaleBiasName, scaleBias);
                     if (subsampleDepth)
                     {
                         cmd.EnableShaderKeyword(kSubsampleDepthKeyword);
