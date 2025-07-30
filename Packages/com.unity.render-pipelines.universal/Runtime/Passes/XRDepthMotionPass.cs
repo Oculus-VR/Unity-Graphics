@@ -12,6 +12,7 @@ namespace UnityEngine.Rendering.Universal
     {
         private static readonly ShaderTagId k_MotionOnlyShaderTagId = new ShaderTagId("MotionVectors");
         private static readonly int k_XRDepthTextureNameID = Shader.PropertyToID("_XRDepthTexture");
+        private static readonly int k_XRDepthTextureScaleBiasNameID = Shader.PropertyToID("_XRDepthTexture_ST");
         private static LocalKeyword m_SubsampleDepthKeyword;
         private static GlobalKeyword m_ApplicationSpaceWarpMotionKeyword;
         private PassData m_PassData;
@@ -50,6 +51,7 @@ namespace UnityEngine.Rendering.Universal
             internal Material xrMotionVector;
             internal bool hasValidXRDepth;
             internal TextureHandle xrDepthSrc;
+            internal UniversalCameraData cameraData;
             internal bool requiresSubsampleDepth;
             internal LocalKeyword subsampleDepthKeyword;
         }
@@ -171,7 +173,11 @@ namespace UnityEngine.Rendering.Universal
             using (new ProfilingScope(renderingData.commandBuffer, profilingSampler))
             {
                 if (hasValidXRDepth)
-                    renderingData.commandBuffer.SetGlobalTexture(k_XRDepthTextureNameID, m_DepthSource, RenderTextureSubElement.Depth);
+                {
+                    renderingData.commandBuffer.SetGlobalTexture(k_XRDepthTextureNameID, m_DepthSource,
+                        RenderTextureSubElement.Depth);
+                    renderingData.commandBuffer.SetGlobalVector(k_XRDepthTextureScaleBiasNameID, GetScaleBias(m_DepthSource, cameraData));
+                }
 
                 ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), m_PassData, m_PassData.objMotionRendererList);
             }
@@ -200,6 +206,7 @@ namespace UnityEngine.Rendering.Universal
 
             // Setup the default XR valid depth flag
             passData.hasValidXRDepth = false;
+            passData.cameraData = cameraData;
         }
 
         /// <summary>
@@ -262,6 +269,28 @@ namespace UnityEngine.Rendering.Universal
 
             xrMotionVectorColor = renderGraph.ImportTexture(m_XRMotionVectorColor, importInfo, importMotionColorParams);
             xrMotionVectorDepth = renderGraph.ImportTexture(m_XRMotionVectorDepth, importInfoDepth, importMotionDepthParams);
+        }
+
+        private Vector4 GetScaleBias(RTHandle xrDepthSrc, UniversalCameraData cameraData)
+        {
+            bool yFlip = cameraData.IsHandleYFlipped(xrDepthSrc);
+
+            Vector2 viewportScale = Vector2.one;
+
+            if (cameraData.xr.IsXRTarget(xrDepthSrc))
+            {
+                // xrViewport is in pixel coordinates
+                var xrViewport = cameraData.xr.GetViewport();
+                viewportScale.x = xrViewport.width / cameraData.xr.renderTargetDesc.width;
+                viewportScale.y = xrViewport.height / cameraData.xr.renderTargetDesc.height;
+            }
+            else if (xrDepthSrc.useScaling)
+            {
+                viewportScale.x = xrDepthSrc.rtHandleProperties.rtHandleScale.x;
+                viewportScale.y = xrDepthSrc.rtHandleProperties.rtHandleScale.y;
+            }
+
+            return yFlip ? new Vector4(viewportScale.x, -viewportScale.y, 0, viewportScale.y) : new Vector4(viewportScale.x, viewportScale.y, 0, 0);
         }
 
 #region Recording
@@ -331,8 +360,11 @@ namespace UnityEngine.Rendering.Universal
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
                     if (data.hasValidXRDepth)
+                    {
                         context.cmd.SetGlobalTexture(k_XRDepthTextureNameID, data.xrDepthSrc,
                             RenderTextureSubElement.Depth);
+                        context.cmd.SetGlobalVector(k_XRDepthTextureScaleBiasNameID, GetScaleBias(data.xrDepthSrc, data.cameraData));
+                    }
 
                     ExecutePass(context.cmd, data, data.objMotionRendererListHdl);
                 });

@@ -128,6 +128,7 @@ Shader "Hidden/Universal Render Pipeline/XR/XRMotionVector"
                 float2 uv : TEXCOORD1;
                 UNITY_VERTEX_OUTPUT_STEREO
             };
+            float4 _XRDepthTexture_ST;
 
             // -------------------------------------
             // Vertex
@@ -140,6 +141,7 @@ Shader "Hidden/Universal Render Pipeline/XR/XRMotionVector"
                 output.position = GetFullScreenTriangleVertexPosition(input.vertexID);
                 output.posCS = output.position;
                 output.uv = GetFullScreenTriangleTexCoord(input.vertexID);
+                output.uv = TRANSFORM_TEX(output.uv, _XRDepthTexture);
                 return output;
             }
 
