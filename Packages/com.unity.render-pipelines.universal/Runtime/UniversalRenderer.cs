@@ -1304,6 +1304,7 @@ namespace UnityEngine.Rendering.Universal
                     {
                         m_XRCopyDepthPass.Setup(m_ActiveCameraDepthAttachment, m_XRTargetHandleAlias);
                         m_XRCopyDepthPass.CopyToDepth = true;
+                        m_XRCopyDepthPass.m_CopyResolvedDepth = RenderingUtils.MultisampleDepthResolveSupported();
                         EnqueuePass(m_XRCopyDepthPass);
                     }
                 }
