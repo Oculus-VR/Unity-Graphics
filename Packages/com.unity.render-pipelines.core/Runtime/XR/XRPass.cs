@@ -190,6 +190,18 @@ namespace UnityEngine.Experimental.Rendering
         public float occlusionMeshScale { get; private set; }
 
         /// <summary>
+        /// Whether we need to flip the viewport on final blit.
+        /// </summary>
+        public bool viewportRequiresYFlip
+        {
+#if USING_OPENXR || USING_OCULUSXR_4_3_0_OR_NEWER
+            get => SystemInfo.graphicsUVStartsAtTop;
+#else
+            get => false;
+#endif
+        }
+
+        /// <summary>
         /// Returns the projection matrix for a given view.
         /// </summary>
         /// <param name="viewIndex"></param>

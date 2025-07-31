@@ -40,6 +40,16 @@
             "name": "com.unity.modules.nvidia",
             "expression": "1.0.0",
             "define": "ENABLE_NVIDIA_MODULE"
+        },
+        {
+            "name": "com.unity.xr.openxr",
+            "expression": "0.0.0",
+            "define": "USING_OPENXR"
+        },
+        {
+            "name": "com.unity.xr.oculusxr",
+            "expression": "4.3.0",
+            "define": "USING_OCULUSXR_4_3_0_OR_NEWER"
         }
     ],
     "noEngineReferences": false
