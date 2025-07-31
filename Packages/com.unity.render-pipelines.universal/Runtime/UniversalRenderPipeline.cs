@@ -1279,7 +1279,7 @@ namespace UnityEngine.Rendering.Universal
             // for the XR Target to make the final copy pass as fast as possible.
             if (cameraData.xrRendering && camera.targetTexture == null && resolveFinalTarget)
             {
-                XRSystem.SetDisplayMSAASamples(cameraData.postProcessEnabled || cameraData.isHdrEnabled ? MSAASamples.None : (MSAASamples)cameraData.cameraTargetDescriptor.msaaSamples);
+                XRSystem.SetDisplayMSAASamples(cameraData.postProcessEnabled || cameraData.isHdrEnabled || !cameraData.isDefaultViewport ? MSAASamples.None : (MSAASamples)cameraData.cameraTargetDescriptor.msaaSamples);
             }
         }
 
