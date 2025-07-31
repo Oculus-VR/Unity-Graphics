@@ -78,7 +78,19 @@ namespace UnityEngine.Rendering.Universal.Internal
                 // using the main path depth information.
                 if (renderingData.cameraData.xr.copyDepth)
                 {
-                    Vector2 viewportScale = depthTextureHandle.useScaling ? new Vector2(depthTextureHandle.rtHandleProperties.rtHandleScale.x, depthTextureHandle.rtHandleProperties.rtHandleScale.y) : Vector2.one;
+                    Vector2 viewportScale = Vector2.one;
+                    if (new RenderTargetIdentifier(depthTextureHandle.nameID, 0, CubemapFace.Unknown, 0) == new RenderTargetIdentifier(renderingData.cameraData.xr.renderTarget, 0, CubemapFace.Unknown, 0))
+                    {
+                        // xrViewport is in pixel coordinates
+                        var xrViewport = renderingData.cameraData.xr.GetViewport();
+                        viewportScale.x = xrViewport.width / renderingData.cameraData.xr.renderTargetDesc.width;
+                        viewportScale.y = xrViewport.height / renderingData.cameraData.xr.renderTargetDesc.height;
+                    }
+                    else if (depthTextureHandle.useScaling)
+                    {
+                        viewportScale.x = depthTextureHandle.rtHandleProperties.rtHandleScale.x;
+                        viewportScale.y = depthTextureHandle.rtHandleProperties.rtHandleScale.y;
+                    }
                     bool yflip = renderingData.cameraData.IsHandleYFlipped(motionVectorDepthHandle) == renderingData.cameraData.IsHandleYFlipped(depthTextureHandle);
                     Vector4 scaleBias = yflip ? new Vector4(viewportScale.x, -viewportScale.y, 0, viewportScale.y) : new Vector4(viewportScale.x, viewportScale.y, 0, 0);
 
