@@ -150,7 +150,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                 loadAction = RenderBufferLoadAction.Load;
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (cameraData.xr.enabled)
-                loadAction = RenderBufferLoadAction.Load;
+                loadAction = RenderBufferLoadAction.DontCare;
 #endif
             
             RenderingUtils.FinalBlit(cmd, ref cameraData, source, cameraTarget, loadAction, RenderBufferStoreAction.Store, blitMaterial, source.rt?.filterMode == FilterMode.Bilinear ? 1 : 0);
