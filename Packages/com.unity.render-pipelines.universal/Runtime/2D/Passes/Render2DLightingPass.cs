@@ -1,6 +1,8 @@
 // Workaround Unity changing SpriteMaskUtility API in 2022.3.59
-#if UNITY_2023_1_OR_NEWER || UNITY_2022_3_1 || UNITY_2022_3_2 || UNITY_2022_3_3 || UNITY_2022_3_4 || UNITY_2022_3_5 ||  UNITY_2022_3_6 || UNITY_2022_3_7 || UNITY_2022_3_8 || UNITY_2022_3_9 || UNITY_2022_3_10 || UNITY_2022_3_11 || UNITY_2022_3_12 || UNITY_2022_3_13 || UNITY_2022_3_14 || UNITY_2022_3_15 ||  UNITY_2022_3_16 || UNITY_2022_3_17 || UNITY_2022_3_18 || UNITY_2022_3_19 || UNITY_2022_3_20 || UNITY_2022_3_21 || UNITY_2022_3_22 || UNITY_2022_3_23 || UNITY_2022_3_24 || UNITY_2022_3_25 || UNITY_2022_3_26 || UNITY_2022_3_27 || UNITY_2022_3_28 || UNITY_2022_3_29 || UNITY_2022_3_30 || UNITY_2022_3_31 || UNITY_2022_3_32 || UNITY_2022_3_34 || UNITY_2022_3_35 || UNITY_2022_36 || UNITY_2022_3_37 || UNITY_2022_3_38 || UNITY_2022_3_39 || UNITY_2022_3_40 || UNITY_2022_3_41 || UNITY_2022_3_42 || UNITY_2022_3_43 || UNITY_2022_3_44 || UNITY_2022_3_45 || UNITY_2022_3_46 || UNITY_2022_3_47 || UNITY_2022_3_48 || UNITY_2022_3_49 || UNITY_2022_3_50 || UNITY_2022_3_51 || UNITY_2022_3_52 || UNITY_2022_3_53 || UNITY_2022_3_54 || UNITY_2022_3_55 || UNITY_2022_3_56 || UNITY_2022_3_57 || UNITY_2022_3_58
-#define CHECK_ALL_SPRITE_MASKS
+#if !UNITY_2022_3_OR_NEWER || UNITY_2022_3_0 || UNITY_2022_3_1 || UNITY_2022_3_2 || UNITY_2022_3_3 || UNITY_2022_3_4 || UNITY_2022_3_5 ||  UNITY_2022_3_6 || UNITY_2022_3_7 || UNITY_2022_3_8 || UNITY_2022_3_9 || UNITY_2022_3_10 || UNITY_2022_3_11 || UNITY_2022_3_12 || UNITY_2022_3_13 || UNITY_2022_3_14 || UNITY_2022_3_15 ||  UNITY_2022_3_16 || UNITY_2022_3_17 || UNITY_2022_3_18 || UNITY_2022_3_19 || UNITY_2022_3_20 || UNITY_2022_3_21 || UNITY_2022_3_22 || UNITY_2022_3_23 || UNITY_2022_3_24 || UNITY_2022_3_25 || UNITY_2022_3_26 || UNITY_2022_3_27 || UNITY_2022_3_28 || UNITY_2022_3_29 || UNITY_2022_3_30 || UNITY_2022_3_31 || UNITY_2022_3_32 || UNITY_2022_3_33 || UNITY_2022_3_34 || UNITY_2022_3_35 || UNITY_2022_36 || UNITY_2022_3_37 || UNITY_2022_3_38 || UNITY_2022_3_39 || UNITY_2022_3_40 || UNITY_2022_3_41
+#define UNITY_2022_3_41_OR_OLDER
+#else
+#define UNITY_2022_3_42_OR_NEWER
 #endif
 
 using System.Collections.Generic;
@@ -200,7 +202,7 @@ namespace UnityEngine.Rendering.Universal
             var rtCount = 0U;
 
             // Account for Sprite Mask and normal map usage where the first and last layer has to render the stencil pass
-#if CHECK_ALL_SPRITE_MASKS
+#if UNITY_2022_3_41_OR_OLDER
             bool hasSpriteMask = UnityEngine.SpriteMaskUtility.HasSpriteMaskInScene();
 #endif
             bool normalsFirstClear = true;
@@ -226,7 +228,7 @@ namespace UnityEngine.Rendering.Universal
                         break;
 
                     batchesDrawn++;
-#if !CHECK_ALL_SPRITE_MASKS
+#if UNITY_2022_3_42_OR_NEWER
                     bool hasSpriteMask = SpriteMaskUtility.HasSpriteMaskInLayerRange(layerBatch.layerRange);
 #endif
                     if (layerBatch.lightStats.totalNormalMapUsage > 0 ||
