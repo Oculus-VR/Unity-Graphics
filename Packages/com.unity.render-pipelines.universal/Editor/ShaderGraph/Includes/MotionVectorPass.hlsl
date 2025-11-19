@@ -164,7 +164,7 @@ void vert(
         // transform, but UNITY_MATRIX_M is always identity, causing artifacts for particles with motion vectors.
         // We can avoid this bug by checking whether the current model matrix is the identity matrix, and if
         // so, simply use the unaltered previous position without multiplying by UNITY_PREV_MATRIX_M.
-        const float3 prevPositionWS = previousPositionOS;
+        float3 prevPositionWS = previousPositionOS;
         if (!IsIdentity(UNITY_MATRIX_M))
         {
             prevPositionWS = mul(UNITY_PREV_MATRIX_M, float4(previousPositionOS, 1.0f)).xyz;
