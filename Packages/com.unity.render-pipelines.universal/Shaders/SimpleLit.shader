@@ -427,6 +427,7 @@ Shader "Universal Render Pipeline/Simple Lit"
             Tags { "LightMode" = "MotionVectors" }
 
             HLSLPROGRAM
+            #pragma shader_feature_local _SURFACE_TYPE_TRANSPARENT
             #pragma shader_feature_local _ALPHATEST_ON
             #pragma multi_compile _ LOD_FADE_CROSSFADE
             #pragma multi_compile _ APPLICATION_SPACE_WARP_MOTION

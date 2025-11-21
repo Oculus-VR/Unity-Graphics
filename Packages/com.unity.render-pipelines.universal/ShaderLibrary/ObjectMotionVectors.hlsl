@@ -31,7 +31,7 @@
 struct Attributes
 {
     float4 position             : POSITION;
-#if _ALPHATEST_ON
+#if defined(_ALPHATEST_ON) || defined(_SURFACE_TYPE_TRANSPARENT)
     float2 uv                   : TEXCOORD0;
 #endif
     float3 positionOld          : TEXCOORD4;
@@ -46,7 +46,7 @@ struct Varyings
     float4 positionCS                 : SV_POSITION;
     float4 positionCSNoJitter         : POSITION_CS_NO_JITTER;
     float4 previousPositionCSNoJitter : PREV_POSITION_CS_NO_JITTER;
-#if _ALPHATEST_ON
+#if defined(_ALPHATEST_ON) || defined(_SURFACE_TYPE_TRANSPARENT)
     float2 uv                         : TEXCOORD0;
 #endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -74,7 +74,7 @@ Varyings vert(Attributes input)
 
     const VertexPositionInputs vertexInput = GetVertexPositionInputs(input.position.xyz);
 
-    #if defined(_ALPHATEST_ON)
+    #if defined(_ALPHATEST_ON) || defined(_SURFACE_TYPE_TRANSPARENT)
         output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
     #endif
 
@@ -113,6 +113,20 @@ Varyings vert(Attributes input)
     return output;
 }
 
+#if defined(_SURFACE_TYPE_TRANSPARENT)
+void TransparentClipAlpha(half albedoAlpha, half4 color)
+{
+    #if !defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A) && !defined(_GLOSSINESS_FROM_BASE_ALPHA)
+    half alpha = albedoAlpha * color.a;
+    #else
+    half alpha = color.a;
+    #endif
+
+    // force cutoff to 0.5
+    clip(alpha - 0.5);
+}
+#endif
+
 // -------------------------------------
 // Fragment
 float4 frag(Varyings input) : SV_Target
@@ -122,6 +136,8 @@ float4 frag(Varyings input) : SV_Target
 
     #if defined(_ALPHATEST_ON)
         Alpha(SampleAlbedoAlpha(input.uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor, _Cutoff);
+    #elif defined(_SURFACE_TYPE_TRANSPARENT)
+        TransparentClipAlpha(SampleAlbedoAlpha(input.uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor);
     #endif
 
     #if defined(LOD_FADE_CROSSFADE)
