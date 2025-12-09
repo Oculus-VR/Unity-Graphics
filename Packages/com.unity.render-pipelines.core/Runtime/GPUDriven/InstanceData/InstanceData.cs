@@ -10,6 +10,11 @@ using UnityEngine.Assertions;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal struct CPUInstanceData : IDisposable
     {
         private const int k_InvalidIndex = -1;
@@ -307,12 +312,12 @@ namespace UnityEngine.Rendering
 
         //@ Need to figure out the way to share the code with CPUInstanceData. Both structures are almost identical.
         public NativeArray<SharedInstanceHandle> instances;
-        public NativeArray<int> rendererGroupIDs;
+        public NativeArray<EntityId_Int32> rendererGroupIDs;
 
         // For now we just use nested collections since materialIDs are only parsed rarely. E.g. when an unsupported material is detected.
         public NativeArray<SmallIntegerArray> materialIDArrays;
         
-        public NativeArray<int> meshIDs;
+        public NativeArray<EntityId_Int32> meshIDs;
         public NativeArray<AABB> localAABBs;
         public NativeArray<CPUSharedInstanceFlags> flags;
         public NativeArray<uint> lodGroupAndMasks;
@@ -330,9 +335,9 @@ namespace UnityEngine.Rendering
             m_InstanceIndices = new NativeList<int>(Allocator.Persistent);
             instances = new NativeArray<SharedInstanceHandle>(instancesCapacity, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             instances.FillArray(SharedInstanceHandle.Invalid);
-            rendererGroupIDs = new NativeArray<int>(instancesCapacity, Allocator.Persistent);
+            rendererGroupIDs = new NativeArray<EntityId_Int32>(instancesCapacity, Allocator.Persistent);
             materialIDArrays = new NativeArray<SmallIntegerArray>(instancesCapacity, Allocator.Persistent);
-            meshIDs = new NativeArray<int>(instancesCapacity, Allocator.Persistent);
+            meshIDs = new NativeArray<EntityId_Int32>(instancesCapacity, Allocator.Persistent);
             localAABBs = new NativeArray<AABB>(instancesCapacity, Allocator.Persistent);
             flags = new NativeArray<CPUSharedInstanceFlags>(instancesCapacity, Allocator.Persistent);
             lodGroupAndMasks = new NativeArray<uint>(instancesCapacity, Allocator.Persistent);
@@ -522,7 +527,7 @@ namespace UnityEngine.Rendering
             materialIDArrays[index] = materialIDs;
         }
 
-        public void Set(SharedInstanceHandle instance, int rendererGroupID, in SmallIntegerArray materialIDs, int meshID, in AABB localAABB, TransformUpdateFlags transformUpdateFlags,
+        public void Set(SharedInstanceHandle instance, EntityId_Int32 rendererGroupID, in SmallIntegerArray materialIDs, EntityId_Int32 meshID, in AABB localAABB, TransformUpdateFlags transformUpdateFlags,
             InstanceFlags instanceFlags, uint lodGroupAndMask, int gameObjectLayer, int refCount)
         {
             int index = SharedInstanceToIndex(instance);
@@ -540,7 +545,7 @@ namespace UnityEngine.Rendering
 
         public void SetDefault(SharedInstanceHandle instance)
         {
-            Set(instance, 0, default, 0, new AABB(), TransformUpdateFlags.None, InstanceFlags.None, k_InvalidLODGroupAndMask, 0, 0);
+            Set(instance, default, default, default, new AABB(), TransformUpdateFlags.None, InstanceFlags.None, k_InvalidLODGroupAndMask, 0, 0);
         }
 
         public ReadOnly AsReadOnly()
@@ -552,9 +557,9 @@ namespace UnityEngine.Rendering
         {
             public readonly NativeArray<int>.ReadOnly instanceIndices;
             public readonly NativeArray<SharedInstanceHandle>.ReadOnly instances;
-            public readonly NativeArray<int>.ReadOnly rendererGroupIDs;
+            public readonly NativeArray<EntityId_Int32>.ReadOnly rendererGroupIDs;
             public readonly NativeArray<SmallIntegerArray>.ReadOnly materialIDArrays;
-            public readonly NativeArray<int>.ReadOnly meshIDs;
+            public readonly NativeArray<EntityId_Int32>.ReadOnly meshIDs;
             public readonly NativeArray<AABB>.ReadOnly localAABBs;
             public readonly NativeArray<CPUSharedInstanceFlags>.ReadOnly flags;
             public readonly NativeArray<uint>.ReadOnly lodGroupAndMasks;

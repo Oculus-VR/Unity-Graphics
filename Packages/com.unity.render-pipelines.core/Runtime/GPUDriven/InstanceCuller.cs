@@ -19,6 +19,11 @@ using UnityEditor.SceneManagement;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal struct RangeKey : IEquatable<RangeKey>
     {
         public byte layer;
@@ -1052,7 +1057,7 @@ namespace UnityEngine.Rendering
         [ReadOnly] public NativeArray<int> drawBatchIndices;
 
         [ReadOnly] public NativeArray<bool> filteringResults;
-        [ReadOnly] public NativeArray<int> excludedRenderers;
+        [ReadOnly] public NativeArray<EntityId_Int32> excludedRenderers;
 
         [ReadOnly] public FilteringJobMode mode;
 
@@ -1891,7 +1896,7 @@ namespace UnityEngine.Rendering
         {
             NativeArray<bool> filteredRenderers = new NativeArray<bool>(sharedInstanceData.rendererGroupIDs.Length, Allocator.TempJob);
             EditorCameraUtils.GetRenderersFilteringResults(sharedInstanceData.rendererGroupIDs, filteredRenderers);
-            var dummyExcludedRenderers = new NativeArray<int>(0, Allocator.TempJob);
+            var dummyExcludedRenderers = new NativeArray<EntityId_Int32>(0, Allocator.TempJob);
 
             var drawOutputJob = new DrawCommandOutputFiltering
             {
@@ -1930,8 +1935,12 @@ namespace UnityEngine.Rendering
             if (PrefabStageUtility.GetCurrentPrefabStage() != null)
                 return cullingJobHandle;
 
+#if UNITY_6000_3_OR_NEWER
+            var pickingIDs = HandleUtility.GetPickingIncludeExcludeEntityIdList(Allocator.TempJob);
+#else
             var pickingIDs = HandleUtility.GetPickingIncludeExcludeList(Allocator.TempJob);
-            var excludedRenderers = pickingIDs.ExcludeRenderers.IsCreated ? pickingIDs.ExcludeRenderers : new NativeArray<int>(0, Allocator.TempJob);
+#endif
+            var excludedRenderers = pickingIDs.ExcludeRenderers.IsCreated ? pickingIDs.ExcludeRenderers : new NativeArray<EntityId_Int32>(0, Allocator.TempJob);
             var dummyFilteringResults = new NativeArray<bool>(0, Allocator.TempJob);
 
             var drawOutputJob = new DrawCommandOutputFiltering
@@ -1966,7 +1975,7 @@ namespace UnityEngine.Rendering
 
 #endif
 
-        public void InstanceOccludersUpdated(int viewInstanceID, int subviewMask, RenderersBatchersContext batchersContext)
+            public void InstanceOccludersUpdated(int viewInstanceID, int subviewMask, RenderersBatchersContext batchersContext)
         {
             if (m_DebugStats?.enabled ?? false)
             {

@@ -11,6 +11,11 @@ using UnityEngine.Profiling;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal struct RenderersBatchersContextDesc
     {
         public InstanceNumInfo instanceNumInfo;
@@ -114,7 +119,7 @@ namespace UnityEngine.Rendering
 
         public void Dispose()
         {
-            NativeArray<int>.ReadOnly rendererGroupIDs = m_InstanceDataSystem.sharedInstanceData.rendererGroupIDs;
+            NativeArray<EntityId_Int32>.ReadOnly rendererGroupIDs = m_InstanceDataSystem.sharedInstanceData.rendererGroupIDs;
 
             if (rendererGroupIDs.Length > 0)
                 m_GPUDrivenProcessor.DisableGPUDrivenRendering(rendererGroupIDs);
@@ -209,7 +214,7 @@ namespace UnityEngine.Rendering
             Profiler.EndSample();
         }
 
-        public void DestroyLODGroups(NativeArray<int> destroyed)
+        public void DestroyLODGroups(NativeArray<EntityId_Int32> destroyed)
         {
             if (destroyed.Length == 0)
                 return;
@@ -217,7 +222,7 @@ namespace UnityEngine.Rendering
             m_LODGroupDataPool.FreeLODGroupData(destroyed);
         }
 
-        public void UpdateLODGroups(NativeArray<int> changedID)
+        public void UpdateLODGroups(NativeArray<EntityId_Int32> changedID)
         {
             if (changedID.Length == 0)
                 return;
@@ -237,7 +242,7 @@ namespace UnityEngine.Rendering
             return m_InstanceDataSystem.ScheduleUpdateInstanceDataJob(instances, rendererData, m_LODGroupDataPool.lodGroupDataHash);
         }
 
-        public void FreeRendererGroupInstances(NativeArray<int> rendererGroupsID)
+        public void FreeRendererGroupInstances(NativeArray<EntityId_Int32> rendererGroupsID)
         {
             m_InstanceDataSystem.FreeRendererGroupInstances(rendererGroupsID);
         }
@@ -247,22 +252,22 @@ namespace UnityEngine.Rendering
             m_InstanceDataSystem.FreeInstances(instances);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<InstanceHandle> instances)
         {
             return m_InstanceDataSystem.ScheduleQueryRendererGroupInstancesJob(rendererGroupIDs, instances);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeList<InstanceHandle> instances)
         {
             return m_InstanceDataSystem.ScheduleQueryRendererGroupInstancesJob(rendererGroupIDs, instances);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
         {
             return m_InstanceDataSystem.ScheduleQueryRendererGroupInstancesJob(rendererGroupIDs, instancesOffset, instancesCount, instances);
         }
 
-        public JobHandle ScheduleQueryMeshInstancesJob(NativeArray<int> sortedMeshIDs, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryMeshInstancesJob(NativeArray<EntityId_Int32> sortedMeshIDs, NativeList<InstanceHandle> instances)
         {
             return m_InstanceDataSystem.ScheduleQuerySortedMeshInstancesJob(sortedMeshIDs, instances);
         }
@@ -333,7 +338,7 @@ namespace UnityEngine.Rendering
             ChangeInstanceBufferVersion();
         }
 
-        public void TransformLODGroups(NativeArray<int> lodGroupsID)
+        public void TransformLODGroups(NativeArray<EntityId_Int32> lodGroupsID)
         {
             if (lodGroupsID.Length == 0)
                 return;
@@ -351,9 +356,9 @@ namespace UnityEngine.Rendering
             return m_InstanceDataSystem.ScheduleCollectInstancesLODGroupAndMasksJob(instances, lodGroupAndMasks);
         }
 
-        public InstanceHandle GetRendererInstanceHandle(int rendererID)
+        public InstanceHandle GetRendererInstanceHandle(EntityId_Int32 rendererID)
         {
-            var rendererIDs = new NativeArray<int>(1, Allocator.TempJob);
+            var rendererIDs = new NativeArray<EntityId_Int32>(1, Allocator.TempJob);
             var instances = new NativeArray<InstanceHandle>(1, Allocator.TempJob);
 
             rendererIDs[0] = rendererID;

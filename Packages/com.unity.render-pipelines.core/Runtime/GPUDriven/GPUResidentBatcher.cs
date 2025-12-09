@@ -9,6 +9,11 @@ using UnityEngine.Rendering.RenderGraphModule;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal partial class GPUResidentBatcher : IDisposable
     {
         private RenderersBatchersContext m_BatchersContext;
@@ -69,7 +74,7 @@ namespace UnityEngine.Rendering
             m_BatchersContext.UpdateFrame();
         }
 
-        public void DestroyMaterials(NativeArray<int> destroyedMaterials)
+        public void DestroyMaterials(NativeArray<EntityId_Int32> destroyedMaterials)
         {
             m_InstanceCullingBatcher.DestroyMaterials(destroyedMaterials);
         }
@@ -79,12 +84,12 @@ namespace UnityEngine.Rendering
             m_InstanceCullingBatcher.DestroyInstances(instances);
         }
 
-        public void DestroyMeshes(NativeArray<int> destroyedMeshes)
+        public void DestroyMeshes(NativeArray<EntityId_Int32> destroyedMeshes)
         {
             m_InstanceCullingBatcher.DestroyMeshes(destroyedMeshes);
         }
 
-        internal void FreeRendererGroupInstances(NativeArray<int> rendererGroupIDs)
+        internal void FreeRendererGroupInstances(NativeArray<EntityId_Int32> rendererGroupIDs)
         {
             if (rendererGroupIDs.Length == 0)
                 return;
@@ -113,7 +118,7 @@ namespace UnityEngine.Rendering
             m_BatchersContext.occlusionCullingCommon.UpdateInstanceOccluders(renderGraph, occluderParams, occluderSubviewUpdates);
         }
 
-        public void UpdateRenderers(NativeArray<int> renderersID)
+        public void UpdateRenderers(NativeArray<EntityId_Int32> renderersID)
         {
             if (renderersID.Length == 0)
                 return;
@@ -124,7 +129,7 @@ namespace UnityEngine.Rendering
         }
 
 #if UNITY_EDITOR
-        public void UpdateSelectedRenderers(NativeArray<int> renderersID)
+        public void UpdateSelectedRenderers(NativeArray<EntityId_Int32> renderersID)
         {
             var instances = new NativeArray<InstanceHandle>(renderersID.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             m_BatchersContext.ScheduleQueryRendererGroupInstancesJob(renderersID, instances).Complete();
