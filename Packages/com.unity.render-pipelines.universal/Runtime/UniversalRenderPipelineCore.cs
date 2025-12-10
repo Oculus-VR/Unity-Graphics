@@ -1545,6 +1545,10 @@ namespace UnityEngine.Rendering.Universal
                 desc.depthStencilFormat = SystemInfo.GetGraphicsFormat(DefaultFormat.DepthStencil);
                 desc.msaaSamples = msaaSamples;
                 desc.sRGB = (QualitySettings.activeColorSpace == ColorSpace.Linear);
+                // Use Memoryless MSAA buffers if resolve is supported
+                desc.memoryless = RenderingUtils.MultisampleDepthResolveSupported() ?
+                    RenderTextureMemoryless.MSAA :
+                    RenderTextureMemoryless.None;
             }
             else
             {
