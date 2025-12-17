@@ -8,6 +8,11 @@ using UnityEngine.Profiling;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal partial class InstanceDataSystem : IDisposable
     {
         private InstanceAllocators m_InstanceAllocators;
@@ -483,7 +488,7 @@ namespace UnityEngine.Rendering
                 instanceCounts = rendererData.instancesCount, instances = instances }.Run();
         }
 
-        public void FreeRendererGroupInstances(NativeArray<int> rendererGroupsID)
+        public void FreeRendererGroupInstances(NativeArray<EntityId_Int32> rendererGroupsID)
         {
             new FreeRendererGroupInstancesJob { rendererGroupInstanceMultiHash = m_RendererGroupInstanceMultiHash,
                 instanceAllocators = m_InstanceAllocators, sharedInstanceData = m_SharedInstanceData, instanceData = m_InstanceData,
@@ -560,7 +565,7 @@ namespace UnityEngine.Rendering
             UpdateInstanceMotionsData(renderersParameters, outputBuffer);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<InstanceHandle> instances)
         {
             Assert.AreEqual(rendererGroupIDs.Length, instances.Length);
 
@@ -577,7 +582,7 @@ namespace UnityEngine.Rendering
             return queryJob.ScheduleBatch(rendererGroupIDs.Length, QueryRendererGroupInstancesJob.k_BatchSize);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeList<InstanceHandle> instances)
         {
             if (rendererGroupIDs.Length == 0)
                 return default;
@@ -593,7 +598,7 @@ namespace UnityEngine.Rendering
             return jobHandle;
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
         {
             Assert.AreEqual(rendererGroupIDs.Length, instancesOffset.Length);
             Assert.AreEqual(rendererGroupIDs.Length, instancesCount.Length);
@@ -627,7 +632,7 @@ namespace UnityEngine.Rendering
             }.ScheduleBatch(rendererGroupIDs.Length, QueryRendererGroupInstancesMultiJob.k_BatchSize, computeOffsetsAndResizeArrayJobHandle);
         }
 
-        public JobHandle ScheduleQuerySortedMeshInstancesJob(NativeArray<int> sortedMeshIDs, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQuerySortedMeshInstancesJob(NativeArray<EntityId_Int32> sortedMeshIDs, NativeList<InstanceHandle> instances)
         {
             if (sortedMeshIDs.Length == 0)
                 return default;

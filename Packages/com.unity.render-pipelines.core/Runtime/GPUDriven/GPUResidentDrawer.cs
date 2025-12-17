@@ -29,6 +29,11 @@ using UnityEditor.Rendering;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     /// <summary>
     /// Static utility class for updating data post cull in begin camera rendering
     /// </summary>
@@ -531,7 +536,7 @@ namespace UnityEngine.Rendering
 
             Object[] renderers = Selection.GetFiltered(typeof(MeshRenderer), SelectionMode.Deep);
 
-            var rendererIDs = new NativeArray<int>(renderers.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var rendererIDs = new NativeArray<EntityId_Int32>(renderers.Length, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
             for (int i = 0; i < renderers.Length; ++i)
                 rendererIDs[i] = renderers[i] ? renderers[i].GetInstanceID() : 0;
@@ -577,11 +582,11 @@ namespace UnityEngine.Rendering
             Profiler.EndSample();
 
             Profiler.BeginSample("GPUResidentDrawer.FindUnsupportedMaterials");
-            NativeList<int> unsupportedMaterials = FindUnsupportedMaterials(materialData.changedID);
+            NativeList<EntityId_Int32> unsupportedMaterials = FindUnsupportedMaterials(materialData.changedID);
             Profiler.EndSample();
 
             Profiler.BeginSample("GPUResidentDrawer.FindUnsupportedRenderers");
-            NativeList<int> unsupportedRenderers = FindUnsupportedRenderers(unsupportedMaterials.AsArray());
+            NativeList<EntityId_Int32> unsupportedRenderers = FindUnsupportedRenderers(unsupportedMaterials.AsArray());
             Profiler.EndSample();
 
             Profiler.BeginSample("GPUResidentDrawer.ProcessMaterials");
@@ -617,7 +622,7 @@ namespace UnityEngine.Rendering
 #endif
         }
 
-        private void ProcessMaterials(NativeArray<int> destroyedID, NativeArray<int> unsupportedMaterials)
+        private void ProcessMaterials(NativeArray<EntityId_Int32> destroyedID, NativeArray<EntityId_Int32> unsupportedMaterials)
         {
             if (destroyedID.Length > 0)
                 m_Batcher.DestroyMaterials(destroyedID);
@@ -626,7 +631,7 @@ namespace UnityEngine.Rendering
                 m_Batcher.DestroyMaterials(unsupportedMaterials);
         }
 
-        private void ProcessMeshes(NativeArray<int> destroyedID)
+        private void ProcessMeshes(NativeArray<EntityId_Int32> destroyedID)
         {
             if (destroyedID.Length == 0)
                 return;
@@ -640,14 +645,14 @@ namespace UnityEngine.Rendering
             m_Batcher.DestroyMeshes(destroyedID);
         }
 
-        private void ProcessLODGroups(NativeArray<int> changedID, NativeArray<int> destroyed, NativeArray<int> transformedID)
+        private void ProcessLODGroups(NativeArray<EntityId_Int32> changedID, NativeArray<EntityId_Int32> destroyed, NativeArray<EntityId_Int32> transformedID)
         {
             m_BatchersContext.DestroyLODGroups(destroyed);
             m_BatchersContext.UpdateLODGroups(changedID);
             m_BatchersContext.TransformLODGroups(transformedID);
         }
 
-        private void ProcessRenderers(TypeDispatchData rendererChanges, NativeArray<int> unsupportedRenderers)
+        private void ProcessRenderers(TypeDispatchData rendererChanges, NativeArray<EntityId_Int32> unsupportedRenderers)
         {
             Profiler.BeginSample("GPUResidentDrawer.ProcessRenderers");
 
@@ -692,7 +697,7 @@ namespace UnityEngine.Rendering
             Profiler.EndSample();
         }
 
-        private void FreeRendererGroupInstances(NativeArray<int> rendererGroupIDs, NativeArray<int> unsupportedRendererGroupIDs)
+        private void FreeRendererGroupInstances(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<EntityId_Int32> unsupportedRendererGroupIDs)
         {
             Profiler.BeginSample("GPUResidentDrawer.FreeRendererGroupInstances");
 
@@ -716,29 +721,29 @@ namespace UnityEngine.Rendering
         //@ Additionally we need to implement the way to tie external transforms (not Transform components) with instances.
         //@ So that an individual instance could be transformed externally and then updated in the drawer.
 
-        private JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<InstanceHandle> instances)
+        private JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<InstanceHandle> instances)
         {
             return m_BatchersContext.ScheduleQueryRendererGroupInstancesJob(rendererGroupIDs, instances);
         }
 
-        private JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeList<InstanceHandle> instances)
+        private JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeList<InstanceHandle> instances)
         {
             return m_BatchersContext.ScheduleQueryRendererGroupInstancesJob(rendererGroupIDs, instances);
         }
 
-        private JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
+        private JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId_Int32> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
         {
             return m_BatchersContext.ScheduleQueryRendererGroupInstancesJob(rendererGroupIDs, instancesOffset, instancesCount, instances);
         }
 
-        private JobHandle ScheduleQueryMeshInstancesJob(NativeArray<int> sortedMeshIDs, NativeList<InstanceHandle> instances)
+        private JobHandle ScheduleQueryMeshInstancesJob(NativeArray<EntityId_Int32> sortedMeshIDs, NativeList<InstanceHandle> instances)
         {
             return m_BatchersContext.ScheduleQueryMeshInstancesJob(sortedMeshIDs, instances);
         }
 
-        private NativeList<int> FindUnsupportedMaterials(NativeArray<int> changedMaterialIDs)
+private NativeList<EntityId_Int32> FindUnsupportedMaterials(NativeArray<EntityId_Int32> changedMaterialIDs)
         {
-            NativeList<int> unsupportedMaterials = new NativeList<int>(Allocator.TempJob);
+            NativeList<EntityId_Int32> unsupportedMaterials = new NativeList<EntityId_Int32>(Allocator.TempJob);
 
             if (changedMaterialIDs.Length > 0)
             {
@@ -753,9 +758,9 @@ namespace UnityEngine.Rendering
             return unsupportedMaterials;
         }
 
-        private NativeList<int> FindUnsupportedRenderers(NativeArray<int> unsupportedMaterials)
+private NativeList<EntityId_Int32> FindUnsupportedRenderers(NativeArray<EntityId_Int32> unsupportedMaterials)
         {
-            NativeList<int> unsupportedRenderers = new NativeList<int>(Allocator.TempJob);
+            NativeList<EntityId_Int32> unsupportedRenderers = new NativeList<EntityId_Int32>(Allocator.TempJob);
 
             if (unsupportedMaterials.Length > 0)
             {
@@ -774,14 +779,14 @@ namespace UnityEngine.Rendering
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
         private struct FindUnsupportedMaterialsJob : IJob
         {
-            [ReadOnly] public NativeParallelHashMap<int, BatchMaterialID> batchMaterialHash;
-            [ReadOnly] public NativeArray<int> changedMaterialIDs;
+            [ReadOnly] public NativeParallelHashMap<EntityId_Int32, BatchMaterialID> batchMaterialHash;
+[ReadOnly] public NativeArray<EntityId_Int32> changedMaterialIDs;
 
-            public NativeList<int> unsupportedMaterialIDs;
+            public NativeList<EntityId_Int32> unsupportedMaterialIDs;
 
             public unsafe void Execute()
             {
-                var changedUsedMaterialIDs = new NativeList<int>(4, Allocator.Temp);
+                var changedUsedMaterialIDs = new NativeList<EntityId_Int32>(4, Allocator.Temp);
 
                 foreach (var materialID in changedMaterialIDs)
                 {
@@ -795,7 +800,7 @@ namespace UnityEngine.Rendering
                 unsupportedMaterialIDs.Resize(changedUsedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
 #if UNITY_6000_0_38_OR_NEWER
                 // Unity Removed the FindUnsupportedMaterialIDs in 6000.0.38
-                NativeList<int> supportedMaterialIDs = new NativeList<int>(Allocator.TempJob);
+                NativeList<EntityId_Int32> supportedMaterialIDs = new NativeList<EntityId_Int32>(Allocator.TempJob);
                 NativeList<GPUDrivenPackedMaterialData> supportedPackedMaterialDatas = new NativeList<GPUDrivenPackedMaterialData>(Allocator.TempJob);
                 supportedMaterialIDs.Resize(changedUsedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
                 supportedPackedMaterialDatas.Resize(changedUsedMaterialIDs.Length, NativeArrayOptions.UninitializedMemory);
@@ -810,11 +815,11 @@ namespace UnityEngine.Rendering
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
         private struct FindUnsupportedRenderersJob : IJob
         {
-            [ReadOnly] public NativeArray<int>.ReadOnly unsupportedMaterials;
+            [ReadOnly] public NativeArray<EntityId_Int32>.ReadOnly unsupportedMaterials;
             [ReadOnly] public NativeArray<SmallIntegerArray>.ReadOnly materialIDArrays;
-            [ReadOnly] public NativeArray<int>.ReadOnly rendererGroups;
+[ReadOnly] public NativeArray<EntityId_Int32>.ReadOnly rendererGroups;
 
-            public NativeList<int> unsupportedRenderers;
+            public NativeList<EntityId_Int32> unsupportedRenderers;
 
             public unsafe void Execute()
             {
@@ -830,7 +835,7 @@ namespace UnityEngine.Rendering
                     {
                         int materialID = materialIDs[i];
 
-                        if (unsupportedMaterials.Contains(materialID))
+                        if (unsupportedMaterials.Contains((EntityId_Int32)materialID))
                         {
                             unsupportedRenderers.Add(rendererID);
                             break;

@@ -12,6 +12,11 @@ using UnityEngine.Profiling;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal partial class InstanceDataSystem : IDisposable
     {
         private unsafe static int AtomicAddLengthNoResize<T>(in NativeList<T> list, int count) where T : unmanaged
@@ -30,7 +35,7 @@ namespace UnityEngine.Rendering
             [ReadOnly] public CPUInstanceData instanceData;
             [ReadOnly] public CPUSharedInstanceData sharedInstanceData;
             [ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> rendererGroupIDs;
+[NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<EntityId_Int32> rendererGroupIDs;
 
             [NativeDisableContainerSafetyRestriction, NoAlias][WriteOnly] public NativeArray<int> instancesCount;
 
@@ -80,8 +85,8 @@ namespace UnityEngine.Rendering
         {
             public const int k_BatchSize = 128;
 
-            [ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> rendererGroupIDs;
+[ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
+            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<EntityId_Int32> rendererGroupIDs;
 
             [NativeDisableContainerSafetyRestriction, NoAlias][WriteOnly] public NativeArray<InstanceHandle> instances;
             [NativeDisableUnsafePtrRestriction] public UnsafeAtomicCounter32 atomicNonFoundInstancesCount;
@@ -113,8 +118,8 @@ namespace UnityEngine.Rendering
         {
             public const int k_BatchSize = 128;
 
-            [ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> rendererGroupIDs;
+[ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
+            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<EntityId_Int32> rendererGroupIDs;
             [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> instancesOffsets;
             [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> instancesCounts;
 
@@ -170,7 +175,7 @@ namespace UnityEngine.Rendering
 
             [ReadOnly] public CPUInstanceData instanceData;
             [ReadOnly] public CPUSharedInstanceData sharedInstanceData;
-            [ReadOnly] public NativeArray<int> sortedMeshID;
+            [ReadOnly] public NativeArray<EntityId_Int32> sortedMeshID;
 
             [NativeDisableParallelForRestriction][WriteOnly] public NativeList<InstanceHandle> instances;
 
@@ -492,7 +497,7 @@ namespace UnityEngine.Rendering
         private struct ReallocateInstancesJob : IJob
         {
             [ReadOnly] public bool implicitInstanceIndices;
-            [ReadOnly] public NativeArray<int> rendererGroupIDs;
+            [ReadOnly] public NativeArray<EntityId_Int32> rendererGroupIDs;
             [ReadOnly] public NativeArray<GPUDrivenPackedRendererData> packedRendererData;
             [ReadOnly] public NativeArray<int> instanceOffsets;
             [ReadOnly] public NativeArray<int> instanceCounts;
@@ -655,7 +660,7 @@ namespace UnityEngine.Rendering
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
         private struct FreeRendererGroupInstancesJob : IJob
         {
-            [ReadOnly] public NativeArray<int> rendererGroupsID;
+            [ReadOnly] public NativeArray<EntityId_Int32> rendererGroupsID;
 
             public InstanceAllocators instanceAllocators;
             public CPUInstanceData instanceData;

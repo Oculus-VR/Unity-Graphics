@@ -15,6 +15,11 @@ using UnityEngine.Profiling;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal delegate void OnCullingCompleteCallback(JobHandle jobHandle, in BatchCullingContext cullingContext, in BatchCullingOutput cullingOutput);
 
     internal struct InstanceCullingBatcherDesc
@@ -195,25 +200,25 @@ namespace UnityEngine.Rendering
     {
         public const int k_BatchSize = 128;
 
-        [ReadOnly] public NativeArray<int> instanceIDs;
-        [ReadOnly] public NativeParallelHashMap<int, T> hashMap;
+        [ReadOnly] public NativeArray<EntityId_Int32> instanceIDs;
+        [ReadOnly] public NativeParallelHashMap<EntityId_Int32, T> hashMap;
 
-        [WriteOnly] public NativeList<int>.ParallelWriter outInstancesWriter;
+        [WriteOnly] public NativeList<EntityId_Int32>.ParallelWriter outInstancesWriter;
 
         public unsafe void Execute(int startIndex, int count)
         {
-            int* notFoundinstanceIDs = stackalloc int[k_BatchSize];
-            int length = 0;
+            EntityId_Int32* notFoundinstanceIDsPtr = stackalloc EntityId_Int32[k_BatchSize];
+            var notFoundinstanceIDs = new UnsafeList<EntityId_Int32>(notFoundinstanceIDsPtr, k_BatchSize);
 
             for (int i = startIndex; i < startIndex + count; ++i)
             {
-                int instanceID = instanceIDs[i];
+                var instanceID = instanceIDs[i];
 
                 if (!hashMap.ContainsKey(instanceID))
-                    notFoundinstanceIDs[length++] = instanceID;
+                    notFoundinstanceIDs.AddNoResize(instanceID);
             }
 
-            outInstancesWriter.AddRangeNoResize(notFoundinstanceIDs, length);
+            outInstancesWriter.AddRangeNoResize(notFoundinstanceIDs.Ptr, notFoundinstanceIDs.Length);
         }
     }
 
@@ -222,10 +227,10 @@ namespace UnityEngine.Rendering
     {
         public const int k_BatchSize = 128;
 
-        [ReadOnly] public NativeArray<int> instanceIDs;
+        [ReadOnly] public NativeArray<EntityId_Int32> instanceIDs;
         [ReadOnly] public NativeArray<T> batchIDs;
 
-        [WriteOnly] public NativeParallelHashMap<int, T>.ParallelWriter hashMap;
+        [WriteOnly] public NativeParallelHashMap<EntityId_Int32, T>.ParallelWriter hashMap;
 
         public unsafe void Execute(int index)
         {
@@ -307,8 +312,8 @@ namespace UnityEngine.Rendering
         [ReadOnly] public bool implicitInstanceIndices;
         [ReadOnly] public NativeArray<InstanceHandle> instances;
         [ReadOnly] public GPUDrivenRendererGroupData rendererData;
-        [ReadOnly] public NativeParallelHashMap<int, BatchMeshID> batchMeshHash;
-        [ReadOnly] public NativeParallelHashMap<int, BatchMaterialID> batchMaterialHash;
+        [ReadOnly] public NativeParallelHashMap<EntityId_Int32, BatchMeshID> batchMeshHash;
+        [ReadOnly] public NativeParallelHashMap<EntityId_Int32, BatchMaterialID> batchMaterialHash;
 
         public NativeParallelHashMap<RangeKey, int> rangeHash;
         public NativeList<DrawRange> drawRanges;
@@ -717,14 +722,14 @@ namespace UnityEngine.Rendering
         private BatchRendererGroup m_BRG;
         private NativeParallelHashMap<uint, BatchID> m_GlobalBatchIDs;
         private InstanceCuller m_Culler;
-        private NativeParallelHashMap<int, BatchMaterialID> m_BatchMaterialHash;
-        private NativeParallelHashMap<int, BatchMeshID> m_BatchMeshHash;
+        private NativeParallelHashMap<EntityId_Int32, BatchMaterialID> m_BatchMaterialHash;
+        private NativeParallelHashMap<EntityId_Int32, BatchMeshID> m_BatchMeshHash;
 
         private int m_CachedInstanceDataBufferLayoutVersion;
 
         private OnCullingCompleteCallback m_OnCompleteCallback;
 
-        public NativeParallelHashMap<int, BatchMaterialID> batchMaterialHash => m_BatchMaterialHash;
+        public NativeParallelHashMap<EntityId_Int32, BatchMaterialID> batchMaterialHash => m_BatchMaterialHash;
 
         public InstanceCullingBatcher(RenderersBatchersContext batcherContext, InstanceCullingBatcherDesc desc, BatchRendererGroup.OnFinishedCulling onFinishedCulling)
         {
@@ -773,8 +778,8 @@ namespace UnityEngine.Rendering
 
             m_CachedInstanceDataBufferLayoutVersion = -1;
             m_OnCompleteCallback = desc.onCompleteCallback;
-            m_BatchMaterialHash = new NativeParallelHashMap<int, BatchMaterialID>(64, Allocator.Persistent);
-            m_BatchMeshHash = new NativeParallelHashMap<int, BatchMeshID>(64, Allocator.Persistent);
+            m_BatchMaterialHash = new NativeParallelHashMap<EntityId_Int32, BatchMaterialID>(64, Allocator.Persistent);
+            m_BatchMeshHash = new NativeParallelHashMap<EntityId_Int32, BatchMeshID>(64, Allocator.Persistent);
 
             m_GlobalBatchIDs = new NativeParallelHashMap<uint, BatchID>(6, Allocator.Persistent);
             m_GlobalBatchIDs.Add((uint)InstanceComponentGroup.Default, GetBatchID(InstanceComponentGroup.Default));
@@ -914,7 +919,7 @@ namespace UnityEngine.Rendering
             Profiler.EndSample();
         }
 
-        public void DestroyMaterials(NativeArray<int> destroyedMaterials)
+        public void DestroyMaterials(NativeArray<EntityId_Int32> destroyedMaterials)
         {
             if (destroyedMaterials.Length == 0)
                 return;
@@ -940,7 +945,7 @@ namespace UnityEngine.Rendering
             Profiler.EndSample();
         }
 
-        public void DestroyMeshes(NativeArray<int> destroyedMeshes)
+        public void DestroyMeshes(NativeArray<EntityId_Int32> destroyedMeshes)
         {
             if (destroyedMeshes.Length == 0)
                 return;
@@ -963,9 +968,9 @@ namespace UnityEngine.Rendering
         {
         }
 
-        private void RegisterBatchMeshes(NativeArray<int> meshIDs)
+        private void RegisterBatchMeshes(NativeArray<EntityId_Int32> meshIDs)
         {
-            var newMeshIDs = new NativeList<int>(meshIDs.Length, Allocator.TempJob);
+            var newMeshIDs = new NativeList<EntityId_Int32>(meshIDs.Length, Allocator.TempJob);
             new FindNonRegisteredInstancesJob<BatchMeshID>
             {
                 instanceIDs = meshIDs,
@@ -991,9 +996,9 @@ namespace UnityEngine.Rendering
             newBatchMeshIDs.Dispose();
         }
 
-        private void RegisterBatchMaterials(in NativeArray<int> usedMaterialIDs)
+        private void RegisterBatchMaterials(in NativeArray<EntityId_Int32> usedMaterialIDs)
         {
-            var newMaterialIDs = new NativeList<int>(usedMaterialIDs.Length, Allocator.TempJob);
+            var newMaterialIDs = new NativeList<EntityId_Int32>(usedMaterialIDs.Length, Allocator.TempJob);
             new FindNonRegisteredInstancesJob<BatchMaterialID>
             {
                 instanceIDs = usedMaterialIDs,
@@ -1022,8 +1027,8 @@ namespace UnityEngine.Rendering
 
         public void BuildBatch(
             NativeArray<InstanceHandle> instances,
-            NativeArray<int> usedMaterialIDs,
-            NativeArray<int> usedMeshIDs,
+            NativeArray<EntityId_Int32> usedMaterialIDs,
+            NativeArray<EntityId_Int32> usedMeshIDs,
             in GPUDrivenRendererGroupData rendererData)
         {
             RegisterBatchMaterials(usedMaterialIDs);

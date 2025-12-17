@@ -8,6 +8,11 @@ using Unity.Mathematics;
 
 namespace UnityEngine.Rendering
 {
+#if UNITY_6000_3_OR_NEWER
+    using EntityId_Int32 = EntityId;
+#else
+    using EntityId_Int32 = System.Int32;
+#endif
     internal unsafe struct LODGroupData
     {
         public const int k_MaxLODLevelsCount = 8;
@@ -35,7 +40,7 @@ namespace UnityEngine.Rendering
         public const int k_BatchSize = 256;
 
         [ReadOnly] public NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataHash;
-        [ReadOnly] public NativeArray<int> lodGroupIDs;
+        [ReadOnly] public NativeArray<EntityId_Int32> lodGroupIDs;
         [ReadOnly] public NativeArray<Vector3> worldSpaceReferencePoints;
         [ReadOnly] public NativeArray<float> worldSpaceSizes;
         [ReadOnly] public bool requiresGPUUpload;
@@ -88,7 +93,7 @@ namespace UnityEngine.Rendering
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     internal unsafe struct AllocateOrGetLODGroupDataInstancesJob : IJob
     {
-        [ReadOnly] public NativeArray<int> lodGroupsID;
+        [ReadOnly] public NativeArray<EntityId_Int32> lodGroupsID;
 
         public NativeList<LODGroupData> lodGroupsData;
         public NativeList<LODGroupCullingData> lodGroupCullingData;
@@ -219,7 +224,7 @@ namespace UnityEngine.Rendering
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     internal unsafe struct FreeLODGroupDataJob : IJob
     {
-        [ReadOnly] public NativeArray<int> destroyedLODGroupsID;
+        [ReadOnly] public NativeArray<EntityId_Int32> destroyedLODGroupsID;
 
         public NativeList<LODGroupData> lodGroupsData;
         public NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataHash;
@@ -364,7 +369,7 @@ namespace UnityEngine.Rendering
             lodGroupInstances.Dispose();
         }
 
-        public unsafe void FreeLODGroupData(NativeArray<int> destroyedLODGroupsID)
+        public unsafe void FreeLODGroupData(NativeArray<EntityId_Int32> destroyedLODGroupsID)
         {
             if (destroyedLODGroupsID.Length == 0)
                 return;
