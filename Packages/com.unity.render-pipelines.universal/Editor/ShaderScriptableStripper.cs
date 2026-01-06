@@ -196,6 +196,7 @@ namespace UnityEditor.Rendering.Universal
         LocalKeyword m_Instancing;
         LocalKeyword m_DotsInstancing;
         LocalKeyword m_ProceduralInstancing;
+        LocalKeyword m_ApplicationSpaceWarpMotion;
 
         private LocalKeyword TryGetLocalKeyword(Shader shader, string name)
         {
@@ -271,6 +272,9 @@ namespace UnityEditor.Rendering.Universal
             m_Instancing = TryGetLocalKeyword(shader, "INSTANCING_ON");
             m_DotsInstancing = TryGetLocalKeyword(shader, "DOTS_INSTANCING_ON");
             m_ProceduralInstancing = TryGetLocalKeyword(shader, "PROCEDURAL_INSTANCING_ON");
+            // XR Specific Keywords
+            m_ApplicationSpaceWarpMotion =
+                TryGetLocalKeyword(shader, ShaderKeywordStrings.APPLICATION_SPACE_WARP_MOTION);
         }
 
 
@@ -1028,6 +1032,16 @@ namespace UnityEditor.Rendering.Universal
             return false;
         }
 
+        internal bool StripInvalidVariants_MotionVectors(ref IShaderScriptableStrippingData strippingData)
+        {
+            if (strippingData.IsKeywordEnabled(m_ApplicationSpaceWarpMotion))
+            {
+                return strippingData.stripUnusedXRVariants;
+            }
+
+            return false;
+        }
+
         internal bool StripInvalidVariants(ref IShaderScriptableStrippingData strippingData)
         {
             if (StripInvalidVariants_HDR(ref strippingData))
@@ -1037,6 +1051,9 @@ namespace UnityEditor.Rendering.Universal
                 return true;
 
             if (StripInvalidVariants_Shadows(ref strippingData))
+                return true;
+
+            if (StripInvalidVariants_MotionVectors(ref strippingData))
                 return true;
 
             return false;

@@ -7,9 +7,9 @@ Shader "Hidden/Universal Render Pipeline/ObjectMotionVectorFallback"
             Name "MotionVectors"
 
             Tags{ "LightMode" = "MotionVectors" }
-            ColorMask RG
 
             HLSLPROGRAM
+            #pragma multi_compile _ APPLICATION_SPACE_WARP_MOTION
             #include_with_pragmas "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl"
             ENDHLSL
         }

@@ -1168,7 +1168,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 renderStates = CoreRenderStates.MotionVector(target),
                 pragmas = CorePragmas.MotionVectors,
                 defines = new DefineCollection(),
-                keywords = new KeywordCollection(),
+                keywords = new KeywordCollection() { CoreKeywordDescriptors.ApplicationSpaceWarpMotion },
                 includes = CoreIncludes.MotionVectors,
 
                 // Custom Interpolator Support
@@ -1597,7 +1597,6 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 { RenderState.ZTest(ZTest.LEqual) },
                 { RenderState.ZWrite(ZWrite.On) },
                 { UberSwitchedCullRenderState(target) },
-                { RenderState.ColorMask("ColorMask RG") },
             };
             return result;
         }
@@ -2426,6 +2425,14 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         {
             displayName = "ReflectionProbe Rotation",
             referenceName = ShaderKeywordStrings.ReflectionProbeRotation,
+            type = KeywordType.Boolean,
+            definition = KeywordDefinition.MultiCompile,
+            scope = KeywordScope.Global
+        };
+        public static readonly KeywordDescriptor ApplicationSpaceWarpMotion = new KeywordDescriptor()
+        {
+            displayName = ShaderKeywordStrings.APPLICATION_SPACE_WARP_MOTION,
+            referenceName = ShaderKeywordStrings.APPLICATION_SPACE_WARP_MOTION,
             type = KeywordType.Boolean,
             definition = KeywordDefinition.MultiCompile,
             scope = KeywordScope.Global

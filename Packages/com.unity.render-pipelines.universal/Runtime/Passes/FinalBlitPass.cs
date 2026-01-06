@@ -95,14 +95,132 @@ namespace UnityEngine.Rendering.Universal.Internal
             CoreUtils.SetKeyword(material, ShaderKeywordStrings.HDROverlay, rendersOverlayUI);
         }
 
+#if URP_COMPATIBILITY_MODE
+        /// <inheritdoc/>
+        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsoleteFrom2023_3)]
+        public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
+        {
+            UniversalCameraData cameraData = renderingData.frameData.Get<UniversalCameraData>();
+            DebugHandler debugHandler = GetActiveDebugHandler(cameraData);
+            bool resolveToDebugScreen = debugHandler != null && debugHandler.WriteToDebugScreenTexture(cameraData.resolveFinalTarget);
+
+            if (resolveToDebugScreen)
+            {
+                // Disable obsolete warning for internal usage
+                #pragma warning disable CS0618
+                ConfigureTarget(debugHandler.DebugScreenColorHandle, debugHandler.DebugScreenDepthHandle);
+                #pragma warning restore CS0618
+            }
+        }
+
+        /// <inheritdoc/>
+        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsoleteFrom2023_3)]
+        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+        {
+            ContextContainer frameData = renderingData.frameData;
+            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
+
+            bool outputsToHDR = renderingData.cameraData.isHDROutputActive;
+            bool outputsAlpha = false;
+            InitPassData(cameraData, ref m_PassData, outputsToHDR ? BlitType.HDR : BlitType.Core, outputsAlpha, false);
+
+            if (m_PassData.blitMaterialData.material == null)
+            {
+                Debug.LogErrorFormat("Missing {0}. {1} render pass will not execute. Check for missing reference in the renderer resources.", m_PassData.blitMaterialData, GetType().Name);
+                return;
+            }
+
+            var cameraTarget = RenderingUtils.GetCameraTargetIdentifier(ref renderingData);
+            DebugHandler debugHandler = GetActiveDebugHandler(cameraData);
+            bool resolveToDebugScreen = debugHandler != null && debugHandler.WriteToDebugScreenTexture(cameraData.resolveFinalTarget);
+
+            // Get RTHandle alias to use RTHandle apis
+            RTHandleStaticHelpers.SetRTHandleStaticWrapper(cameraTarget);
+            var cameraTargetHandle = RTHandleStaticHelpers.s_RTHandleWrapper;
+
+            var cmd = renderingData.commandBuffer;
+
+            if (m_Source == cameraData.renderer.GetCameraColorFrontBuffer(cmd))
+            {
+                m_Source = renderingData.cameraData.renderer.cameraColorTargetHandle;
+            }
+
+            using (new ProfilingScope(cmd, profilingSampler))
+            {
+                m_PassData.blitMaterialData.material.enabledKeywords = null;
+
+                debugHandler?.UpdateShaderGlobalPropertiesForFinalValidationPass(cmd, cameraData, !resolveToDebugScreen);
+
+                cmd.SetKeyword(ShaderGlobalKeywords.LinearToSRGBConversion,
+                    cameraData.requireSrgbConversion);
+
+                if (outputsToHDR)
+                {
+                    VolumeStack stack = VolumeManager.instance.stack;
+                    Tonemapping tonemapping = stack.GetComponent<Tonemapping>();
+
+                    Vector4 hdrOutputLuminanceParams;
+                    UniversalRenderPipeline.GetHDROutputLuminanceParameters(cameraData.hdrDisplayInformation, cameraData.hdrDisplayColorGamut, tonemapping, out hdrOutputLuminanceParams);
+
+                    HDROutputUtils.Operation hdrOperation = HDROutputUtils.Operation.None;
+                    // If the HDRDebugView is on, we don't want the encoding
+                    if (debugHandler == null || !debugHandler.HDRDebugViewIsActive(cameraData.resolveFinalTarget))
+                        hdrOperation |= HDROutputUtils.Operation.ColorEncoding;
+                    // Color conversion may have happened in the Uber post process through color grading, so we don't want to reapply it
+                    if (!cameraData.postProcessEnabled)
+                        hdrOperation |= HDROutputUtils.Operation.ColorConversion;
+
+                    SetupHDROutput(cameraData.hdrDisplayColorGamut, m_PassData.blitMaterialData.material, hdrOperation, hdrOutputLuminanceParams, cameraData.rendersOverlayUI);
+                }
+
+                if (resolveToDebugScreen)
+                {
+                    // Blit to the debugger texture instead of the camera target
+                    int shaderPassIndex = m_Source.rt?.filterMode == FilterMode.Bilinear ? m_PassData.blitMaterialData.bilinearSamplerPass : m_PassData.blitMaterialData.nearestSamplerPass;
+                    Vector2 viewportScale = m_Source.useScaling ? new Vector2(m_Source.rtHandleProperties.rtHandleScale.x, m_Source.rtHandleProperties.rtHandleScale.y) : Vector2.one;
+                    Blitter.BlitTexture(cmd, m_Source, viewportScale, m_PassData.blitMaterialData.material, shaderPassIndex);
+
+                    cameraData.renderer.ConfigureCameraTarget(debugHandler.DebugScreenColorHandle, debugHandler.DebugScreenDepthHandle);
+                }
+                // TODO RENDERGRAPH: See https://jira.unity3d.com/projects/URP/issues/URP-1737
+                // This branch of the if statement must be removed for render graph and the new command list with a novel way of using Blitter with fill mode
+                else if (GL.wireframe && cameraData.isSceneViewCamera)
+                {
+                    // This set render target is necessary so we change the LOAD state to DontCare.
+                    cmd.SetRenderTarget(BuiltinRenderTextureType.CameraTarget,
+                        RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, // color
+                        RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare); // depth
+                    cmd.Blit(m_Source.nameID, cameraTargetHandle.nameID);
+                }
+                else
+                {
+                    // TODO: Final blit pass should always blit to backbuffer. The first time we do we don't need to Load contents to tile.
+                    // We need to keep in the pipeline of first render pass to each render target to properly set load/store actions.
+                    // meanwhile we set to load so split screen case works.
+                    var loadAction = RenderBufferLoadAction.DontCare;
+                    if (!cameraData.isSceneViewCamera && !cameraData.isDefaultViewport)
+                        loadAction = RenderBufferLoadAction.Load;
+#if ENABLE_VR && ENABLE_XR_MODULE
+                    if (cameraData.xr.enabled)
+                        loadAction = RenderBufferLoadAction.DontCare;
+#endif
+
+                    CoreUtils.SetRenderTarget(renderingData.commandBuffer, cameraTargetHandle.nameID, loadAction, RenderBufferStoreAction.Store, ClearFlag.None, Color.clear);
+                    Vector4 scaleBias = RenderingUtils.GetFinalBlitScaleBias(m_Source, cameraTargetHandle, cameraData);
+                    ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), m_PassData, m_Source, cameraTargetHandle, cameraData, scaleBias);
+                    cameraData.renderer.ConfigureCameraTarget(cameraTargetHandle, cameraTargetHandle);
+                }
+            }
+        }
+#endif
 
         private static void ExecutePass(RasterCommandBuffer cmd, PassData data, RTHandle source, RTHandle destination, UniversalCameraData cameraData, Vector4 scaleBias)
         {
             bool isRenderToBackBufferTarget = !cameraData.isSceneViewCamera;
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (cameraData.xr.enabled)
-                isRenderToBackBufferTarget = new RenderTargetIdentifier(destination.nameID, 0, CubemapFace.Unknown, -1) == new RenderTargetIdentifier(cameraData.xr.renderTarget, 0, CubemapFace.Unknown, -1);
-#endif            
+                isRenderToBackBufferTarget = cameraData.xr.IsXRTarget(destination);
+#endif
             var pixelRect = data.useFullScreenViewport ? new Rect(0f, 0f, Screen.width, Screen.height) : cameraData.pixelRect;
             RenderingUtils.SetupOffscreenUIViewportParams(data.blitMaterialData.material, ref pixelRect, isRenderToBackBufferTarget);
             if (isRenderToBackBufferTarget)
@@ -166,7 +284,9 @@ namespace UnityEngine.Rendering.Universal.Internal
                 AccessFlags targetAccessFlag = AccessFlags.Write;
 #if ENABLE_VR && ENABLE_XR_MODULE
                 // This is a screen-space pass, make sure foveated rendering is disabled for non-uniform renders
-                bool passSupportsFoveation = !XRSystem.foveatedRenderingCaps.HasFlag(FoveatedRenderingCaps.NonUniformRaster);
+                // Also disable foveation on final blit pass for mobile XR devices to use direct mode on
+                // tiled GPUs when possible.
+                bool passSupportsFoveation = !XRSystem.foveatedRenderingCaps.HasFlag(FoveatedRenderingCaps.NonUniformRaster) && !PlatformAutoDetect.isXRMobile;
                 builder.EnableFoveatedRasterization(cameraData.xr.supportsFoveatedRendering && passSupportsFoveation);
                 // Apply MultiviewRenderRegionsCompatible flag only to the peripheral view in Quad Views
                 if (cameraData.xr.multipassId == 0)

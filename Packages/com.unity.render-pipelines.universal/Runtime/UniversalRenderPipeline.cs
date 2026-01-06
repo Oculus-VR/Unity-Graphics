@@ -449,7 +449,6 @@ namespace UnityEngine.Rendering.Universal
                 GraphicsSettings.lightsUseLinearIntensity = (QualitySettings.activeColorSpace == ColorSpace.Linear);
                 GraphicsSettings.lightsUseColorTemperature = true;
                 SetupPerFrameShaderConstants();
-                XRSystem.SetDisplayMSAASamples((MSAASamples)asset.msaaSampleCount);
 
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
                 if (DebugManager.instance.isAnyDebugUIActive)
@@ -1169,6 +1168,7 @@ namespace UnityEngine.Rendering.Universal
                 baseCameraData.cameraTargetDescriptor.graphicsFormat = originalTargetDesc.graphicsFormat;
             }
             baseCameraData.cameraTargetDescriptor.msaaSamples = originalTargetDesc.msaaSamples;
+            baseCameraData.cameraTargetDescriptor.memoryless = originalTargetDesc.memoryless;
 
             if (baseCameraData.isDefaultViewport)
             {
@@ -1361,12 +1361,6 @@ namespace UnityEngine.Rendering.Universal
             int msaaSamples = 1;
             if (camera.allowMSAA && asset.msaaSampleCount > 1 && rendererSupportsMSAA)
                 msaaSamples = (camera.targetTexture != null) ? camera.targetTexture.antiAliasing : asset.msaaSampleCount;
-
-            // Use XR's MSAA if camera is XR camera. XR MSAA needs special handle here because it is not per Camera.
-            // Multiple cameras could render into the same XR display and they should share the same MSAA level.
-            // However it should still respect the sample count of the target texture camera is rendering to.
-            if (cameraData.xrRendering && rendererSupportsMSAA && camera.targetTexture == null)
-                msaaSamples = (int)XRSystem.GetDisplayMSAASamples();
 
             bool needsAlphaChannel = Graphics.preserveFramebufferAlpha;
 
@@ -1661,6 +1655,14 @@ namespace UnityEngine.Rendering.Universal
             // cameraData.isAlphaOutputEnabled is set based on target alpha channel availability on create. Target can be a RenderTexture or the back-buffer.
             bool allowAlphaOutput = !cameraData.postProcessEnabled || (cameraData.postProcessEnabled && settings.allowPostProcessAlphaOutput);
             cameraData.isAlphaOutputEnabled = cameraData.isAlphaOutputEnabled && allowAlphaOutput;
+
+            // Update the MSAA setting for the XR Display. If the camera directly renders into the XR
+            // target, we should set the display MSAA level to the camera setting. Otherwise MSAA should be disabled
+            // for the XR Target to make the final copy pass as fast as possible.
+            if (cameraData.xrRendering && camera.targetTexture == null && resolveFinalTarget)
+            {
+                XRSystem.SetDisplayMSAASamples(cameraData.postProcessEnabled || cameraData.isHdrEnabled ? MSAASamples.None : (MSAASamples)cameraData.cameraTargetDescriptor.msaaSamples);
+            }
         }
 
         static UniversalRenderingData CreateRenderingData(ContextContainer frameData, UniversalRenderPipelineAsset settings, CommandBuffer cmd, RenderingMode? renderingMode, ScriptableRenderer renderer)

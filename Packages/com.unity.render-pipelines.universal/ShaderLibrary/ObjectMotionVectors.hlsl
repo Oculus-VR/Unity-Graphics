@@ -31,7 +31,7 @@
 struct Attributes
 {
     float4 position             : POSITION;
-#if _ALPHATEST_ON
+#if defined(_ALPHATEST_ON) || defined(_SURFACE_TYPE_TRANSPARENT)
     float2 uv                   : TEXCOORD0;
 #endif
     float3 positionOld          : TEXCOORD4;
@@ -46,12 +46,21 @@ struct Varyings
     float4 positionCS                 : SV_POSITION;
     float4 positionCSNoJitter         : POSITION_CS_NO_JITTER;
     float4 previousPositionCSNoJitter : PREV_POSITION_CS_NO_JITTER;
-#if _ALPHATEST_ON
+#if defined(_ALPHATEST_ON) || defined(_SURFACE_TYPE_TRANSPARENT)
     float2 uv                         : TEXCOORD0;
 #endif
     UNITY_VERTEX_INPUT_INSTANCE_ID
     UNITY_VERTEX_OUTPUT_STEREO
 };
+
+bool IsIdentity(in float4x4 modelMatrix)
+{
+    return
+        modelMatrix[0][0] == 1.0 && modelMatrix[0][1] == 0.0 && modelMatrix[0][2] == 0.0 && modelMatrix[0][3] == 0.0 &&
+        modelMatrix[1][0] == 0.0 && modelMatrix[1][1] == 1.0 && modelMatrix[1][2] == 0.0 && modelMatrix[1][3] == 0.0 &&
+        modelMatrix[2][0] == 0.0 && modelMatrix[2][1] == 0.0 && modelMatrix[2][2] == 1.0 && modelMatrix[2][3] == 0.0 &&
+        modelMatrix[3][0] == 0.0 && modelMatrix[3][1] == 0.0 && modelMatrix[3][2] == 0.0 && modelMatrix[3][3] == 1.0;
+}
 
 // -------------------------------------
 // Vertex
@@ -65,7 +74,7 @@ Varyings vert(Attributes input)
 
     const VertexPositionInputs vertexInput = GetVertexPositionInputs(input.position.xyz);
 
-    #if defined(_ALPHATEST_ON)
+    #if defined(_ALPHATEST_ON) || defined(_SURFACE_TYPE_TRANSPARENT)
         output.uv = TRANSFORM_TEX(input.uv, _BaseMap);
     #endif
 
@@ -85,10 +94,34 @@ Varyings vert(Attributes input)
     prevPos = prevPos - float4(input.alembicMotionVector, 0);
 #endif
 
-    output.previousPositionCSNoJitter = mul(_PrevViewProjMatrix, mul(UNITY_PREV_MATRIX_M, prevPos));
+    // Particle System Workaround.
+    // There is currently a bug in Unity that UNITY_PREV_MATRIX_M is relative to the particle system
+    // transform, but UNITY_MATRIX_M is always identity, causing artifacts for particles with motion vectors.
+    // We can avoid this bug by checking whether the current model matrix is the identity matrix, and if
+    // so, simply use the unaltered previous position without multiplying by UNITY_PREV_MATRIX_M.
+    if (!IsIdentity(UNITY_MATRIX_M))
+    {
+        prevPos = mul(UNITY_PREV_MATRIX_M, prevPos);
+    }
+
+    output.previousPositionCSNoJitter = mul(_PrevViewProjMatrix, prevPos);
 
     return output;
 }
+
+#if defined(_SURFACE_TYPE_TRANSPARENT)
+void TransparentClipAlpha(half albedoAlpha, half4 color)
+{
+    #if !defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A) && !defined(_GLOSSINESS_FROM_BASE_ALPHA)
+    half alpha = albedoAlpha * color.a;
+    #else
+    half alpha = color.a;
+    #endif
+
+    // force cutoff to 0.5
+    clip(alpha - 0.5);
+}
+#endif
 
 // -------------------------------------
 // Fragment
@@ -99,6 +132,8 @@ float4 frag(Varyings input) : SV_Target
 
     #if defined(_ALPHATEST_ON)
         Alpha(SampleAlbedoAlpha(input.uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor, _Cutoff);
+    #elif defined(_SURFACE_TYPE_TRANSPARENT)
+        TransparentClipAlpha(SampleAlbedoAlpha(input.uv, TEXTURE2D_ARGS(_BaseMap, sampler_BaseMap)).a, _BaseColor);
     #endif
 
     #if defined(LOD_FADE_CROSSFADE)

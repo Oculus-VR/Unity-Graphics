@@ -393,7 +393,7 @@ namespace UnityEngine.Rendering.Universal
             bool isBackbuffer = handleID == BuiltinRenderTextureType.CameraTarget || handleID == BuiltinRenderTextureType.Depth;
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (xr.enabled)
-                isBackbuffer |= handleID == new RenderTargetIdentifier(xr.renderTarget, 0, CubemapFace.Unknown, 0);
+                isBackbuffer |= xr.IsXRTarget(handleID);
 #endif
             return !isBackbuffer;
         }
