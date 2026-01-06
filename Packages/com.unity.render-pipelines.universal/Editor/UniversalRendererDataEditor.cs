@@ -18,6 +18,7 @@ namespace UnityEditor.Rendering.Universal
             public static readonly GUIContent PostProcessIncluded = EditorGUIUtility.TrTextContent("Enabled", "Enables the use of post processing effects within the scene. If disabled, Unity excludes post processing renderer Passes, shaders and textures from the build.");
             public static readonly GUIContent PostProcessLabel = EditorGUIUtility.TrTextContent("Data", "The asset containing references to shaders and Textures that the Renderer uses for post-processing.");
             public static readonly GUIContent FilteringSectionLabel = EditorGUIUtility.TrTextContent("Filtering", "Settings that controls and define which layers the renderer draws.");
+            public static readonly GUIContent PrepassMask = EditorGUIUtility.TrTextContent("Prepass Layer Mask", "Controls which prepass layers this renderer draws. It applies to any prepass.");
             public static readonly GUIContent OpaqueMask = EditorGUIUtility.TrTextContent("Opaque Layer Mask", "Controls which opaque layers this renderer draws.");
             public static readonly GUIContent TransparentMask = EditorGUIUtility.TrTextContent("Transparent Layer Mask", "Controls which transparent layers this renderer draws.");
 
@@ -41,10 +42,12 @@ namespace UnityEditor.Rendering.Universal
             public static readonly GUIContent defaultStencilStateLabel = EditorGUIUtility.TrTextContent("Default Stencil State", "Configure the stencil state for the opaque and transparent render passes.");
             public static readonly GUIContent shadowTransparentReceiveLabel = EditorGUIUtility.TrTextContent("Transparent Receive Shadows", "When disabled, none of the transparent objects will receive shadows.");
             public static readonly GUIContent invalidStencilOverride = EditorGUIUtility.TrTextContent("Error: When using the deferred rendering path, the Renderer requires the control over the 4 highest bits of the stencil buffer to store Material types. The current combination of the stencil override options prevents the Renderer from controlling the required bits. Try changing one of the options to Replace.");
-            public static readonly GUIContent intermediateTextureMode = EditorGUIUtility.TrTextContent("Intermediate Texture", "Controls when URP renders via an intermediate texture.");
+            public static readonly GUIContent intermediateTextureMode = EditorGUIUtility.TrTextContent("Intermediate Texture (Obsolete)", "Should be set to Auto. Controls when URP renders via an intermediate texture.");
+            public static readonly GUIContent warningIntermediateTextureMode = EditorGUIUtility.TrTextContent("'Always' is Obsolete. Change it to Auto. This can improve performance. The setting will disappear once it is corrected to 'Auto'.");
             public static readonly GUIContent deferredPlusIncompatibleWarning = EditorGUIUtility.TrTextContent("Deferred+ is only available with Render Graph. In compatibility mode, Deferred+ falls back to Forward+.");
         }
 
+        SerializedProperty m_PrepassLayerMask;
         SerializedProperty m_OpaqueLayerMask;
         SerializedProperty m_TransparentLayerMask;
         SerializedProperty m_RenderingMode;
@@ -53,7 +56,6 @@ namespace UnityEditor.Rendering.Universal
         SerializedProperty m_DepthAttachmentFormat;
         SerializedProperty m_DepthTextureFormat;
         SerializedProperty m_AccurateGbufferNormals;
-        SerializedProperty m_UseNativeRenderPass;
         SerializedProperty m_DefaultStencilState;
         SerializedProperty m_PostProcessData;
         SerializedProperty m_Shaders;
@@ -64,6 +66,7 @@ namespace UnityEditor.Rendering.Universal
 
         private void OnEnable()
         {
+            m_PrepassLayerMask = serializedObject.FindProperty("m_PrepassLayerMask");
             m_OpaqueLayerMask = serializedObject.FindProperty("m_OpaqueLayerMask");
             m_TransparentLayerMask = serializedObject.FindProperty("m_TransparentLayerMask");
             m_RenderingMode = serializedObject.FindProperty("m_RenderingMode");
@@ -72,7 +75,6 @@ namespace UnityEditor.Rendering.Universal
             m_DepthAttachmentFormat = serializedObject.FindProperty("m_DepthAttachmentFormat");
             m_DepthTextureFormat = serializedObject.FindProperty("m_DepthTextureFormat");
             m_AccurateGbufferNormals = serializedObject.FindProperty("m_AccurateGbufferNormals");
-            m_UseNativeRenderPass = serializedObject.FindProperty("m_UseNativeRenderPass");
             m_DefaultStencilState = serializedObject.FindProperty("m_DefaultStencilState");
             m_PostProcessData = serializedObject.FindProperty("postProcessData");
             m_Shaders = serializedObject.FindProperty("shaders");
@@ -160,6 +162,7 @@ namespace UnityEditor.Rendering.Universal
 
             EditorGUILayout.LabelField(Styles.FilteringSectionLabel, EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
+            EditorGUILayout.PropertyField(m_PrepassLayerMask, Styles.PrepassMask);
             EditorGUILayout.PropertyField(m_OpaqueLayerMask, Styles.OpaqueMask);
             EditorGUILayout.PropertyField(m_TransparentLayerMask, Styles.TransparentMask);
             EditorGUI.indentLevel--;
@@ -177,13 +180,6 @@ namespace UnityEditor.Rendering.Universal
             {
                 PopulateCompatibleDepthFormats(m_RenderingMode.intValue);
                 depthFormatIndex = GetDepthFormatIndex((DepthFormat)m_DepthAttachmentFormat.intValue, m_RenderingMode.intValue);
-            }
-
-            if (m_RenderingMode.intValue == (int)RenderingMode.DeferredPlus && GraphicsSettings.GetRenderPipelineSettings<RenderGraphSettings>().enableRenderCompatibilityMode)
-            {
-                EditorGUI.indentLevel++;
-                EditorGUILayout.HelpBox(Styles.deferredPlusIncompatibleWarning.text, MessageType.Warning);
-                EditorGUI.indentLevel--;
             }
 
             if (m_RenderingMode.intValue == (int)RenderingMode.Deferred || m_RenderingMode.intValue == (int)RenderingMode.DeferredPlus)
@@ -220,17 +216,7 @@ namespace UnityEditor.Rendering.Universal
 
             EditorGUILayout.PropertyField(m_DepthTextureFormat, Styles.DepthTextureFormat);
 
-
             EditorGUI.indentLevel--;
-            if (GraphicsSettings.TryGetRenderPipelineSettings<RenderGraphSettings>(out var renderGraphSettings)
-                && renderGraphSettings.enableRenderCompatibilityMode)
-            {
-                EditorGUILayout.Space();
-                EditorGUILayout.LabelField(Styles.RenderPassSectionLabel, EditorStyles.boldLabel);
-                EditorGUI.indentLevel++;
-                EditorGUILayout.PropertyField(m_UseNativeRenderPass, Styles.RenderPassLabel);
-                EditorGUI.indentLevel--;
-            }
             EditorGUILayout.Space();
             EditorGUILayout.LabelField(Styles.ShadowsSectionLabel, EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
@@ -276,13 +262,18 @@ namespace UnityEditor.Rendering.Universal
             EditorGUI.indentLevel--;
             EditorGUILayout.Space();
 
-            EditorGUILayout.LabelField("Compatibility", EditorStyles.boldLabel);
-            EditorGUI.indentLevel++;
+            //Hide the obsolete setting if the value is Auto. This is the only valid setting from now. Users that still have it at Always can still see it and change it to Auto.
+            if( m_IntermediateTextureMode.enumValueIndex != 0)
             {
-                EditorGUILayout.PropertyField(m_IntermediateTextureMode, Styles.intermediateTextureMode);
+                EditorGUILayout.LabelField("Compatibility", EditorStyles.boldLabel);
+                EditorGUI.indentLevel++;
+                {
+                    EditorGUILayout.PropertyField(m_IntermediateTextureMode, Styles.intermediateTextureMode);
+                    EditorGUILayout.HelpBox(Styles.warningIntermediateTextureMode.text, MessageType.Warning);
+                }
+                EditorGUI.indentLevel--;
+                EditorGUILayout.Space();
             }
-            EditorGUI.indentLevel--;
-            EditorGUILayout.Space();
 
             serializedObject.ApplyModifiedProperties();
 

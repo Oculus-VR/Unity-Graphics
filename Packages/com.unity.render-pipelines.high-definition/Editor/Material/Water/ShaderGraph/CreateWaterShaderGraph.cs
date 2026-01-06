@@ -36,9 +36,9 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             GraphUtil.CreateNewGraphWithOutputs(new[] { target }, blockDescriptors);
         }
 
-        class DoCreateNewWaterShaderGraph : ProjectWindowCallback.EndNameEditAction
+        class DoCreateNewWaterShaderGraph : ProjectWindowCallback.AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var shader = GraphicsSettings.GetRenderPipelineSettings<WaterSystemRuntimeResources>().waterPS;
                 AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(shader), pathName);
@@ -48,7 +48,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         [MenuItem("Assets/Create/Shader Graph/HDRP/Water Shader Graph", priority = CoreUtils.Priorities.assetsCreateShaderMenuPriority + 6)]
         static void CreateWaterGraphCopy()
         {
-            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, ScriptableObject.CreateInstance<DoCreateNewWaterShaderGraph>(), "Water Shader Graph.shadergraph", null, null);
+            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, ScriptableObject.CreateInstance<DoCreateNewWaterShaderGraph>(), "Water Shader Graph.shadergraph", ShaderGraphImporter.GetIcon(), null);
         }
     }
 }

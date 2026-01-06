@@ -110,7 +110,7 @@ void InitializeInputData(Varyings IN, half3 normalTS, out InputData inputData)
     inputData.vertexSH = SH;
     #endif
     #if defined(USE_APV_PROBE_OCCLUSION)
-    inputData.probeOcclusion = input.probeOcclusion;
+    inputData.probeOcclusion = IN.probeOcclusion;
     #endif
     #endif
 }
@@ -123,7 +123,9 @@ void InitializeBakedGIData(Varyings IN, inout InputData inputData)
     half3 SH = IN.vertexSH;
     #endif
 
-#if defined(DYNAMICLIGHTMAP_ON)
+#if defined(_SCREEN_SPACE_IRRADIANCE)
+    inputData.bakedGI = SAMPLE_GI(_ScreenSpaceIrradiance, inputData.positionCS.xy);
+#elif defined(DYNAMICLIGHTMAP_ON)
     inputData.bakedGI = SAMPLE_GI(IN.uvMainAndLM.zw, IN.dynamicLightmapUV, SH, inputData.normalWS);
     inputData.shadowMask = SAMPLE_SHADOWMASK(IN.uvMainAndLM.zw);
 #elif !defined(LIGHTMAP_ON) && (defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2))
@@ -171,13 +173,26 @@ void SplatmapMix(float4 uvMainAndLM, float4 uvSplat01, float4 uvSplat23, inout h
     diffAlbedo[2] = SAMPLE_TEXTURE2D(_Splat2, sampler_Splat0, uvSplat23.xy);
     diffAlbedo[3] = SAMPLE_TEXTURE2D(_Splat3, sampler_Splat0, uvSplat23.zw);
 
-    // This might be a bit of a gamble -- the assumption here is that if the diffuseMap has no
-    // alpha channel, then diffAlbedo[n].a = 1.0 (and _DiffuseHasAlphaN = 0.0)
-    // Prior to coming in, _SmoothnessN is actually set to max(_DiffuseHasAlphaN, _SmoothnessN)
-    // This means that if we have an alpha channel, _SmoothnessN is locked to 1.0 and
-    // otherwise, the true slider value is passed down and diffAlbedo[n].a == 1.0.
-    defaultSmoothness = half4(diffAlbedo[0].a, diffAlbedo[1].a, diffAlbedo[2].a, diffAlbedo[3].a);
-    defaultSmoothness *= half4(_Smoothness0, _Smoothness1, _Smoothness2, _Smoothness3);
+    half4 diffuseAlpha = half4(diffAlbedo[0].a, diffAlbedo[1].a, diffAlbedo[2].a, diffAlbedo[3].a);
+    half4 smoothnessConstants = half4(_Smoothness0, _Smoothness1, _Smoothness2, _Smoothness3);
+    half4 smoothnessSources = half4(_SmoothnessSource0, _SmoothnessSource1, _SmoothnessSource2, _SmoothnessSource3);
+
+    // Process each layer's smoothness based on its source mode.
+    defaultSmoothness.r = (smoothnessSources.r < 0.5) ? diffuseAlpha.r * smoothnessConstants.r : // kConstantMultipliedByDiffuseAlpha
+                          (smoothnessSources.r < 1.5) ? diffuseAlpha.r :                         // kDiffuseAlphaChannel
+                          smoothnessConstants.r;                                                 // kConstant
+    
+    defaultSmoothness.g = (smoothnessSources.g < 0.5) ? diffuseAlpha.g * smoothnessConstants.g :
+                          (smoothnessSources.g < 1.5) ? diffuseAlpha.g :
+                          smoothnessConstants.g;
+    
+    defaultSmoothness.b = (smoothnessSources.b < 0.5) ? diffuseAlpha.b * smoothnessConstants.b :
+                          (smoothnessSources.b < 1.5) ? diffuseAlpha.b :
+                          smoothnessConstants.b;
+    
+    defaultSmoothness.a = (smoothnessSources.a < 0.5) ? diffuseAlpha.a * smoothnessConstants.a :
+                          (smoothnessSources.a < 1.5) ? diffuseAlpha.a :
+                          smoothnessConstants.a;
 
 #ifndef _TERRAIN_BLEND_HEIGHT // density blending
     if(_NumLayersCount <= 4)
@@ -387,7 +402,7 @@ void SplatmapFragment(
     Varyings IN
     , out half4 outColor : SV_Target0
 #ifdef _WRITE_RENDERING_LAYERS
-    , out float4 outRenderingLayers : SV_Target1
+    , out uint outRenderingLayers : SV_Target1
 #endif
     )
 #endif
@@ -494,8 +509,7 @@ void SplatmapFragment(
     outColor = half4(color.rgb, 1.0h);
 
 #ifdef _WRITE_RENDERING_LAYERS
-    uint renderingLayers = GetMeshRenderingLayer();
-    outRenderingLayers = float4(EncodeMeshRenderingLayer(renderingLayers), 0, 0, 0);
+    outRenderingLayers = EncodeMeshRenderingLayer();
 #endif
 #endif
 }

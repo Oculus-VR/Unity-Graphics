@@ -8,10 +8,10 @@ namespace UnityEngine.Rendering
     internal static class InstanceDataSystemBurst
     {
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        public static void ReallocateInstances(bool implicitInstanceIndices, in NativeArray<int> rendererGroupIDs, in NativeArray<GPUDrivenPackedRendererData> packedRendererData,
+        public static void ReallocateInstances(bool implicitInstanceIndices, in NativeArray<EntityId> rendererGroupIDs, in NativeArray<GPUDrivenPackedRendererData> packedRendererData,
             in NativeArray<int> instanceOffsets, in NativeArray<int> instanceCounts, ref InstanceAllocators instanceAllocators, ref CPUInstanceData instanceData,
             ref CPUPerCameraInstanceData perCameraInstanceData, ref CPUSharedInstanceData sharedInstanceData, ref NativeArray<InstanceHandle> instances,
-            ref NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash)
+            ref NativeParallelMultiHashMap<EntityId, InstanceHandle> rendererGroupInstanceMultiHash)
         {
             for (int i = 0; i < rendererGroupIDs.Length; ++i)
             {
@@ -112,8 +112,8 @@ namespace UnityEngine.Rendering
         }
 
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        public static void FreeRendererGroupInstances(in NativeArray<int>.ReadOnly rendererGroupsID, ref InstanceAllocators instanceAllocators, ref CPUInstanceData instanceData,
-            ref CPUPerCameraInstanceData perCameraInstanceData, ref CPUSharedInstanceData sharedInstanceData, ref NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash)
+        public static void FreeRendererGroupInstances(in NativeArray<EntityId>.ReadOnly rendererGroupsID, ref InstanceAllocators instanceAllocators, ref CPUInstanceData instanceData,
+            ref CPUPerCameraInstanceData perCameraInstanceData, ref CPUSharedInstanceData sharedInstanceData, ref NativeParallelMultiHashMap<EntityId, InstanceHandle> rendererGroupInstanceMultiHash)
         {
             foreach (var rendererGroupID in rendererGroupsID)
             {
@@ -150,7 +150,7 @@ namespace UnityEngine.Rendering
 
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
         public static void FreeInstances(in NativeArray<InstanceHandle>.ReadOnly instances, ref InstanceAllocators instanceAllocators, ref CPUInstanceData instanceData,
-            ref CPUPerCameraInstanceData perCameraInstanceData, ref CPUSharedInstanceData sharedInstanceData, ref NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash)
+            ref CPUPerCameraInstanceData perCameraInstanceData, ref CPUSharedInstanceData sharedInstanceData, ref NativeParallelMultiHashMap<EntityId, InstanceHandle> rendererGroupInstanceMultiHash)
         {
             foreach (var instance in instances)
             {

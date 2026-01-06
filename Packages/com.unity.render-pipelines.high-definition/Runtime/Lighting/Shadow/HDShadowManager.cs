@@ -748,7 +748,7 @@ namespace UnityEngine.Rendering.HighDefinition
             var punctualAtlasInitParams = new HDShadowAtlas.HDShadowAtlasInitParameters(
                 renderPipeline,
                 renderGraph,
-                useSharedTexture: false,
+                usePersistentTexture: false,
                 initParams.punctualLightShadowAtlas.shadowAtlasResolution,
                 initParams.punctualLightShadowAtlas.shadowAtlasResolution,
                 m_ClearShadowMaterial,
@@ -767,7 +767,7 @@ namespace UnityEngine.Rendering.HighDefinition
             HDShadowAtlas.BlurAlgorithm cascadeBlur = GetDirectionalShadowAlgorithm() == DirectionalShadowAlgorithm.IMS ? HDShadowAtlas.BlurAlgorithm.IM : HDShadowAtlas.BlurAlgorithm.None;
 
             HDShadowAtlas.HDShadowAtlasInitParameters dirAtlasInitParams = punctualAtlasInitParams;
-            dirAtlasInitParams.useSharedTexture = true;
+            dirAtlasInitParams.usePersistentTexture = true;
             dirAtlasInitParams.width = 1;
             dirAtlasInitParams.height = 1;
             dirAtlasInitParams.blurAlgorithm = cascadeBlur;
@@ -782,7 +782,7 @@ namespace UnityEngine.Rendering.HighDefinition
             HDShadowAtlas.HDShadowAtlasInitParameters areaAtlasInitParams = punctualAtlasInitParams;
             if (ShaderConfig.s_AreaLights == 1)
             {
-                areaAtlasInitParams.useSharedTexture = false;
+                areaAtlasInitParams.usePersistentTexture = false;
                 areaAtlasInitParams.width = initParams.areaLightShadowAtlas.shadowAtlasResolution;
                 areaAtlasInitParams.height = initParams.areaLightShadowAtlas.shadowAtlasResolution;
                 areaAtlasInitParams.blurAlgorithm = GetAreaLightShadowBlurAlgorithm();
@@ -801,7 +801,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             HDShadowAtlas.HDShadowAtlasInitParameters cachedPunctualAtlasInitParams = punctualAtlasInitParams;
-            cachedPunctualAtlasInitParams.useSharedTexture = true;
+            cachedPunctualAtlasInitParams.usePersistentTexture = true;
             cachedPunctualAtlasInitParams.width = initParams.cachedPunctualLightShadowAtlas;
             cachedPunctualAtlasInitParams.height = initParams.cachedPunctualLightShadowAtlas;
             cachedPunctualAtlasInitParams.name = "Cached Shadow Map Atlas";
@@ -811,7 +811,7 @@ namespace UnityEngine.Rendering.HighDefinition
             if (ShaderConfig.s_AreaLights == 1)
             {
                 HDShadowAtlas.HDShadowAtlasInitParameters cachedAreaAtlasInitParams = areaAtlasInitParams;
-                cachedAreaAtlasInitParams.useSharedTexture = true;
+                cachedAreaAtlasInitParams.usePersistentTexture = true;
                 cachedAreaAtlasInitParams.width = initParams.cachedAreaLightShadowAtlas;
                 cachedAreaAtlasInitParams.height = initParams.cachedAreaLightShadowAtlas;
                 cachedAreaAtlasInitParams.name = "Cached Area Light Shadow Map Atlas";
@@ -870,7 +870,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
         public static HDShadowAtlas.BlurAlgorithm GetAreaLightShadowBlurAlgorithm()
         {
-            return HDRenderPipeline.currentAsset.currentPlatformRenderPipelineSettings.hdShadowInitParams.areaShadowFilteringQuality == HDAreaShadowFilteringQuality.High ?
+            return (ShaderConfig.s_AreaLights == 1 && HDRenderPipeline.currentAsset.currentPlatformRenderPipelineSettings.hdShadowInitParams.areaShadowFilteringQuality == HDAreaShadowFilteringQuality.High) ?
                 HDShadowAtlas.BlurAlgorithm.None : HDShadowAtlas.BlurAlgorithm.EVSM;
         }
 
@@ -904,7 +904,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 cachedShadowManager.directionalLightAtlas.UpdateSize(atlasResolution);
         }
 
-        internal int ReserveShadowResolutions(Vector2 resolution, ShadowMapType shadowMapType, int lightID, int index, ShadowMapUpdateType updateType)
+        internal int ReserveShadowResolutions(Vector2 resolution, ShadowMapType shadowMapType, EntityId lightID, int index, ShadowMapUpdateType updateType)
         {
             if (m_ShadowRequestCount >= m_MaxShadowRequests)
             {
@@ -1238,7 +1238,8 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             shadowManagerData.shadowRequests = m_ShadowRequests;
             shadowManagerData.shadowResolutionRequestStorage = m_ShadowResolutionRequestStorage;
-            shadowManagerData.areaShadowFilteringQuality = HDRenderPipeline.currentAsset.currentPlatformRenderPipelineSettings.hdShadowInitParams.areaShadowFilteringQuality;
+            shadowManagerData.areaShadowFilteringQuality = (ShaderConfig.s_AreaLights == 0) ? HDAreaShadowFilteringQuality.Medium
+                : HDRenderPipeline.currentAsset.currentPlatformRenderPipelineSettings.hdShadowInitParams.areaShadowFilteringQuality;
             m_Atlas.GetUnmanageDataForShadowRequestJobs(ref shadowManagerData.atlas);
             m_CascadeAtlas.GetUnmanageDataForShadowRequestJobs(ref shadowManagerData.cascadeShadowAtlas);
             if (ShaderConfig.s_AreaLights == 1)
@@ -1339,42 +1340,57 @@ namespace UnityEngine.Rendering.HighDefinition
             ;
         }
 
-        internal static ShadowResult ReadShadowResult(in ShadowResult shadowResult, RenderGraphBuilder builder)
+        internal static ShadowResult ReadShadowResult(in ShadowResult shadowResult, IUnsafeRenderGraphBuilder builder)
         {
             var result = new ShadowResult();
 
             if (shadowResult.punctualShadowResult.IsValid())
-                result.punctualShadowResult = builder.ReadTexture(shadowResult.punctualShadowResult);
+            {
+                result.punctualShadowResult = shadowResult.punctualShadowResult;
+                builder.UseTexture(result.punctualShadowResult, AccessFlags.Read);
+            }
             if (shadowResult.directionalShadowResult.IsValid())
-                result.directionalShadowResult = builder.ReadTexture(shadowResult.directionalShadowResult);
+            {
+                result.directionalShadowResult = shadowResult.directionalShadowResult;
+                builder.UseTexture(result.directionalShadowResult, AccessFlags.Read);
+            }
             if (shadowResult.areaShadowResult.IsValid())
-                result.areaShadowResult = builder.ReadTexture(shadowResult.areaShadowResult);
+            {
+                result.areaShadowResult = shadowResult.areaShadowResult;
+                builder.UseTexture(result.areaShadowResult, AccessFlags.Read);
+            }
             if (shadowResult.cachedPunctualShadowResult.IsValid())
-                result.cachedPunctualShadowResult = builder.ReadTexture(shadowResult.cachedPunctualShadowResult);
+            {
+                result.cachedPunctualShadowResult = shadowResult.cachedPunctualShadowResult;
+                builder.UseTexture(result.cachedPunctualShadowResult, AccessFlags.Read);
+            }
             if (shadowResult.cachedAreaShadowResult.IsValid())
-                result.cachedAreaShadowResult = builder.ReadTexture(shadowResult.cachedAreaShadowResult);
+            {
+                result.cachedAreaShadowResult = shadowResult.cachedAreaShadowResult;
+                builder.UseTexture(result.cachedAreaShadowResult, AccessFlags.Read);
+            }
 
             return result;
         }
 
-        internal void RenderShadows(RenderGraph renderGraph, in ShaderVariablesGlobal globalCB, HDCamera hdCamera, CullingResults cullResults, ref ShadowResult result)
+        internal void RenderShadows(RenderGraph renderGraph, ScriptableRenderContext renderContext, in ShaderVariablesGlobal globalCB, HDCamera hdCamera, CullingResults cullResults, ref ShadowResult result)
         {
-            InvalidateAtlasOutputsIfNeeded();
+            InvalidateAtlasOutputs();
 
             // Avoid to do any commands if there is no shadow to draw
             if (m_ShadowRequestCount != 0 &&
                 (hdCamera.frameSettings.IsEnabled(FrameSettingsField.OpaqueObjects) || hdCamera.frameSettings.IsEnabled(FrameSettingsField.TransparentObjects)))
             {
                 // Punctual
-                result.cachedPunctualShadowResult = cachedShadowManager.punctualShadowAtlas.RenderShadows(renderGraph, cullResults, globalCB, hdCamera.frameSettings, "Cached Punctual Lights Shadows rendering");
+                result.cachedPunctualShadowResult = cachedShadowManager.punctualShadowAtlas.RenderShadows(renderGraph, renderContext, cullResults, globalCB, hdCamera.frameSettings, "Render Cached Punctual Lights Shadow Maps");
                 BlitCachedShadows(renderGraph, ShadowMapType.PunctualAtlas);
-                result.punctualShadowResult = m_Atlas.RenderShadows(renderGraph, cullResults, globalCB, hdCamera.frameSettings, "Punctual Lights Shadows rendering");
+                result.punctualShadowResult = m_Atlas.RenderShadows(renderGraph, renderContext, cullResults, globalCB, hdCamera.frameSettings, "Render Punctual Lights Shadow Maps");
 
                 if (ShaderConfig.s_AreaLights == 1)
                 {
-                    cachedShadowManager.areaShadowAtlas.RenderShadowMaps(renderGraph, cullResults, globalCB, hdCamera.frameSettings, "Cached Area Lights Shadows rendering");
+                    cachedShadowManager.areaShadowAtlas.RenderShadowMaps(renderGraph, renderContext, cullResults, globalCB, hdCamera.frameSettings, "Render Cached Area Lights Shadow Maps");
                     BlitCachedShadows(renderGraph, ShadowMapType.AreaLightAtlas);
-                    m_AreaLightShadowAtlas.RenderShadowMaps(renderGraph, cullResults, globalCB, hdCamera.frameSettings, "Area Light Shadows rendering");
+                    m_AreaLightShadowAtlas.RenderShadowMaps(renderGraph, renderContext, cullResults, globalCB, hdCamera.frameSettings, "Render Area Light Shadow Maps");
                     result.areaShadowResult = m_AreaLightShadowAtlas.BlurShadows(renderGraph);
                     result.cachedAreaShadowResult = cachedShadowManager.areaShadowAtlas.BlurShadows(renderGraph);
                 }
@@ -1385,11 +1401,11 @@ namespace UnityEngine.Rendering.HighDefinition
                     if (cachedShadowManager.directionalLightAtlas.HasShadowRequests())
                     {
                         cachedShadowManager.UpdateDirectionalCacheTexture(renderGraph);
-                        cachedShadowManager.directionalLightAtlas.RenderShadows(renderGraph, cullResults, globalCB, hdCamera.frameSettings, "Cached Directional Lights Shadows rendering");
+                        cachedShadowManager.directionalLightAtlas.RenderShadows(renderGraph, renderContext, cullResults, globalCB, hdCamera.frameSettings, "Render Cached Directional Lights Shadow Maps");
                     }
                     BlitCachedShadows(renderGraph, ShadowMapType.CascadedDirectional);
                 }
-                result.directionalShadowResult = m_CascadeAtlas.RenderShadows(renderGraph, cullResults, globalCB, hdCamera.frameSettings, "Directional Light Shadows rendering");
+                result.directionalShadowResult = m_CascadeAtlas.RenderShadows(renderGraph, renderContext, cullResults, globalCB, hdCamera.frameSettings, "Render Directional Light Shadow Maps");
             }
 
             // TODO RENDERGRAPH
@@ -1399,14 +1415,14 @@ namespace UnityEngine.Rendering.HighDefinition
             BindShadowGlobalResources(renderGraph, result);
         }
 
-        internal void ReleaseSharedShadowAtlases(RenderGraph renderGraph)
+        internal void ReleasePersistentShadowAtlases(RenderGraph renderGraph)
         {
             if (cachedShadowManager.DirectionalHasCachedAtlas())
-                cachedShadowManager.directionalLightAtlas.CleanupRenderGraphOutput(renderGraph);
+                cachedShadowManager.directionalLightAtlas.CleanupPersistentTexture(renderGraph);
 
-            cachedShadowManager.punctualShadowAtlas.CleanupRenderGraphOutput(renderGraph);
+            cachedShadowManager.punctualShadowAtlas.CleanupPersistentTexture(renderGraph);
             if (ShaderConfig.s_AreaLights == 1)
-                cachedShadowManager.areaShadowAtlas.CleanupRenderGraphOutput(renderGraph);
+                cachedShadowManager.areaShadowAtlas.CleanupPersistentTexture(renderGraph);
 
             cachedShadowManager.DefragAtlas(LightType.Point);
             cachedShadowManager.DefragAtlas(LightType.Spot);
@@ -1414,19 +1430,19 @@ namespace UnityEngine.Rendering.HighDefinition
                 cachedShadowManager.DefragAtlas(LightType.Rectangle);
         }
 
-        void InvalidateAtlasOutputsIfNeeded()
+        void InvalidateAtlasOutputs()
         {
-            cachedShadowManager.punctualShadowAtlas.InvalidateOutputIfNeeded();
-            m_Atlas.InvalidateOutputIfNeeded();
-            m_CascadeAtlas.InvalidateOutputIfNeeded();
+            cachedShadowManager.punctualShadowAtlas.InvalidateOutput();
+            m_Atlas.InvalidateOutput();
+            m_CascadeAtlas.InvalidateOutput();
             if (cachedShadowManager.DirectionalHasCachedAtlas())
             {
-                cachedShadowManager.directionalLightAtlas.InvalidateOutputIfNeeded();
+                cachedShadowManager.directionalLightAtlas.InvalidateOutput();
             }
             if (ShaderConfig.s_AreaLights == 1)
             {
-                cachedShadowManager.areaShadowAtlas.InvalidateOutputIfNeeded();
-                m_AreaLightShadowAtlas.InvalidateOutputIfNeeded();
+                cachedShadowManager.areaShadowAtlas.InvalidateOutput();
+                m_AreaLightShadowAtlas.InvalidateOutput();
             }
         }
 
@@ -1436,7 +1452,7 @@ namespace UnityEngine.Rendering.HighDefinition
         }
 
 
-        static void BindAtlasTexture(RenderGraphContext ctx, TextureHandle texture, int shaderId)
+        static void BindAtlasTexture(UnsafeGraphContext ctx, in TextureHandle texture, int shaderId)
         {
             if (texture.IsValid())
                 ctx.cmd.SetGlobalTexture(shaderId, texture);
@@ -1446,12 +1462,12 @@ namespace UnityEngine.Rendering.HighDefinition
 
         void BindShadowGlobalResources(RenderGraph renderGraph, in ShadowResult shadowResult)
         {
-            using (var builder = renderGraph.AddRenderPass<BindShadowGlobalResourcesPassData>("BindShadowGlobalResources", out var passData))
+            using (var builder = renderGraph.AddUnsafePass<BindShadowGlobalResourcesPassData>("BindShadowGlobalResources", out var passData))
             {
                 passData.shadowResult = ReadShadowResult(shadowResult, builder);
-                builder.AllowPassCulling(false);
+                builder.AllowGlobalStateModification(true);
                 builder.SetRenderFunc(
-                    (BindShadowGlobalResourcesPassData data, RenderGraphContext ctx) =>
+                    static (BindShadowGlobalResourcesPassData data, UnsafeGraphContext ctx) =>
                     {
                         BindAtlasTexture(ctx, data.shadowResult.punctualShadowResult, HDShaderIDs._ShadowmapAtlas);
                         BindAtlasTexture(ctx, data.shadowResult.directionalShadowResult, HDShaderIDs._ShadowmapCascadeAtlas);
@@ -1464,11 +1480,11 @@ namespace UnityEngine.Rendering.HighDefinition
 
         internal static void BindDefaultShadowGlobalResources(RenderGraph renderGraph)
         {
-            using (var builder = renderGraph.AddRenderPass<BindShadowGlobalResourcesPassData>("BindDefaultShadowGlobalResources", out var passData))
+            using (var builder = renderGraph.AddUnsafePass<BindShadowGlobalResourcesPassData>("BindDefaultShadowGlobalResources", out var passData))
             {
-                builder.AllowPassCulling(false);
+                builder.AllowGlobalStateModification(true);
                 builder.SetRenderFunc(
-                    (BindShadowGlobalResourcesPassData data, RenderGraphContext ctx) =>
+                    static (BindShadowGlobalResourcesPassData data, UnsafeGraphContext ctx) =>
                     {
                         BindAtlasTexture(ctx, ctx.defaultResources.defaultShadowTexture, HDShaderIDs._ShadowmapAtlas);
                         BindAtlasTexture(ctx, ctx.defaultResources.defaultShadowTexture, HDShaderIDs._ShadowmapCascadeAtlas);

@@ -35,7 +35,7 @@ You can then use the **HD Sample Buffer** node and set **RenderingLayerMask** as
 After you enable Light Layers, you can then use them to decouple Meshes from certain Lights in your Scene. To do this:
 
 1. Click on a Light in the Hierarchy or the Scene view to view it in the Inspector.
-2. Enable [additional properties](expose-all-additional-properties.md) in the **General** section to expose the **Rendering Layer Mask** property.
+2. Enable [additional properties](https://docs.unity3d.com/Packages/com.unity.render-pipelines.core@17.2/manual/advanced-properties.html) in the **General** section to expose the **Rendering Layer Mask** property.
 3. Use the **Rendering Layer Mask** property drop-down to select which Light Layers this Light affects.
 4. Click on a Mesh Renderer or Terrain in the Hierarchy or the Scene view to view it in the Inspector.
 5. Use the **Rendering Layer Mask** drop-down (See [MeshRenderer](https://docs.unity3d.com/Manual/class-MeshRenderer.html) for GameObjects or [OtherSettings](https://docs.unity3d.com/Manual/terrain-OtherSettings.html) for Terrain) to select which Light Layers affect this Mesh Renderer or Terrain. When you enable Light Layers, a Light only affects a Mesh Renderer or Terrain if they both use a matching Light Layer.
@@ -72,6 +72,7 @@ Assigning the bulb’s Mesh Renderer to a specific Rendering Layer means that th
 ![To restore the transmission effect, create a Point Light and assign it to the same Rendering Layer as the bulb’s Mesh Renderer. Now this Point Light only affects the bulb’s Mesh Renderer and does not contribute to the rest of the Scene Lighting.](Images/LightLayers3.png)<br/>
 To restore the transmission effect, create a Point Light and assign it to the same Rendering Layer as the bulb’s Mesh Renderer. Now this Point Light only affects the bulb’s Mesh Renderer and does not contribute to the rest of the Scene Lighting.
 
+## Additional resources
 
-For more information on this process, see Pierre Donzallaz’s [expert guide](https://pydonzallaz.files.wordpress.com/2019/02/create-high-quality-light-fixtures-in-unity.pdf) on creating high quality light fixtures in Unity.
+- [Pierre Donzallaz - Expert guide: Create High-Quality  Light Fixtures in Unity](https://pydonzallaz.files.wordpress.com/2019/02/create-high-quality-light-fixtures-in-unity.pdf)
 

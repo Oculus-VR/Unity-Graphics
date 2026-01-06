@@ -17,6 +17,18 @@ Input **A** channels take priority over input **B** to combine up to a maximum o
 | B     | Input     | Dynamic   | None | Second input value |
 | Out   | Output    | Dynamic   | None | Combined vector from A and B |
 
+## Example graph usage
+
+In the following example, an **Append** node combines a **Vector 2** and a **Float**. The resulting output vector has the following 3 channels:
+
+- The first channel is the **X** from the **Vector 2**.
+- The second channel is the **Y** from the **Vector 2**.
+- The third channel is the **X** from the **Float**.
+
+Notice that with an Append node, you don't need to use a Split node to break up the Vector 2 into individual channels, then a Combine node to combine the 3 separate channels.
+
+![An image of the Graph window that shows a Vector 2 node and a Float node with their outputs connected to the inputs of an Append node.](images/sg-append-node-example.png)
+
 ## Generated Code Example
 
 The following example code represents one possible outcome of this node for different inputs combinations.

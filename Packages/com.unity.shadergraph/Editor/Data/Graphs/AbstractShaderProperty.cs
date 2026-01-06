@@ -11,6 +11,8 @@ namespace UnityEditor.ShaderGraph.Internal
 
         internal override ConcreteSlotValueType concreteShaderValueType => propertyType.ToConcreteShaderValueType();
 
+        internal override bool canPromoteToFinalShader => true;
+
         // user selected precision setting
         [SerializeField]
         Precision m_Precision = Precision.Inherit;
@@ -22,12 +24,14 @@ namespace UnityEditor.ShaderGraph.Internal
             set { }
         }
 
+        internal bool isPerElementVFX => overrideHLSLDeclaration && hlslDeclarationOverride != HLSLDeclaration.Global;
+
         internal virtual string GetHLSLVariableName(bool isSubgraphProperty, GenerationMode mode)
         {
             if (mode == GenerationMode.VFX)
             {
                 // Per-element exposed properties are provided by the properties structure filled by VFX.
-                if (overrideHLSLDeclaration && hlslDeclarationOverride != HLSLDeclaration.Global)
+                if (isPerElementVFX)
                     return $"PROP.{referenceName}";
                 // For un-exposed global properties, just read from the cbuffer.
                 else
@@ -91,7 +95,33 @@ namespace UnityEditor.ShaderGraph.Internal
             set => m_Hidden = value;
         }
 
-        internal string hideTagString => hidden || (shouldForceExposed && !isExposed) ? "[HideInInspector]" : "";
+        [SerializeField]
+        bool m_PerRendererData = false;
+        internal bool PerRendererData
+        {
+            get => m_PerRendererData;
+            set => m_PerRendererData = value;
+        }
+
+        internal string hideTagString => hidden || (shouldForceExposed && !isExposed) ? $"[HideInInspector]" : perRendererDataTagString;
+        internal string perRendererDataTagString => PerRendererData ? "[PerRendererData]" : "";
+
+        [Serializable]
+        internal class PropertyAttribute
+        {
+            public string name;
+            public string value;
+
+            internal PropertyAttribute(string name, string value)
+            {
+                this.name = name;
+                this.value = value;
+            }
+        }
+
+        [SerializeField]
+        List<PropertyAttribute> m_customAttributes = new();
+        internal List<PropertyAttribute> customAttributes => m_customAttributes;
 
         // reference names are the HLSL declaration name / property block ref name
         internal virtual void GetPropertyReferenceNames(List<string> result)
@@ -117,7 +147,18 @@ namespace UnityEditor.ShaderGraph.Internal
         // the more complex interface for complex properties (defaulted for simple properties)
         internal virtual void AppendPropertyBlockStrings(ShaderStringBuilder builder)
         {
-            builder.AppendLine(GetPropertyBlockString());
+            string attributesPrefix = string.Empty;
+
+            foreach (var attribute in customAttributes)
+            {
+                if (string.IsNullOrEmpty(attribute.value))
+                    attributesPrefix += $"[{attribute.name}]";
+                else
+                    attributesPrefix += $"[{attribute.name}({attribute.value})]";
+            }
+
+            string propertyBlockString = attributesPrefix + GetPropertyBlockString();
+            builder.AppendLine(propertyBlockString);
         }
 
         internal abstract void ForeachHLSLProperty(Action<HLSLProperty> action);

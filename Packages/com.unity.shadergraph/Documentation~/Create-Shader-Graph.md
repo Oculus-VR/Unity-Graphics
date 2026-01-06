@@ -1,52 +1,57 @@
-# Creating a new Shader Graph Asset
+# Create a shader graph asset
 
-After you configure an SRP, you can create a new Shader Graph Asset. Right-click the Project window, locate **Create** > **Shader Graph** in the context menu, then select your desired type of Shader Graph.
+You can create a new shader graph asset in different ways according to your current workflow.
 
-The type of Shader Graph available is dependent on the render pipelines present in your project. Some options may or may not be present based on the render pipelines.
 
-The following options are always available:
+## Create a shader graph from a template
 
-|       |  | |
-|:------------|:----------------|:------------|
-| Blank Shader Graph | A completely blank shader graph. No target is selected and no blocks are added to the Master Stack. |
-| Sub Graph |  A blank sub graph asset. |
+To create a new shader graph asset from a prebuilt shader graph template, follow these steps:
 
-A sub menu for each installed render pipeline may be present containing template stacks for standard shading models ( Lit, Unlit, etc ).
+1. In the **Project** window, right-click and select **Create** > **Shader Graph** > **From Template**.
 
-For a full list of provided options, refer to the [Universal Render Pipeline](https://docs.unity3d.com/Manual/urp/urp-introduction.html) and [High Definition Render Pipeline](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@latest) documentation.
+   The [template browser](template-browser.md) lists all available templates according to your project's render pipeline.
 
-For this example, Universal is installed so a Unversal Lit Shader Graph has been created.
+1. Select the desired template and click **Create**.
 
-Double-click your newly created Shader Graph Asset to open it in the Shader Graph window.
+   Unity creates a new shader graph asset in your project.
 
-## Shader Graph window
+1. Name the shader graph asset.
 
-The Shader Graph window consists of the Master Stack, the Preview Window, the Blackboard, and the Graph Inspector.
+You can now open the asset and edit the graph in the [Shader Graph window](Shader-Graph-Window.md).
 
-![](images/ShaderGraphWindow.png)
 
-### Master Stack
+## Create a shader graph with a preset target
 
-The final connection that determines your shader output. Refer to [Master Stack](Master-Stack) for more information.
+To start from a default configuration with a preset master stack according to a specific render pipeline and material type, follow these steps:
 
-![]()
+1. In the **Project** window, right-click and select **Create** > **Shader Graph**, and then the target render pipeline and the desired shader type.
 
-### Preview window
+   The types of shader graphs available depend on the render pipelines present in your project (for example, **URP** > **Lit Shader Graph**). For a full list of provided options, refer to the [Universal Render Pipeline](https://docs.unity3d.com/Manual/urp/urp-introduction.html) and [High Definition Render Pipeline](https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@latest) documentation.
 
-An area to preview the current shader output. Here, you can rotate the object, and zoom in and out. You can also change the basic mesh on which the shader is previewed. Refer to [Main Preview](Main-Preview) for more information.
+   Unity creates a new shader graph asset in your project.
 
-![img](images/MainPreview.png)
+1. Name the shader graph asset.
 
-### Blackboard
+You can now open the asset and edit the graph in the [Shader Graph window](Shader-Graph-Window.md).
 
-An area that contains all of the shader's properties in a single, collected view. Use the Blackboard to add, remove, rename, and reorder properties. Refer to [Blackboard](Blackboard) for more information.
 
-![](images/Blackboard.png)
+## Create an empty shader graph
 
-After you've set up a project, and become familiar with the Shader Graph window, refer to [My first Shader Graph](First-Shader-Graph) for more information on how to get started.
+To create an empty shader graph asset and build your shader graph from scratch in the Shader Graph window:
 
-### Internal Inspector
+1. In the **Project** window, right-click and select **Create** > **Shader Graph** > **Blank Shader Graph**.
 
-An area that contains information contextual to whatever the user is currently clicking on. It's a window that automatically is hidden by default and only appears when something is selected that can be edited by the user. Use the Internal Inspector to display and modify properties, node options, and the graph settings. Refer to [Internal Inspector](Internal-Inspector.md) for more information.
+   Unity creates a new shader graph asset in your project.
 
-![](images/Inspector.png)
+1. Name the shader graph asset.
+
+You can now open the asset and edit the graph in the [Shader Graph window](Shader-Graph-Window.md).
+
+> [!NOTE]
+> To make such a blank shader graph functional, you have to define a [Target](Graph-Target.md) in the [Graph settings tab](Graph-Settings-Tab.md) of the Graph Inspector.
+
+## Additional resources
+
+* [Shader Graph template browser](template-browser.md)
+* [Create a custom shader graph template](template-browser.md#create-a-custom-shader-graph-template)
+* [Shader Graph window](Shader-Graph-Window.md)

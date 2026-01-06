@@ -31,7 +31,7 @@ namespace UnityEditor.VFX
             //This is the only place where shaderGraph property is updated or read
             if (shaderGraph == null && !object.ReferenceEquals(shaderGraph, null))
             {
-                var assetPath = AssetDatabase.GetAssetPath(shaderGraph.GetInstanceID());
+                var assetPath = AssetDatabase.GetAssetPath(shaderGraph.GetEntityId());
 
                 var newShaderGraph = AssetDatabase.LoadAssetAtPath<ShaderGraphVfxAsset>(assetPath);
                 m_IsShaderGraphMissing = newShaderGraph == null;
@@ -94,12 +94,12 @@ namespace UnityEditor.VFX
             }
         }
 
-        public override void GetImportDependentAssets(HashSet<int> dependencies)
+        public override void GetImportDependentAssets(HashSet<EntityId> dependencies)
         {
             base.GetImportDependentAssets(dependencies);
             if (!object.ReferenceEquals(shaderGraph, null))
             {
-                dependencies.Add(shaderGraph.GetInstanceID());
+                dependencies.Add(shaderGraph.GetEntityId());
             }
         }
 
@@ -132,6 +132,7 @@ namespace UnityEditor.VFX
                 if (sg != null || m_IsShaderGraphMissing)
                 {
                     yield return "colorMapping";
+                    yield return "useBaseColorMap";
                     yield return "useAlphaClipping";
 
                     if (m_IsShaderGraphMissing)

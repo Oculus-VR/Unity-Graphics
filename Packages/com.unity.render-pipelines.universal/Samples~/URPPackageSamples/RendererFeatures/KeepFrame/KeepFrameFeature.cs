@@ -24,32 +24,6 @@ public class KeepFrameFeature : ScriptableRendererFeature
             m_Destination = destination;
         }
 
-#pragma warning disable 618, 672 // Type or member is obsolete, Member overrides obsolete member
-
-        // Override the Execute method to implement the rendering logic.
-        // This method is used only in the Compatibility Mode path.
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            // Skip rendering if the camera isn't a game camera.
-            if (renderingData.cameraData.camera.cameraType != CameraType.Game)
-                return;
-
-            // Set the source texture as the camera color target.
-            var source = renderingData.cameraData.renderer.cameraColorTargetHandle;
-
-            // Get a command buffer.
-            CommandBuffer cmd = CommandBufferPool.Get("CopyFramePass");
-
-            // Blit the camera color target to the destination texture.
-            Blit(cmd, source, m_Destination);
-
-            // Execute the command buffer.
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
-        }
-
-#pragma warning restore 618, 672
-
         // Override the RecordRenderGraph method to implement the rendering logic.
         // This method is used only in the render graph system path.
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
@@ -113,29 +87,6 @@ public class KeepFrameFeature : ScriptableRendererFeature
             // Blit the copied texture to the camera color target.
             Blitter.BlitTexture(cmd, source, viewportScale, material, 0);
         }
-
-#pragma warning disable 618, 672 // Type or member is obsolete, Member overrides obsolete member
-
-        // Override the Execute method to implement the rendering logic.
-        // This method is used only in the Compatibility Mode path.
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            // Get a command buffer.
-            CommandBuffer cmd = CommandBufferPool.Get(nameof(DrawOldFramePass));
-            cmd.SetGlobalTexture(m_TextureName, m_Handle);
-
-            // Set the source texture as the camera color target.
-            var source = renderingData.cameraData.renderer.cameraColorTargetHandle;
-
-            // Blit the camera color target to the destination texture.
-            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(cmd), source, m_DrawOldFrameMaterial);
-
-            // Execute the command buffer.
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
-        }
-
-#pragma warning restore 618, 672
 
         // Override the RecordRenderGraph method to implement the rendering logic.
         // This method is used only in the render graph system path.

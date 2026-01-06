@@ -10,9 +10,31 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 Version Updated
 The version number for this package has increased due to a version update of a related graphics package.
 
+## [17.4.0] - 2025-10-22
+
+This version is compatible with Unity 6000.4.0a4.
+For the release notes, refer to the [Unity download archive](https://unity.com/releases/editor/archive).
+
+## [17.3.0] - 2025-08-27
+
+This version is compatible with Unity 6000.3.0b1.
+For the release notes, refer to the [Unity download archive](https://unity.com/releases/editor/archive).
+
+## [17.2.0] - 2025-05-14
+
+This version is compatible with Unity 6000.2.0b2.
+
+### Fixed
+- Fixed tooltip positions in HDWizard.
+- Fixed warning padding in HDWizard.
+- Updated UI warnings to provide clearer messaging when ray tracing is not supported.
+- Prevent CustomPass using camera depth if the injection point is set to AfterPostprocess. Show a warning in the CustomPass inspector if this configuration is present.
+- Fixed a crash in `AMDUnityPlugin.dll` when there are multiple cameras and one is toggled off.
+- Fixed a ghosting issue with DX11.
+
 ## [17.0.3] - 2025-02-13
 
-This version is compatible with Unity 6000.2.0a17.
+This version is compatible with Unity 6000.2.0a5.
 
 ### Changed
 - Rendering Debugger - Moved decals to the Rendering Section.
@@ -33,6 +55,7 @@ This version is compatible with Unity 6000.2.0a17.
 - Improved water sample by adding a cave scene using caustics and deformation texture.
 
 ### Fixed
+- Fixed the macro redefinition warnings that occur in Lit.shader and HDShadowAlgorithms.hlsl, by implement a check to see if PUNCTUAL_SHADOW_LOW, USE_FPTL_LIGHTLIST and DIRECTIONAL_SHADOW_LOW have already been previously defined. (UUM-83878)
 - Fixed High Definition Render Pipeline's Wizard to no longer assume a check fail while waiting a reply from the Package Manager and will display a specific pending icon.
 - Fixed an issue where the padding in the Lighting window was different between tabs.
 - Fixed artifacts when blending cascade shadows and distance shadowmask.

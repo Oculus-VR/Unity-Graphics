@@ -16,31 +16,17 @@ public class GraphicsTests
 #endif
     public const string path = "Assets/ReferenceImages";
 
-#if UNITY_WEBGL || UNITY_ANDROID
-    [UnitySetUp]
-    public IEnumerator SetUp()
-    {
-        yield return RuntimeGraphicsTestCaseProvider.EnsureGetReferenceImageBundlesAsync();
-    }
-#endif
-
     [UnityTest, Category("GraphicsTest")]
-#if UNITY_EDITOR
-    [PrebuildSetup("SetupGraphicsTestCases")]
-#endif
-    [UseGraphicsTestCases(path)]
-    public IEnumerator Run(GraphicsTestCase testCase)
+    [SceneGraphicsTest("Assets/SampleScenes")]
+    [IgnoreGraphicsTest("ErrorMaterial", "Ignoring this specially designed test that fails to build the build", isInclusive: true, runtimePlatforms: new[] { RuntimePlatform.WindowsEditor, RuntimePlatform.OSXEditor, RuntimePlatform.LinuxEditor })]
+    public IEnumerator Run(SceneGraphicsTestCase testCase)
     {
         if (testCase.ScenePath.Contains("ErrorMaterial"))
         {
             LogAssert.ignoreFailingMessages = true;
         }
 
-#if UNITY_WEBGL || UNITY_ANDROID
-        // Do this near the beginning of the test case method before you test or assert
-        RuntimeGraphicsTestCaseProvider.AssociateReferenceImageWithTest(testCase);
-#endif
-		Debug.Log($"Running test case '{testCase}' with scene '{testCase.ScenePath}' {testCase.ReferenceImagePathLog}.");
+        GraphicsTestLogger.Log($"Running test case '{testCase}' with scene '{testCase.ScenePath}' {testCase.ReferenceImage.LoadMessage}.");
         SceneManager.LoadScene(testCase.ScenePath);
 
         // Always wait one frame for scene load
@@ -59,6 +45,14 @@ public class GraphicsTests
 
         yield return null;
 
+        // Add a maximum amount of wait frames to avoid infinite loop
+        int maxWaitFrames = 300;
+        while (settings.Wait && maxWaitFrames > 0)
+        {
+            maxWaitFrames--;
+            yield return new WaitForEndOfFrame();
+        }
+
         int waitFrames = settings.WaitFrames;
 
         if (settings.ImageComparisonSettings.UseBackBuffer && settings.WaitFrames < 1)
@@ -74,30 +68,12 @@ public class GraphicsTests
         for (int i = 0; i < waitFrames; i++)
             yield return new WaitForEndOfFrame();
 
-
-#if UNITY_ANDROID
-        // On Android first scene often needs a bit more frames to load all the assets
-        // otherwise the screenshot is just a black screen
-        if (!wasFirstSceneRan)
-        {
-            for(int i = 0; i < firstSceneAdditionalFrames; i++)
-            {
-                yield return null;
-            }
-            wasFirstSceneRan = true;
-        }
-#endif
-
-        ImageAssert.AreEqual(testCase.ReferenceImage, cameras.Where(x => x != null), settings.ImageComparisonSettings, testCase.ReferenceImagePathLog);
+        ImageAssert.AreEqual(testCase.ReferenceImage.Image, cameras.Where(x => x != null), settings.ImageComparisonSettings, testCase.ReferenceImage.LoadMessage);
     }
 
     [TearDown]
     public void DumpImagesInEditor()
     {
-#if UNITY_EDITOR
-        UnityEditor.TestTools.Graphics.ResultsUtility.ExtractImagesFromTestProperties(TestContext.CurrentContext.Test);
-#endif
-
         XRGraphicsAutomatedTests.running = false;
     }
 }

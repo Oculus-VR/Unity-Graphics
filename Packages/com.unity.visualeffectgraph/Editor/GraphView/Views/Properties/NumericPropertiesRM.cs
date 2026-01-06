@@ -164,7 +164,6 @@ namespace UnityEditor.VFX.UI
     class UintPropertyRM : NumericPropertyRM<uint, long>
     {
         private VFXEnumValuePopup m_EnumPopup;
-        private VFX32BitField m_BitField;
 
         public UintPropertyRM(IPropertyRMProvider controller, float labelWidth) : base(controller, labelWidth)
         {
@@ -199,9 +198,8 @@ namespace UnityEditor.VFX.UI
 
             if (m_Provider.attributes.Is(VFXPropertyAttributes.Type.Enum))
             {
-                string[] enumValues = m_Provider.attributes.FindEnum();
-
-                return enumValues.SequenceEqual(m_EnumPopup.choices);
+                var enumValues = m_Provider.attributes.FindEnum();
+                return enumValues.Length == m_EnumPopup.choices.Count();
             }
             return true;
         }
@@ -212,6 +210,7 @@ namespace UnityEditor.VFX.UI
             {
                 var nameLabel = new Label(label);
                 nameLabel.AddToClassList("label");
+                nameLabel.AddToClassList("bitfield-label");
                 Insert(0, nameLabel);
                 return new VFX32BitField();
             }
@@ -220,6 +219,20 @@ namespace UnityEditor.VFX.UI
         }
 
         protected override VFXBaseSliderField<long> CreateSliderField(string label) => new VFXLongSliderField(label);
+
+        public override void UpdateGUI(bool force)
+        {
+            base.UpdateGUI(force);
+            if (m_Provider.attributes.Is(VFXPropertyAttributes.Type.Enum))
+            {
+                var enumValues = m_Provider.attributes.FindEnum();
+                if (!enumValues.SequenceEqual(m_EnumPopup.choices))
+                {
+                    var dropdownField = m_EnumPopup.Q<DropdownField>();
+                    dropdownField.choices = enumValues.ToList();
+                }
+            }
+        }
 
         public override uint Convert(object value)
         {

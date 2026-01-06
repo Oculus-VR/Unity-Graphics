@@ -1,15 +1,17 @@
 using System;
 using System.Linq;
 using System.Collections.Generic;
+using UnityEditor.Rendering.UITK.ShaderGraph;
+using UnityEditor.ShaderGraph;
+using UnityEditor.ShaderGraph.Internal;
+using UnityEditor.ShaderGraph.Legacy;
+using UnityEditor.ShaderGraph.Serialization;
+using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using UnityEngine.Rendering.VirtualTexturing;
 using UnityEngine.UIElements;
-using UnityEditor.ShaderGraph;
-using UnityEditor.ShaderGraph.Internal;
-using UnityEditor.UIElements;
-using UnityEditor.ShaderGraph.Serialization;
-using UnityEditor.ShaderGraph.Legacy;
 #if HAS_VFX_GRAPH
 using UnityEditor.VFX;
 #endif
@@ -112,6 +114,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
 #endif
     {
         public override int latestVersion => 1;
+        internal override bool prefersUITKPreview => m_ActiveSubTarget.value is IUISubTarget;
 
         // Constants
         static readonly GUID kSourceCodeGuid = new GUID("8c72f47fdde33b14a9340e325ce56f4d"); // UniversalTarget.cs
@@ -119,6 +122,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         public const string kComplexLitMaterialTypeTag = "\"UniversalMaterialType\" = \"ComplexLit\"";
         public const string kLitMaterialTypeTag = "\"UniversalMaterialType\" = \"Lit\"";
         public const string kUnlitMaterialTypeTag = "\"UniversalMaterialType\" = \"Unlit\"";
+        public const string kTerrainMaterialTypeTag = "\"TerrainCompatible\" = \"True\"";
         public const string kAlwaysRenderMotionVectorsTag = "\"AlwaysRenderMotionVectors\" = \"true\"";
         public static readonly string[] kSharedTemplateDirectories = GenerationUtils.GetDefaultSharedTemplateDirectories().Union(new string[]
         {
@@ -178,6 +182,9 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
 
         [SerializeField]
         bool m_DisableTint = false;
+
+        [SerializeField]
+        bool m_Sort3DAs2DCompatible = false;
 
         [SerializeField]
         AdditionalMotionVectorMode m_AdditionalMotionVectorMode = AdditionalMotionVectorMode.None;
@@ -245,7 +252,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             }
         }
 
-        public SubTarget activeSubTarget
+        public override SubTarget activeSubTarget
         {
             get => m_ActiveSubTarget.value;
             set => m_ActiveSubTarget = value;
@@ -297,6 +304,12 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         {
             get => m_DisableTint;
             set => m_DisableTint = value;
+        }
+
+        public bool sort3DAs2DCompatible
+        {
+            get => m_Sort3DAs2DCompatible;
+            set => m_Sort3DAs2DCompatible = value;
         }
 
         public bool castShadows
@@ -377,7 +390,17 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             bool worksWithThisSrp = srpFilter == null || srpFilter.srpTypes.Contains(typeof(UniversalRenderPipeline));
 
             SubTargetFilterAttribute subTargetFilter = NodeClassCache.GetAttributeOnNodeType<SubTargetFilterAttribute>(nodeType);
-            bool worksWithThisSubTarget = subTargetFilter == null || subTargetFilter.subTargetTypes.Contains(activeSubTarget.GetType());
+            var activeSubTargetType = activeSubTarget.GetType();
+            var worksWithThisSubTarget = subTargetFilter == null;
+            if (subTargetFilter != null)
+            {
+                foreach (var type in subTargetFilter.subTargetTypes)
+                {
+                    if (!type.IsAssignableFrom(activeSubTargetType)) continue;
+                    worksWithThisSubTarget = true;
+                    break;
+                }
+            }
 
             if (activeSubTarget.IsActive())
                 worksWithThisSubTarget &= activeSubTarget.IsNodeAllowedBySubTarget(nodeType);
@@ -428,17 +451,20 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         public override void GetActiveBlocks(ref TargetActiveBlockContext context)
         {
             // Core blocks
-            bool useCoreBlocks = !(m_ActiveSubTarget.value is UnityEditor.Rendering.Fullscreen.ShaderGraph.FullscreenSubTarget<UniversalTarget> | m_ActiveSubTarget.value is UnityEditor.Rendering.Canvas.ShaderGraph.CanvasSubTarget<UniversalTarget>);
+            bool useCoreBlocks = !(m_ActiveSubTarget.value is UnityEditor.Rendering.Fullscreen.ShaderGraph.FullscreenSubTarget<UniversalTarget>
+                | m_ActiveSubTarget.value is UnityEditor.Rendering.Canvas.ShaderGraph.CanvasSubTarget<UniversalTarget>
+                | m_ActiveSubTarget.value is UnityEditor.Rendering.UITK.ShaderGraph.UISubTarget<UniversalTarget>);
 
             // Core blocks
             if (useCoreBlocks)
             {
                 context.AddBlock(BlockFields.VertexDescription.Position);
-                context.AddBlock(BlockFields.VertexDescription.Normal);
-                context.AddBlock(BlockFields.VertexDescription.Tangent);
+                if (m_ActiveSubTarget.value is not UniversalTerrainLitSubTarget){
+                    context.AddBlock(BlockFields.VertexDescription.Normal);
+                    context.AddBlock(BlockFields.VertexDescription.Tangent);
+                }
                 context.AddBlock(BlockFields.SurfaceDescription.BaseColor);
             }
-
             // SubTarget blocks
             m_ActiveSubTarget.value.GetActiveBlocks(ref context);
         }
@@ -469,6 +495,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         {
             // Core properties
             m_SubTargetField = new PopupField<string>(m_SubTargetNames, activeSubTargetIndex);
+            var validationAction = context.graphValidation;
             context.AddProperty("Material", m_SubTargetField, (evt) =>
             {
                 if (Equals(activeSubTargetIndex, m_SubTargetField.index))
@@ -478,6 +505,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 m_ActiveSubTarget = m_SubTargets[m_SubTargetField.index];
                 ProcessSubTargetDatas(m_ActiveSubTarget.value);
                 onChange();
+                validationAction();
             });
 
             // SubTarget properties
@@ -829,27 +857,10 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             if (m_ActiveSubTarget.value == null)
                 return false;
 
-            if (m_ActiveSubTarget.value is UniversalUnlitSubTarget)
-                return true;
+            if (m_ActiveSubTarget.value is UniversalDecalSubTarget)
+                return false;
 
-            if (m_ActiveSubTarget.value is UniversalSixWaySubTarget)
-                return true;
-
-            if (m_ActiveSubTarget.value is UniversalLitSubTarget)
-                return true;
-
-            if (m_ActiveSubTarget.value is UniversalSpriteLitSubTarget)
-                return true;
-
-            if (m_ActiveSubTarget.value is UniversalSpriteUnlitSubTarget)
-                return true;
-
-            if (m_ActiveSubTarget.value is UniversalSpriteCustomLitSubTarget)
-                return true;
-
-            //It excludes:
-            // - UniversalDecalSubTarget
-            return false;
+            return true;
         }
 
         public bool SupportsVFX() => CanSupportVFX() && m_SupportVFX;
@@ -1184,23 +1195,20 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 displayName = "XRMotionVectors",
                 referenceName = "SHADERPASS_XR_MOTION_VECTORS",
                 lightMode = "XRMotionVectors",
-                useInPreview = true,
+                useInPreview = false,
 
                 // Template
                 passTemplatePath = UniversalTarget.kUberTemplatePath,
                 sharedTemplateDirectories = UniversalTarget.kSharedTemplateDirectories,
 
                 // Port Mask
-                validVertexBlocks = new BlockFieldDescriptor[]{ },
-                validPixelBlocks = new BlockFieldDescriptor[] { },
+                validVertexBlocks = CoreBlockMasks.MotionVectorVertex,
+                validPixelBlocks = CoreBlockMasks.FragmentAlphaOnly,
 
                 // Fields
-                structs = new StructCollection() {
-                    { Structs.SurfaceDescriptionInputs },
-                    { Structs.VertexDescriptionInputs },
-                },
+                structs = CoreStructCollections.Default,
                 requiredFields = new FieldCollection(),
-                fieldDependencies = new DependencyCollection() { },
+                fieldDependencies = CoreFieldDependencies.Default,
 
                 // Conditional State
                 renderStates = CoreRenderStates.XRMotionVector(target),
@@ -1208,9 +1216,15 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 defines = new DefineCollection(),
                 keywords = new KeywordCollection(),
                 includes = CoreIncludes.XRMotionVectors,
+
+                // Custom Interpolator Support
+                customInterpolators = CoreCustomInterpDescriptors.Common
             };
 
             result.defines.Add(CoreKeywordDescriptors.XRMotionVectors, 1);
+
+            AddAlphaClipControlToPass(ref result, target);
+            AddLODCrossFadeControlToPass(ref result, target);
 
             return result;
         }
@@ -1465,6 +1479,8 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         {
             public static readonly string srcBlend = "[" + Property.SrcBlend + "]";
             public static readonly string dstBlend = "[" + Property.DstBlend + "]";
+            public static readonly string srcBlendAlpha = "[" + Property.SrcBlendAlpha + "]";
+            public static readonly string dstBlendAlpha = "[" + Property.DstBlendAlpha + "]";
             public static readonly string cullMode = "[" + Property.CullMode + "]";
             public static readonly string zWrite = "[" + Property.ZWrite + "]";
             public static readonly string zTest = "[" + Property.ZTest + "]";
@@ -1506,7 +1522,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                     RenderState.ZTest(Uniforms.zTest),
                     RenderState.ZWrite(Uniforms.zWrite),
                     RenderState.Cull(Uniforms.cullMode),
-                    RenderState.Blend(Uniforms.srcBlend, Uniforms.dstBlend),
+                    RenderState.Blend(Uniforms.srcBlend, Uniforms.dstBlend, Uniforms.srcBlendAlpha, Uniforms.dstBlendAlpha),
                 };
             }
             else
@@ -1693,8 +1709,10 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
 
         public static readonly PragmaCollection XRMotionVectors = new PragmaCollection
         {
-            { Pragma.MultiCompileLodCrossfade },
-            { Pragma.ShaderFeatureLocalVertex("_ADD_PRECOMPUTED_VELOCITY") },
+            { Pragma.Target(ShaderModel.Target35) },
+            { Pragma.MultiCompileInstancing },
+            { Pragma.Vertex("vert") },
+            { Pragma.Fragment("frag") },
         };
 
         public static readonly PragmaCollection Forward = new PragmaCollection
@@ -1755,7 +1773,6 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         const string kFog = "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Fog.hlsl";
         const string kRenderingLayers = "Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl";
         const string kProbeVolumes = "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ProbeVolumeVariants.hlsl";
-        const string kObjectMotionVectors = "Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl";
 
         public static readonly IncludeCollection CorePregraph = new IncludeCollection
         {
@@ -1788,11 +1805,6 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         public static readonly IncludeCollection ProbeVolumePregraph = new IncludeCollection
         {
             { kProbeVolumes, IncludeLocation.Pregraph, true },
-        };
-
-        public static readonly IncludeCollection ObjectMotionVectors = new IncludeCollection
-        {
-            { kObjectMotionVectors, IncludeLocation.Pregraph, true },
         };
 
         public static readonly IncludeCollection ShaderGraphPregraph = new IncludeCollection
@@ -1847,9 +1859,13 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         public static readonly IncludeCollection XRMotionVectors = new IncludeCollection
         {
             // Pre-graph
+            { DOTSPregraph },
             { CorePregraph },
             { ShaderGraphPregraph },
-            { ObjectMotionVectors },
+
+            //Post-graph
+            { CorePostgraph },
+            { kMotionVectorPass, IncludeLocation.Postgraph },
         };
 
         public static readonly IncludeCollection ShadowCaster = new IncludeCollection
@@ -2362,7 +2378,17 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
         public static readonly KeywordDescriptor ScreenSpaceAmbientOcclusion = new KeywordDescriptor()
         {
             displayName = "Screen Space Ambient Occlusion",
-            referenceName = "_SCREEN_SPACE_OCCLUSION",
+            referenceName = ShaderKeywordStrings.ScreenSpaceOcclusion,
+            type = KeywordType.Boolean,
+            definition = KeywordDefinition.MultiCompile,
+            scope = KeywordScope.Global,
+            stages = KeywordShaderStage.Fragment,
+        };
+
+        public static readonly KeywordDescriptor ScreenSpaceIrradiance = new KeywordDescriptor()
+        {
+            displayName = "Screen Space Irradiance",
+            referenceName = ShaderKeywordStrings.ScreenSpaceIrradiance,
             type = KeywordType.Boolean,
             definition = KeywordDefinition.MultiCompile,
             scope = KeywordScope.Global,
@@ -2386,11 +2412,20 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             definition = KeywordDefinition.Predefined,
             scope = KeywordScope.Local,
         };
-        
+
         public static readonly KeywordDescriptor LightmapBicubicSampling = new KeywordDescriptor()
         {
             displayName = "Lightmap Bicubic Sampling",
             referenceName = ShaderKeywordStrings.LIGHTMAP_BICUBIC_SAMPLING,
+            type = KeywordType.Boolean,
+            definition = KeywordDefinition.MultiCompile,
+            scope = KeywordScope.Global
+        };
+
+        public static readonly KeywordDescriptor ReflectionProbeRotation = new KeywordDescriptor()
+        {
+            displayName = "ReflectionProbe Rotation",
+            referenceName = ShaderKeywordStrings.ReflectionProbeRotation,
             type = KeywordType.Boolean,
             definition = KeywordDefinition.MultiCompile,
             scope = KeywordScope.Global

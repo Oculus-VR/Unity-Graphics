@@ -36,6 +36,10 @@ namespace UnityEditor.Rendering.HighDefinition
                 tooltip = defaultVolumeProfileAssetLabel.tooltip,
                 objectType = typeof(VolumeProfile),
                 value = m_VolumeProfileSerializedProperty.objectReferenceValue as VolumeProfile,
+                style =
+                {
+                    flexShrink = 1,
+                }
             };
             field.AddToClassList("unity-base-field__aligned"); //Align with other BaseField<T>
             field.Q<Label>().RegisterCallback<ClickEvent>(evt => toggle.value ^= true);
@@ -92,7 +96,7 @@ namespace UnityEditor.Rendering.HighDefinition
             return profileLine;
         }
 
-        public class HDRPDefaultVolumeProfileSettingsContextMenu : DefaultVolumeProfileSettingsContextMenu<HDRPDefaultVolumeProfileSettings, HDRenderPipeline>
+        public class HDRPDefaultVolumeProfileSettingsContextMenu : DefaultVolumeProfileSettingsContextMenu2<HDRPDefaultVolumeProfileSettings, HDRenderPipeline>
         {
             protected override string defaultVolumeProfilePath
             {

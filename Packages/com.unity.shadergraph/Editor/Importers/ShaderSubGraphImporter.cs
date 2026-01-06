@@ -15,13 +15,18 @@ using UnityEditor.Graphing.Util;
 using UnityEditor.ShaderGraph.Internal;
 using UnityEditor.ShaderGraph.Serialization;
 using UnityEngine.Pool;
+using UnityEngine.Rendering;
 
 namespace UnityEditor.ShaderGraph
 {
     [ExcludeFromPreset]
     [ScriptedImporter(30, Extension, -905)]
+    [CoreRPHelpURL("Sub-graph", "com.unity.shadergraph")]
     class ShaderSubGraphImporter : ScriptedImporter
     {
+        [SerializeField, HideInInspector]
+        private string documentationPath;
+
         public const string Extension = "shadersubgraph";
         const string IconBasePath = "Packages/com.unity.shadergraph/Editor/Resources/Icons/sg_subgraph_icon.png";
 
@@ -85,7 +90,7 @@ namespace UnityEditor.ShaderGraph
 
             try
             {
-                ProcessSubGraph(graphAsset, graphData, importLog);
+                ProcessSubGraph(graphAsset, graphData, importLog, documentationPath);
             }
             catch (Exception e)
             {
@@ -169,7 +174,7 @@ namespace UnityEditor.ShaderGraph
             }
         }
 
-        static void ProcessSubGraph(SubGraphAsset asset, GraphData graph, ShaderGraphImporter.AssetImportErrorLog importLog)
+        static void ProcessSubGraph(SubGraphAsset asset, GraphData graph, ShaderGraphImporter.AssetImportErrorLog importLog, string documentationPath)
         {
             var graphIncludes = new IncludeCollection();
             var registry = new FunctionRegistry(new ShaderStringBuilder(), graphIncludes, true);
@@ -186,6 +191,7 @@ namespace UnityEditor.ShaderGraph
             asset.inputStructName = $"Bindings_{asset.hlslName}_{asset.assetGuid}_$precision";
             asset.functionName = $"SG_{asset.hlslName}_{asset.assetGuid}_$precision";
             asset.path = graph.path;
+            asset.documentationPath = documentationPath;
 
             var outputNode = graph.outputNode;
 
@@ -249,6 +255,9 @@ namespace UnityEditor.ShaderGraph
             asset.descendents.AddRange(descendents.Select(g => g.ToString()));
             asset.descendents.Sort();   // ensure deterministic order
 
+            var keywordCollector = new KeywordCollector();
+            graph.CollectShaderKeywords(keywordCollector, GenerationMode.ForReals);
+
             var childrenSet = new HashSet<string>();
             var anyErrors = false;
             foreach (var node in nodes)
@@ -256,7 +265,8 @@ namespace UnityEditor.ShaderGraph
                 if (node is SubGraphNode subGraphNode)
                 {
                     var subGraphGuid = subGraphNode.subGraphGuid;
-                    childrenSet.Add(subGraphGuid);
+                    if (childrenSet.Add(subGraphGuid))
+                        subGraphNode.CollectShaderKeywords(keywordCollector, GenerationMode.ForReals);
                 }
 
                 if (node.hasError)
@@ -295,21 +305,39 @@ namespace UnityEditor.ShaderGraph
             // so traverse those and add those items to the ordered properties list.  Needs to be used to set up the
             // function _and_ to write out the final asset data so that the function call parameter order matches as well.
             var orderedProperties = new List<AbstractShaderProperty>();
+            var collector = new PropertyCollector(); // for promoted properties or properties from nodes.
             var propertiesList = graph.properties.ToList();
+            int order = 0;
             foreach (var category in graph.categories)
             {
                 foreach (var child in category.Children)
                 {
-                    var prop = propertiesList.Find(p => p.guid == child.guid);
+                    if (child != null && child.promoteToFinalShader)
+                    {
+                        child.promotedFromCategoryName = category.IsNamedCategory() ? category.name : null;
+                        child.promotedOrdering = order++;
+                        child.promotedFromAssetID = asset.assetGuid;
+                        if (child is AbstractShaderProperty asProp)
+                            collector.AddShaderProperty(asProp);
+                        else if (child is ShaderKeyword asKeyword)
+                            keywordCollector.AddShaderKeyword(asKeyword);
+                        continue;
+                    }
                     // Not all properties in the category are actually on the graph.
                     // In particular, it seems as if keywords are not properties on sub-graphs.
+                    var prop = propertiesList.Find(p => p.guid == child.guid);
                     if (prop != null  && !orderedProperties.Contains(prop))
                         orderedProperties.Add(prop);
                 }
             }
 
             // If we are importing an older file that has not had categories generated for it yet, include those now.
-            orderedProperties.AddRange(graph.properties.Except(orderedProperties));
+            foreach(var prop in graph.properties)
+            {
+                if (prop != null && (prop.promoteToFinalShader || orderedProperties.Contains(prop)))
+                    continue;
+                orderedProperties.Add(prop);
+            }
 
             // provide top level subgraph function
             // NOTE: actual concrete precision here shouldn't matter, it's irrelevant when building the subgraph asset
@@ -397,8 +425,6 @@ namespace UnityEditor.ShaderGraph
                 var func = new FunctionPair(name, source.code, source.graphPrecisionFlags);
                 asset.functions.Add(func);
             }
-
-            var collector = new PropertyCollector();
             foreach (var node in nodes)
             {
                 int previousPropertyCount = Math.Max(0, collector.propertyCount - 1);
@@ -419,7 +445,7 @@ namespace UnityEditor.ShaderGraph
                 }
             }
 
-            asset.WriteData(orderedProperties, graph.keywords, graph.dropdowns, collector.properties, outputSlots, graph.unsupportedTargets);
+            asset.WriteData(orderedProperties, keywordCollector.keywords, graph.dropdowns, collector.properties, outputSlots, graph.unsupportedTargets);
             outputSlots.Dispose();
         }
 
@@ -427,7 +453,7 @@ namespace UnityEditor.ShaderGraph
         {
             var dependencyMap = new Dictionary<GUID, GUID[]>();
             AssetCollection tempAssetCollection = new AssetCollection();
-            using (ListPool<GUID>.Get(out var tempList))
+            using (UnityEngine.Pool.ListPool<GUID>.Get(out var tempList))
             {
                 GatherDependencyMap(rootAssetGuid, dependencyMap, tempAssetCollection);
                 containsCircularDependency = ContainsCircularDependency(rootAssetGuid, dependencyMap, tempList);

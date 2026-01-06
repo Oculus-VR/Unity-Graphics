@@ -162,6 +162,8 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
+        internal bool IsDepthPrimingCompatible => RenderingSettings.sceneOverrideMode != DebugSceneOverrideMode.Wireframe;
+
         internal int stpDebugViewIndex { get { return RenderingSettings.stpDebugViewIndex; } }
 
         internal DebugHandler()
@@ -231,6 +233,7 @@ namespace UnityEngine.Rendering.Universal
             descriptor.autoGenerateMips = false;
             descriptor.useDynamicScale = true;
             descriptor.depthStencilFormat = depthStencilFormat;
+            descriptor.graphicsFormat = GraphicsFormat.None;
         }
 
         [Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]
@@ -546,7 +549,7 @@ namespace UnityEngine.Rendering.Universal
         }
 
         [Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]
-        internal void Render(RenderGraph renderGraph, UniversalCameraData cameraData, TextureHandle srcColor, TextureHandle overlayTexture, TextureHandle dstColor)
+        internal void Render(RenderGraph renderGraph, UniversalCameraData cameraData, in TextureHandle srcColor, in TextureHandle overlayTexture, in TextureHandle dstColor)
         {
             if (IsActiveForCamera(cameraData.isPreviewCamera) && HDRDebugViewIsActive(cameraData.resolveFinalTarget))
             {
@@ -555,19 +558,6 @@ namespace UnityEngine.Rendering.Universal
         }
 
         #region DebugRendererLists
-
-        internal DebugRendererLists CreateRendererListsWithDebugRenderState(
-             ScriptableRenderContext context,
-             ref CullingResults cullResults,
-             ref DrawingSettings drawingSettings,
-             ref FilteringSettings filteringSettings,
-             ref RenderStateBlock renderStateBlock)
-        {
-            DebugRendererLists debug = new DebugRendererLists(this, filteringSettings);
-            debug.CreateRendererListsWithDebugRenderState(context, ref cullResults, ref drawingSettings, ref filteringSettings, ref renderStateBlock);
-            return debug;
-        }
-
         internal DebugRendererLists CreateRendererListsWithDebugRenderState(
             RenderGraph renderGraph,
             ref CullingResults cullResults,
@@ -614,24 +604,6 @@ namespace UnityEngine.Rendering.Universal
             m_DebugRenderSetups.Clear();
             m_ActiveDebugRendererList.Clear();
             m_ActiveDebugRendererListHdl.Clear();
-        }
-
-        internal void CreateRendererListsWithDebugRenderState(
-             ScriptableRenderContext context,
-             ref CullingResults cullResults,
-             ref DrawingSettings drawingSettings,
-             ref FilteringSettings filteringSettings,
-             ref RenderStateBlock renderStateBlock)
-        {
-            CreateDebugRenderSetups(filteringSettings);
-            foreach (DebugRenderSetup debugRenderSetup in m_DebugRenderSetups)
-            {
-                DrawingSettings debugDrawingSettings = debugRenderSetup.CreateDrawingSettings(drawingSettings);
-                RenderStateBlock debugRenderStateBlock = debugRenderSetup.GetRenderStateBlock(renderStateBlock);
-                RendererList rendererList = new RendererList();
-                RenderingUtils.CreateRendererListWithRenderStateBlock(context, ref cullResults, debugDrawingSettings, filteringSettings, debugRenderStateBlock, ref rendererList);
-                m_ActiveDebugRendererList.Add((rendererList));
-            }
         }
 
         internal void CreateRendererListsWithDebugRenderState(

@@ -19,6 +19,14 @@ namespace UnityEditor.ShaderGraph
                 "TEXCOORD2", subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor uv3 = new FieldDescriptor(Attributes.name, "uv3", "ATTRIBUTES_NEED_TEXCOORD3", ShaderValueType.Float4,
                 "TEXCOORD3", subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv4 = new FieldDescriptor(Attributes.name, "uv4", "ATTRIBUTES_NEED_TEXCOORD4", ShaderValueType.Float4,
+                "TEXCOORD4", subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv5 = new FieldDescriptor(Attributes.name, "uv5", "ATTRIBUTES_NEED_TEXCOORD5", ShaderValueType.Float4,
+                "TEXCOORD5", subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv6 = new FieldDescriptor(Attributes.name, "uv6", "ATTRIBUTES_NEED_TEXCOORD6", ShaderValueType.Float4,
+                "TEXCOORD6", subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv7 = new FieldDescriptor(Attributes.name, "uv7", "ATTRIBUTES_NEED_TEXCOORD7", ShaderValueType.Float4,
+                "TEXCOORD7", subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor weights = new FieldDescriptor(Attributes.name, "weights", "ATTRIBUTES_NEED_BLENDWEIGHTS", ShaderValueType.Float4,
                 "BLENDWEIGHTS", subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor indices = new FieldDescriptor(Attributes.name, "indices", "ATTRIBUTES_NEED_BLENDINDICES", ShaderValueType.Uint4,
@@ -50,6 +58,14 @@ namespace UnityEditor.ShaderGraph
             public static FieldDescriptor texCoord2 = new FieldDescriptor(Varyings.name, "texCoord2", "VARYINGS_NEED_TEXCOORD2", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor texCoord3 = new FieldDescriptor(Varyings.name, "texCoord3", "VARYINGS_NEED_TEXCOORD3", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor texCoord4 = new FieldDescriptor(Varyings.name, "texCoord4", "VARYINGS_NEED_TEXCOORD4", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor texCoord5 = new FieldDescriptor(Varyings.name, "texCoord5", "VARYINGS_NEED_TEXCOORD5", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor texCoord6 = new FieldDescriptor(Varyings.name, "texCoord6", "VARYINGS_NEED_TEXCOORD6", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor texCoord7 = new FieldDescriptor(Varyings.name, "texCoord7", "VARYINGS_NEED_TEXCOORD7", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor color = new FieldDescriptor(Varyings.name, "color", "VARYINGS_NEED_COLOR", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
@@ -153,6 +169,15 @@ namespace UnityEditor.ShaderGraph
                 subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor uv3 = new FieldDescriptor(VertexDescriptionInputs.name, "uv3", "", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv4 = new FieldDescriptor(VertexDescriptionInputs.name, "uv4", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv5 = new FieldDescriptor(VertexDescriptionInputs.name, "uv5", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv6 = new FieldDescriptor(VertexDescriptionInputs.name, "uv6", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv7 = new FieldDescriptor(VertexDescriptionInputs.name, "uv7", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+
             public static FieldDescriptor VertexColor = new FieldDescriptor(VertexDescriptionInputs.name, "VertexColor", "", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor TimeParameters = new FieldDescriptor(VertexDescriptionInputs.name, "TimeParameters", "", ShaderValueType.Float3,
@@ -246,6 +271,14 @@ namespace UnityEditor.ShaderGraph
                 subscriptOptions: StructFieldOptions.Optional);
             public static FieldDescriptor uv3 = new FieldDescriptor(SurfaceDescriptionInputs.name, "uv3", "", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv4 = new FieldDescriptor(SurfaceDescriptionInputs.name, "uv4", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv5 = new FieldDescriptor(SurfaceDescriptionInputs.name, "uv5", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv6 = new FieldDescriptor(SurfaceDescriptionInputs.name, "uv6", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uv7 = new FieldDescriptor(SurfaceDescriptionInputs.name, "uv7", "", ShaderValueType.Float4,
+                subscriptOptions: StructFieldOptions.Optional);
 
             public static FieldDescriptor VertexColor = new FieldDescriptor(SurfaceDescriptionInputs.name, "VertexColor", "", ShaderValueType.Float4,
                 subscriptOptions: StructFieldOptions.Optional);
@@ -264,6 +297,14 @@ namespace UnityEditor.ShaderGraph
 
             public static FieldDescriptor InstanceID = new FieldDescriptor(SurfaceDescriptionInputs.name, "InstanceID", "", ShaderValueType.Uint,
                 subscriptOptions: StructFieldOptions.Optional);
+
+            // UITK
+            public static FieldDescriptor color = new FieldDescriptor(SurfaceDescriptionInputs.name, "color", "", ShaderValueType.Float4, subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor uvClip = new FieldDescriptor(SurfaceDescriptionInputs.name, "uvClip", "", ShaderValueType.Float4, subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor typeTexSettings = new FieldDescriptor(SurfaceDescriptionInputs.name, "typeTexSettings", "", ShaderValueType.Float4, subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor textCoreLoc = new FieldDescriptor(SurfaceDescriptionInputs.name, "textCoreLoc", "", ShaderValueType.Float2, subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor layoutUV = new FieldDescriptor(SurfaceDescriptionInputs.name, "layoutUV", "", ShaderValueType.Float2, subscriptOptions: StructFieldOptions.Optional);
+            public static FieldDescriptor circle = new FieldDescriptor(SurfaceDescriptionInputs.name, "circle", "", ShaderValueType.Float4, subscriptOptions: StructFieldOptions.Optional);
 
             // VFX
             public static FieldDescriptor worldToElement = new FieldDescriptor(SurfaceDescriptionInputs.name, "worldToElement", "", ShaderValueType.Matrix4, subscriptOptions: StructFieldOptions.Optional);

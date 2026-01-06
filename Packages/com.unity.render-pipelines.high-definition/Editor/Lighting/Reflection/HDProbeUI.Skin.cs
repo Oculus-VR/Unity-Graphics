@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace UnityEditor.Rendering.HighDefinition
@@ -26,23 +25,8 @@ namespace UnityEditor.Rendering.HighDefinition
             "Enable time slicing to distribute realtime updates over 7 frames (one for each cubemap face then one to process the result) instead of fully updating in a single frame.");
         internal static readonly GUIContent k_CustomTextureContent = EditorGUIUtility.TrTextContent("Texture");
 
-        static readonly Dictionary<ToolBar, GUIContent> k_ToolbarContents = new Dictionary<ToolBar, GUIContent>
-        {
-            { ToolBar.InfluenceShape,  EditorGUIUtility.TrIconContent("EditCollider", "Modify the base shape.") },
-            { ToolBar.Blend,  EditorGUIUtility.TrIconContent("PreMatCube", "Modify the influence volume.") },
-            { ToolBar.NormalBlend,  EditorGUIUtility.TrIconContent("SceneViewOrtho", "Modify the influence normal volume.") },
-            { ToolBar.CapturePosition,  EditorGUIUtility.TrIconContent("MoveTool", "Change the capture position.") },
-            { ToolBar.MirrorPosition,  EditorGUIUtility.TrIconContent("MoveTool", "Change the mirror position.") },
-            { ToolBar.MirrorRotation,  EditorGUIUtility.TrIconContent("RotateTool", "Change the mirror rotation.") },
-            { ToolBar.ShowChromeGizmo,  EditorGUIUtility.TrIconContent(IconReflectionProbeGizmoId, "Display the chrome gizmo.") },
-        };
-
         const string IconReflectionProbeGizmoId =
-#if UNITY_2019_3_OR_NEWER
             "PreMatSphere"
-#else
-            "ReflectionProbe Gizmo"
-#endif
         ;
     }
 }

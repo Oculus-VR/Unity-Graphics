@@ -1,6 +1,7 @@
 using System;
-
+using System.Reflection;
 using UnityEditor.Experimental.GraphView;
+using UnityEngine;
 
 namespace UnityEditor.VFX
 {
@@ -35,6 +36,33 @@ namespace UnityEditor.VFX
         public GraphViewTemplateWindow.ISaveFileDialogHelper saveFileDialogHelper { get; set; } = new SaveFileDialog();
 
 
+        public static void ImportSampleDependencies(PackageManager.PackageInfo packageInfo, PackageManager.UI.Sample sample)
+        {
+            try
+            {
+                var sampleDependencyImporterType = typeof(Rendering.DebugState).Assembly.GetType("SampleDependencyImporter");
+                var instanceProperty = sampleDependencyImporterType.GetProperty("instance", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                var importerInstance = instanceProperty.GetValue(null);
+                var importSampleDependenciesMethod = sampleDependencyImporterType.GetMethod(
+                    "ImportSampleDependencies",
+                    BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance,
+                    null,
+                    new Type[] { typeof(PackageManager.PackageInfo), typeof(PackageManager.UI.Sample) },
+                    null);
+                importSampleDependenciesMethod.Invoke(importerInstance, new object[] { packageInfo, sample });
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("ImportSampleDependencies unexpected failure, SampleDependencyImporter might have been changed or has been moved.");
+                Debug.LogException(e);
+            }
+        }
+
+        public void RaiseImportSampleDependencies(PackageManager.PackageInfo packageInfo, PackageManager.UI.Sample sample)
+        {
+            ImportSampleDependencies(packageInfo, sample);
+        }
+
         /// <summary>
         /// This method is called each time a template is used.
         /// This is the good place to implement analytics
@@ -68,9 +96,7 @@ namespace UnityEditor.VFX
         internal static bool TryGetTemplateStatic(string vfxPath, out GraphViewTemplateDescriptor graphViewTemplate)
         {
             var importer = (VisualEffectImporter)AssetImporter.GetAtPath(vfxPath);
-            var nativeTemplate = importer.templateProperty;
-
-            if (!string.IsNullOrEmpty(nativeTemplate.name))
+            if (importer is { useAsTemplateProperty: true, templateProperty: var nativeTemplate } && !string.IsNullOrEmpty(nativeTemplate.name))
             {
                 graphViewTemplate = new GraphViewTemplateDescriptor
                 {
@@ -104,6 +130,7 @@ namespace UnityEditor.VFX
                     icon = graphViewTemplate.icon,
                     thumbnail = graphViewTemplate.thumbnail,
                 };
+                importer.useAsTemplateProperty = true;
                 importer.templateProperty = nativeTemplate;
                 return true;
             }

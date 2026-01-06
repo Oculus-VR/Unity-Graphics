@@ -9,6 +9,7 @@ using UnityEngine.Rendering.Universal;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 using UnityEngine.TestTools.Graphics;
+using UnityEngine.TestTools.Graphics.Contexts;
 using Object = UnityEngine.Object;
 #if OCULUS_SDK || OPENXR_SDK
 using UnityEngine.XR;
@@ -22,31 +23,6 @@ namespace Unity.Rendering.Universal.Tests
     static bool wasFirstSceneRan = false;
     const int firstSceneAdditionalFrames = 3;
 #endif
-
-        private static bool GPUResidentDrawerRequested()
-        {
-            bool forcedOn = false;
-            foreach (var arg in Environment.GetCommandLineArgs())
-            {
-                if (
-                    arg.Equals(
-                        "-force-gpuresidentdrawer",
-                        StringComparison.InvariantCultureIgnoreCase
-                    )
-                )
-                {
-                    forcedOn = true;
-                    break;
-                }
-            }
-
-            var renderPipelineAsset = GraphicsSettings.currentRenderPipeline;
-            if (renderPipelineAsset is IGPUResidentRenderPipeline mbAsset)
-                return forcedOn || mbAsset.gpuResidentDrawerMode != GPUResidentDrawerMode.Disabled;
-
-            return false;
-        }
-
         public static IEnumerator RunGraphicsTest(SceneGraphicsTestCase testCase)
         {
             Watermark.showDeveloperWatermark = false;
@@ -61,47 +37,32 @@ namespace Unity.Rendering.Universal.Tests
             yield return null;
 
             var cameras = GameObject.FindGameObjectsWithTag("MainCamera").Select(x => x.GetComponent<Camera>());
-            Assert.True(cameras != null && cameras.Any(),
-                "Invalid test scene, couldn't find a camera with MainCamera tag.");
 
-        // Disable camera track for OCULUS_SDK and OPENXR_SDK so we ensure we get a consistent screen capture for image comparison
+            // Disable camera track for OCULUS_SDK and OPENXR_SDK so we ensure we get a consistent screen capture for image comparison
 #if OCULUS_SDK || OPENXR_SDK
-       // This code is added to hande a case where some test(001_SimpleCube_deferred_RenderPass) would throw error on Quest Vulkan, which would pollute the console for the tests running after. 
-        UnityEngine.Debug.ClearDeveloperConsole();
-        
-        XRDevice.DisableAutoXRCameraTracking(Camera.main, true);
+            // This code is added to hande a case where some test(001_SimpleCube_deferred_RenderPass) would throw error on Quest Vulkan, which would pollute the console for the tests running after.
+            UnityEngine.Debug.ClearDeveloperConsole();
 #endif
             var settings = Object.FindAnyObjectByType<UniversalGraphicsTestSettings>();
             Assert.IsNotNull(settings, "Invalid test scene, couldn't find UniversalGraphicsTestSettings");
 
-            if (!settings.gpuDrivenCompatible && GPUResidentDrawerRequested())
-                Assert.Ignore("Test scene is not compatible with GPU Driven and and will be skipped.");
+#if OCULUS_SDK || OPENXR_SDK
+            if(!settings.XRCompatible)
+            {
+                Assert.Ignore("Quest XR Automation: Test scene is not compatible with XR and will be skipped.");
+            }
 
-            // Check for RenderGraph compatibility and skip test if needed.
-            bool isUsingRenderGraph = RenderGraphGraphicsAutomatedTests.enabled ||
-                                      (!GraphicsSettings.GetRenderPipelineSettings<RenderGraphSettings>()
-                                          ?.enableRenderCompatibilityMode ?? false);
-
-            if (isUsingRenderGraph && settings.renderBackendCompatibility ==
-                UniversalGraphicsTestSettings.RenderBackendCompatibility.NonRenderGraph)
-                Assert.Ignore("Test scene is not compatible with Render Graph and will be skipped.");
-            else if (!isUsingRenderGraph && settings.renderBackendCompatibility ==
-                     UniversalGraphicsTestSettings.RenderBackendCompatibility.RenderGraph)
-                Assert.Ignore("Test scene is not compatible with non-Render Graph and will be skipped.");
-
+            XRDevice.DisableAutoXRCameraTracking(Camera.main, true);
+#endif
             int waitFrames = 1;
 
-        // for OCULUS_SDK or OPENXR_SDK, this ensures we wait for a reliable image rendering before screen capture and image comparison
+            // for OCULUS_SDK or OPENXR_SDK, this ensures we wait for a reliable image rendering before screen capture and image comparison
 #if OCULUS_SDK || OPENXR_SDK
-        if(!settings.XRCompatible)
-        {
-            Assert.Ignore("Quest XR Automation: Test scene is not compatible with XR and will be skipped.");
-        }
-
-        waitFrames = 4;
+            waitFrames = 4;
+#elif ENABLE_VR && USE_XR_MOCK_HMD
+            waitFrames = Unity.Testing.XR.Runtime.ConfigureMockHMD.SetupTest(settings.XRCompatible, settings.WaitFrames, settings.ImageComparisonSettings);
 #else
-            waitFrames = Unity.Testing.XR.Runtime.ConfigureMockHMD.SetupTest(settings.XRCompatible, settings.WaitFrames,
-                settings.ImageComparisonSettings);
+            waitFrames = settings.WaitFrames;
 #endif
             Scene scene = SceneManager.GetActiveScene();
 
@@ -110,20 +71,27 @@ namespace Unity.Rendering.Universal.Tests
             if (settings.ImageComparisonSettings.UseBackBuffer)
             {
                 waitFrames = Mathf.Max(waitFrames, 1);
+            }
 
-                if (settings.SetBackBufferResolution)
-                {
-                    // Set screen/backbuffer resolution before doing the capture in ImageAssert.AreEqual. This will avoid doing
-                    // any resizing/scaling of the rendered image when comparing with the reference image in ImageAssert.AreEqual.
-                    // This has to be done before WaitForEndOfFrame, as the request will only be applied after the frame ends.
-                    int targetWidth = settings.ImageComparisonSettings.TargetWidth;
-                    int targetHeight = settings.ImageComparisonSettings.TargetHeight;
-                    Screen.SetResolution(targetWidth, targetHeight, true);
+            if (settings.SetBackBufferResolution)
+            {
+                // Set screen/backbuffer resolution before doing the capture in ImageAssert.AreEqual. This will avoid doing
+                // any resizing/scaling of the rendered image when comparing with the reference image in ImageAssert.AreEqual.
+                // This has to be done before WaitForEndOfFrame, as the request will only be applied after the frame ends.
+                int targetWidth = settings.ImageComparisonSettings.TargetWidth;
+                int targetHeight = settings.ImageComparisonSettings.TargetHeight;
+                Screen.SetResolution(targetWidth, targetHeight, settings.ImageComparisonSettings.UseBackBuffer ? FullScreenMode.FullScreenWindow : Screen.fullScreenMode);
 
-                    // We need to wait at least 2 frames for the Screen.SetResolution to take effect.
-                    // After that, Screen.width and Screen.height will have the target resolution.
-                    waitFrames = Mathf.Max(waitFrames, 2);
-                }
+                // Yield once to finish the current frame (this code runs before the rendering in a frame) with the former
+                // resolution.
+                // Yield twice to finish the next frame with the new resolution taking effect.
+                // Note that once the yields finish and the test resumes after the next for loop, the rendering will be
+                // in the same frame where the new resolution first took place. For effects such as motion vector
+                // rendering it means if the aspect ratio changes after setting the resolution, the previous camera matrix
+                // will be reset, cancelling out all the camera-based motions.
+                // In this case (e.g. UniversalGraphicsTest_Terrain, test scene 300 and 301) increase the wait frame to 3
+                // on the UniversalGraphicsTestSettings component.
+                waitFrames = Mathf.Max(waitFrames, 2);
             }
 
             for (int i = 0; i < waitFrames; i++)
@@ -176,11 +144,11 @@ namespace Unity.Rendering.Universal.Tests
 #endif
 
 #endif
-            // Does it allocate memory when it renders what's on the main camera?
-            var mainCamera = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<Camera>();
 
             if (settings == null || settings.CheckMemoryAllocation)
             {
+                // Does it allocate memory when it renders what's on the main camera?
+                var mainCamera = GameObject.FindGameObjectWithTag("MainCamera").GetComponent<Camera>();
                 yield return ImageAssert.CheckGCAllocWithCallstack(mainCamera, settings?.ImageComparisonSettings);
             }
         }

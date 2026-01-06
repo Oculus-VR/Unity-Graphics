@@ -77,7 +77,7 @@ namespace UnityEditor.VFX.UI
 
         public static VFXViewWindow GetWindow(VisualEffectResource resource, bool createIfNeeded = false, bool show = true)
         {
-            return GetWindowLambda(x => x.graphView?.controller?.graph.visualEffectResource == resource, createIfNeeded, show);
+            return GetWindowLambda(x => x.displayedResource == resource, createIfNeeded, show);
         }
 
         public static VFXViewWindow GetWindow(VFXParameter vfxParameter, bool createIfNeeded = false)
@@ -176,7 +176,7 @@ namespace UnityEditor.VFX.UI
             UpdateIcon(resource);
         }
 
-        VisualEffect GetVisualEffectFromID(int id) => EditorUtility.InstanceIDToObject(id) as VisualEffect;
+        VisualEffect GetVisualEffectFromID(EntityId id) => EditorUtility.EntityIdToObject(id) as VisualEffect;
 
         internal void AttachTo(VisualEffect visualEffect)
         {
@@ -375,7 +375,8 @@ namespace UnityEditor.VFX.UI
                         {
                             graph.errorManager.RefreshCompilationReport();
                             VFXGraph.explicitCompile = true;
-                            AssetDatabase.ImportAsset(AssetDatabase.GetAssetPath(graphView.controller.model));
+                            var asset = graph.GetResource().asset;
+                            graph.CompileAndUpdateAsset(asset);
                             // As are implemented subgraph now, compiling dependents chain can reset dirty flag on used subgraphs, which will make an infinite loop, this is bad!
                             graph.SetExpressionGraphDirty(false);
                             VFXGraph.explicitCompile = false;

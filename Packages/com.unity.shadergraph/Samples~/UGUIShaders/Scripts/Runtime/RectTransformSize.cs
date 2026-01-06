@@ -113,7 +113,9 @@ namespace Unity.UI.Shaders.Sample
 
         public Material GetModifiedMaterial(Material baseMaterial)
         {
-            _material = new Material(baseMaterial);
+            _material ??= new(baseMaterial);
+
+            _material.CopyPropertiesFromMaterial(baseMaterial);
 
             if (_material.HasVector(PropertyId))
                 _material.SetVector(PropertyId, RectTransformInfo);

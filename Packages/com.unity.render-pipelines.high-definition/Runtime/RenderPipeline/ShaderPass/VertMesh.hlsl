@@ -187,6 +187,8 @@ VaryingsMeshType VertMesh(AttributesMesh input, float3 worldSpaceOffset
 
 #ifdef ATTRIBUTES_NEED_TANGENT
     float4 tangentWS = float4(TransformObjectToWorldDir(input.tangentOS.xyz), input.tangentOS.w);
+#else
+    float4 tangentWS = float4(1.0, 0.0, 0.0, 0.0);
 #endif
 
     // Do vertex modification in camera relative space (if enable)
@@ -237,6 +239,18 @@ VaryingsMeshType VertMesh(AttributesMesh input, float3 worldSpaceOffset
 #endif
 #if defined(VARYINGS_NEED_TEXCOORD3) || defined(VARYINGS_DS_NEED_TEXCOORD3)
     output.texCoord3 = input.uv3;
+#endif
+#if defined(VARYINGS_NEED_TEXCOORD4) || defined(VARYINGS_DS_NEED_TEXCOORD4)
+    output.texCoord4 = input.uv4;
+#endif
+#if defined(VARYINGS_NEED_TEXCOORD5) || defined(VARYINGS_DS_NEED_TEXCOORD5)
+    output.texCoord5 = input.uv5;
+#endif
+#if defined(VARYINGS_NEED_TEXCOORD6) || defined(VARYINGS_DS_NEED_TEXCOORD6)
+    output.texCoord6 = input.uv6;
+#endif
+#if defined(VARYINGS_NEED_TEXCOORD7) || defined(VARYINGS_DS_NEED_TEXCOORD7)
+    output.texCoord7 = input.uv7;
 #endif
 #if defined(VARYINGS_NEED_COLOR) || defined(VARYINGS_DS_NEED_COLOR)
     output.color = input.color;
@@ -313,6 +327,18 @@ VaryingsMeshToPS VertMeshTesselation(VaryingsMeshToDS input)
 #endif
 #ifdef VARYINGS_NEED_TEXCOORD3
     output.texCoord3 = input.texCoord3;
+#endif
+#ifdef VARYINGS_NEED_TEXCOORD4
+    output.texCoord4 = input.texCoord4;
+#endif
+#ifdef VARYINGS_NEED_TEXCOORD5
+    output.texCoord5 = input.texCoord5;
+#endif
+#ifdef VARYINGS_NEED_TEXCOORD6
+    output.texCoord6 = input.texCoord6;
+#endif
+#ifdef VARYINGS_NEED_TEXCOORD7
+    output.texCoord7 = input.texCoord7;
 #endif
 #ifdef VARYINGS_NEED_COLOR
     output.color = input.color;

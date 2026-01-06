@@ -16,11 +16,6 @@
     "defineConstraints": [],
     "versionDefines": [
         {
-            "name": "com.unity.modules.vr",
-            "expression": "1.0.0",
-            "define": "ENABLE_VR_MODULE"
-        },
-        {
             "name": "com.unity.modules.xr",
             "expression": "1.0.0",
             "define": "ENABLE_XR_MODULE"
@@ -44,6 +39,21 @@
             "name": "com.unity.modules.nvidia",
             "expression": "1.0.0",
             "define": "ENABLE_NVIDIA_MODULE"
+        },
+        {
+            "name": "com.unity.modules.amd",
+            "expression": "1.0.0",
+            "define": "ENABLE_AMD_MODULE"
+        },
+        {
+            "name": "com.unity.modules.physics",
+            "expression": "1.0.0",
+            "define": "ENABLE_PHYSICS_MODULE"
+        },
+        {
+          "name": "com.unity.ugui",
+          "expression": "1.0.0",
+          "define": "ENABLE_UGUI_PACKAGE"
         }
     ],
     "noEngineReferences": false

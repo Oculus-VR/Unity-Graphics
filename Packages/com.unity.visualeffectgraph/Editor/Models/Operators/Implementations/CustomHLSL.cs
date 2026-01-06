@@ -223,12 +223,12 @@ namespace UnityEditor.VFX.Operator
             }
         }
 
-        public override void GetImportDependentAssets(HashSet<int> dependencies)
+        public override void GetImportDependentAssets(HashSet<EntityId> dependencies)
         {
             base.GetImportDependentAssets(dependencies);
             if (!ReferenceEquals(m_ShaderFile, null))
             {
-                dependencies.Add(m_ShaderFile.GetInstanceID());
+                dependencies.Add(m_ShaderFile.GetEntityId());
             }
         }
 
@@ -357,10 +357,10 @@ namespace UnityEditor.VFX.Operator
             }
 
             var hasError = m_Function?.errorList.Count > 0;
-            var strippedHLSL = HLSLParser.StripCommentedCode(GetHLSLCode());
-            if (hasError || strippedHLSL != cachedHLSLCode || m_SelectedFunction != m_AvailableFunctions.GetSelection() || m_AvailableFunctions.values == null)
+            var hlslCode = GetHLSLCode();
+            if (hasError || hlslCode != cachedHLSLCode || m_SelectedFunction != m_AvailableFunctions.GetSelection() || m_AvailableFunctions.values == null)
             {
-                var functions = new List<HLSLFunction>(HLSLFunction.Parse(graph.attributesManager, strippedHLSL));
+                var functions = new List<HLSLFunction>(HLSLFunction.Parse(graph.attributesManager, hlslCode));
 
                 if (functions.Count > 0)
                 {
@@ -401,11 +401,6 @@ namespace UnityEditor.VFX.Operator
                     m_InputProperties = new List<VFXPropertyWithValue>();
                     m_OutputProperties = new List<VFXPropertyWithValue>();
 
-                    if (m_Function.returnType != typeof(void) && m_Function.returnType != null)
-                    {
-                        m_OutputProperties.Add(new VFXPropertyWithValue(new VFXProperty(m_Function.returnType, m_Function.returnName)));
-                    }
-
                     foreach (var input in m_InputParameters)
                     {
                         if (input.type != null)
@@ -420,6 +415,10 @@ namespace UnityEditor.VFX.Operator
                             }
                         }
                     }
+                    if (m_Function.returnType != typeof(void) && m_Function.returnType != null)
+                    {
+                        m_OutputProperties.Add(new VFXPropertyWithValue(new VFXProperty(m_Function.returnType, m_Function.returnName)));
+                    }
                 }
                 else
                 {
@@ -431,7 +430,7 @@ namespace UnityEditor.VFX.Operator
                     m_OutputProperties = new List<VFXPropertyWithValue>();
                 }
 
-                cachedHLSLCode = strippedHLSL;
+                cachedHLSLCode = hlslCode;
             }
         }
 

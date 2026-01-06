@@ -84,7 +84,8 @@ namespace UnityEditor.VFX.UI
     class OutputCategory : PropertyCategory
     {
         public const string Label = "Output";
-        public OutputCategory(bool isExpanded, int id) : base(Label, id, false, isExpanded) { }
+        public OutputCategory(bool isExpanded, int id) : base(Label, id, false, isExpanded) {}
+        public override bool canRename => false;
     }
 
     class AttributeItem : ParameterItem
@@ -146,6 +147,7 @@ namespace UnityEditor.VFX.UI
         const string PropertiesCategoryTitle = "Properties";
         const string BuiltInAttributesCategoryTitle = "Built-in Attributes";
         const string AttributesCategoryTitle = "Attributes";
+        const uint MaximumAttemptsToScrollToSelection = 10;
 
         static readonly Rect defaultRect = new Rect(100, 100, 300, 500);
         static System.Reflection.PropertyInfo s_LayoutManual = typeof(VisualElement).GetProperty("isLayoutManual", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
@@ -472,14 +474,23 @@ namespace UnityEditor.VFX.UI
 
             if (fieldId.Count > 0)
             {
-                foreach (var id in fieldId)
+                m_IsChangingSelection = true;
+                try
                 {
-                    m_Treeview.viewController.Move(id, arg.parentId, childIndex, true);
+                    foreach (var id in fieldId)
+                    {
+                        m_Treeview.viewController.Move(id, arg.parentId, childIndex, true);
+                    }
+
+                    UpdateLastCategoryItem(arg.parentId);
+                    m_Treeview.ClearSelection();
+
                 }
-
-                UpdateLastCategoryItem(arg.parentId);
-                m_Treeview.ClearSelection();
-
+                finally
+                {
+                    m_IsChangingSelection = false;
+                }
+                    
                 return DragVisualMode.Move;
             }
 
@@ -585,7 +596,19 @@ namespace UnityEditor.VFX.UI
             element.parent.parent.RemoveFromClassList("sub-graph");
             element.parent.parent.RemoveFromClassList("separator");
             element.ClearClassList();
-            element.Clear();
+
+
+            // work around to avoid losing selection with virtualized treeview
+            bool oldChangingSelection = m_IsChangingSelection;
+            m_IsChangingSelection = true;
+            try
+            {
+                element.Clear();
+            }
+            finally
+            {
+                m_IsChangingSelection = oldChangingSelection;
+            }
         }
 
         private void BindItem(VisualElement element, int index)
@@ -1207,7 +1230,7 @@ namespace UnityEditor.VFX.UI
 
         void OnAddCategory()
         {
-            AddCategory("new category");
+            AddCategory("New Category");
         }
 
         public VFXBlackboardRow GetRowFromController(VFXParameterController parameterController)
@@ -1371,23 +1394,40 @@ namespace UnityEditor.VFX.UI
                 m_Treeview.RefreshItems();
                 UpdateSubtitle();
                 SynchronizeExpandState();
-                if (m_pendingSelectionItems.Count > 0)
+                if (m_Treeview.selectedItem != null)
                 {
-                    var lastItemToSelect = m_ParametersController.SelectMany(GetDataRecursive).LastOrDefault(x => m_pendingSelectionItems.Contains(x.data.title));
-                    if (lastItemToSelect.data != null)
-                    {
-                        m_Treeview.ScrollToItemById(lastItemToSelect.id);
-                    }
-                    else
-                    {
-                        m_pendingSelectionItems.Clear();
-                    }
+                    EditorApplication.delayCall += () => ScrollToSelection();
+                    m_pendingSelectionItems.Clear();
                 }
             }
             finally
             {
                 Profiler.EndSample();
             }
+        }
+
+        /// <summary>
+        /// Scroll to selection and check on next frame if it has properly scrolled.
+        /// If not try again, but there's a maximum retry attempts to avoid infinite loop
+        /// </summary>
+        private void ScrollToSelection(uint iteration = 0)
+        {
+            if (iteration >= MaximumAttemptsToScrollToSelection)
+                return;
+
+            m_Treeview.ScrollToItem(m_Treeview.selectedIndex);
+            EditorApplication.delayCall += () =>
+            {
+                var element = m_Treeview.GetRootElementForIndex(m_Treeview.selectedIndex);
+                if (element == null)
+                {
+                    ScrollToSelection(iteration + 1);
+                }
+                else if (!m_Treeview.Q<ScrollView>().worldBound.Overlaps(element.worldBound))
+                {
+                    ScrollToSelection(iteration + 1);
+                }
+            };
         }
 
         private int SortCategory(string category, List<VFXParameterController> parameters)

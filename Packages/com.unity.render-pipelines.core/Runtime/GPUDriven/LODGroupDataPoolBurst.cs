@@ -8,12 +8,12 @@ namespace UnityEngine.Rendering
     internal static class LODGroupDataPoolBurst
     {
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        public static int FreeLODGroupData(in NativeArray<int> destroyedLODGroupsID, ref NativeList<LODGroupData> lodGroupsData,
-            ref NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataHash, ref NativeList<GPUInstanceIndex> freeLODGroupDataHandles)
+        public static int FreeLODGroupData(in NativeArray<EntityId> destroyedLODGroupsID, ref NativeList<LODGroupData> lodGroupsData,
+            ref NativeParallelHashMap<EntityId, GPUInstanceIndex> lodGroupDataHash, ref NativeList<GPUInstanceIndex> freeLODGroupDataHandles)
         {
             int removedRendererCount = 0;
 
-            foreach (int lodGroupID in destroyedLODGroupsID)
+            foreach (EntityId lodGroupID in destroyedLODGroupsID)
             {
                 if (lodGroupDataHash.TryGetValue(lodGroupID, out var lodGroupInstance))
                 {
@@ -34,8 +34,8 @@ namespace UnityEngine.Rendering
         }
 
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
-        public static int AllocateOrGetLODGroupDataInstances(in NativeArray<int> lodGroupsID, ref NativeList<LODGroupData> lodGroupsData, ref NativeList<LODGroupCullingData> lodGroupCullingData,
-            ref NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataHash, ref NativeList<GPUInstanceIndex> freeLODGroupDataHandles, ref NativeArray<GPUInstanceIndex> lodGroupInstances)
+        public static int AllocateOrGetLODGroupDataInstances(in NativeArray<EntityId> lodGroupsID, ref NativeList<LODGroupData> lodGroupsData, ref NativeList<LODGroupCullingData> lodGroupCullingData,
+            ref NativeParallelHashMap<EntityId, GPUInstanceIndex> lodGroupDataHash, ref NativeList<GPUInstanceIndex> freeLODGroupDataHandles, ref NativeArray<GPUInstanceIndex> lodGroupInstances)
         {
             int freeHandlesCount = freeLODGroupDataHandles.Length;
             int lodDataLength = lodGroupsData.Length;
@@ -43,7 +43,7 @@ namespace UnityEngine.Rendering
 
             for (int i = 0; i < lodGroupsID.Length; ++i)
             {
-                int lodGroupID = lodGroupsID[i];
+                EntityId lodGroupID = lodGroupsID[i];
 
                 if (!lodGroupDataHash.TryGetValue(lodGroupID, out var lodGroupInstance))
                 {

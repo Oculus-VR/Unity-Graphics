@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEditor.VFX;
 using UnityEngine.VFX;
 
 using Type = System.Type;
-using Object = UnityEngine.Object;
 
 namespace UnityEditor.VFX
 {
@@ -272,7 +270,7 @@ namespace UnityEditor.VFX
         }
 
         public bool Accept(VFXBlock block, int index = -1) => Accept(block.compatibleContexts, block.compatibleData);
-        public bool Accept(VFXContextType blockContexts, VFXDataType blockData) => (blockContexts & compatibleContextType) == compatibleContextType && (blockData & ownedType) != 0;
+        public bool Accept(VFXContextType blockContexts, VFXDataType blockData) => (blockContexts & compatibleContextType) == compatibleContextType && VFXData.IsCompatible(ownedType, blockData);
 
         public bool CanHaveBlocks()
         {
@@ -371,27 +369,36 @@ namespace UnityEditor.VFX
 
         private bool CanLinkToMany()
         {
-            return contextType == VFXContextType.Spawner
-                || contextType == VFXContextType.Event;
+            return contextType switch
+            {
+                VFXContextType.Spawner or
+                VFXContextType.Event or
+                VFXContextType.Init or
+                VFXContextType.Update => true,
+                _ => false
+            };
         }
 
         private bool CanLinkFromMany()
         {
-            return contextType == VFXContextType.Output
-                || contextType == VFXContextType.OutputEvent
-                || contextType == VFXContextType.Spawner
-                || contextType == VFXContextType.Subgraph
-                || contextType == VFXContextType.Init;
+            return contextType switch
+            {
+                VFXContextType.OutputEvent or
+                VFXContextType.Spawner or
+                VFXContextType.Subgraph or
+                VFXContextType.Init => true,
+                _ => false
+            };
         }
 
         private static bool CanMixingFrom(VFXContextType from, VFXContextType to, VFXContextType lastFavoriteTo)
         {
             if (from == VFXContextType.Init || from == VFXContextType.Update)
             {
-                if (lastFavoriteTo == VFXContextType.Update)
-                    return to == VFXContextType.Update;
                 if (lastFavoriteTo == VFXContextType.Output)
                     return to == VFXContextType.Output;
+                //Excluding any other combination
+                return false;
             }
             //No special case outside init output which can't be mixed with output & update
             return true;
@@ -423,26 +430,28 @@ namespace UnityEditor.VFX
                 throw new ArgumentException(string.Format("Cannot link contexts {0} and {1}", from, to));
 
             // Handle constraints on connections
+            bool fromCanLinkToMany = from.CanLinkToMany();
             foreach (var link in from.m_OutputFlowSlot[fromIndex].link.ToArray())
             {
-                if (!link.context.CanLinkFromMany()
-                    || !CanMixingFrom(from.contextType, link.context.contextType, to.contextType))
+                if (!fromCanLinkToMany || !CanMixingFrom(from.contextType, link.context.contextType, to.contextType))
                 {
                     if (link.context.inputFlowCount > toIndex) //Special case from SubGraph, not sure how this test could be false
-                        InnerUnlink(from, link.context, fromIndex, toIndex, notify);
+                        InnerUnlink(from, link.context, fromIndex, link.slotIndex, notify);
                 }
             }
 
+            bool toCanLinkFromMany = to.CanLinkFromMany();
             foreach (var link in to.m_InputFlowSlot[toIndex].link.ToArray())
             {
-                if (!link.context.CanLinkToMany()
-                    || !CanMixingTo(link.context.contextType, to.contextType, from.contextType))
+                if (!toCanLinkFromMany || !CanMixingTo(link.context.contextType, to.contextType, from.contextType))
                 {
-                    InnerUnlink(link.context, to, fromIndex, toIndex, notify);
+                    InnerUnlink(link.context, to, link.slotIndex, toIndex, notify);
                 }
             }
 
-            if ((from.ownedType & to.ownedType) == to.ownedType && from.ownedType.HasFlag(VFXDataType.Particle))
+            BreakCyclesVertical(from, to, notify);
+
+            if (VFXData.CanConvert(from.ownedType, to.ownedType) && from.ownedType.HasFlag(VFXDataType.Particle))
                 to.InnerSetData(from.GetData(), false);
 
             from.m_OutputFlowSlot[fromIndex].link.Add(new VFXContextLink() { context = to, slotIndex = toIndex });
@@ -470,6 +479,95 @@ namespace UnityEditor.VFX
             }
         }
 
+        private static readonly string k_BreakCycleWarning = "The newly connected edge created a cycle in the graph, disconnecting another edge.";
+        public static bool BreakCyclesVertical(VFXContext from, VFXContext to, bool notify) => BreakCyclesVertical(from, to, notify, new HashSet<VFXContext>());
+
+        private static bool BreakCyclesVertical(VFXContext from, VFXContext to, bool notify, HashSet<VFXContext> contexts, bool first = true)
+        {
+            bool found = false;
+            if (from == to)
+            {
+                found = true;
+            }
+            else if (!contexts.Contains(from))
+            {
+                contexts.Add(from);
+                if (from is VFXBasicGPUEvent gpuEvent)
+                {
+                    Debug.Assert(gpuEvent.inputSlots.Count == 1);
+                    var fromSlot = from.inputSlots[0];
+                    foreach (var toSlot in fromSlot.LinkedSlots.ToArray()) // TODO: Remove copy
+                    {
+                        var block = toSlot.owner as VFXBlock;
+                        if (BreakCyclesVertical(block.GetParent(), to, notify, contexts, false))
+                        {
+                            // Try to break horizontal links that cause a cycle
+                            if (first)
+                            {
+                                Debug.LogWarning(k_BreakCycleWarning);
+                                fromSlot.Unlink(toSlot, notify);
+                            }
+                            found |= true;
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var inputSlot in from.inputFlowSlot)
+                    {
+                        foreach (var link in inputSlot.link)
+                        {
+                            found |= BreakCyclesVertical(link.context, to, notify, contexts, first);
+                        }
+                    }
+                }
+            }
+            return found;
+        }
+
+        public static bool BreakCyclesHorizontal(VFXContext from, VFXContext to, bool notify) => BreakCyclesHorizontal(from, to, notify, new HashSet<VFXContext>());
+
+        private static bool BreakCyclesHorizontal(VFXContext from, VFXContext to, bool notify, HashSet<VFXContext> contexts)
+        {
+            bool found = false;
+            if (!contexts.Contains(from))
+            {
+                contexts.Add(from);
+                if (from is VFXBasicGPUEvent gpuEvent)
+                {
+                    Debug.Assert(gpuEvent.inputSlots.Count == 1);
+                    var fromSlot = from.inputSlots[0];
+                    foreach (var toSlot in fromSlot.LinkedSlots)
+                    {
+                        var block = toSlot.owner as VFXBlock;
+                        found |= BreakCyclesHorizontal(block.GetParent(), to, notify, contexts);
+                    }
+                }
+                else
+                {
+                    for (int slotIndex = 0; slotIndex < from.inputFlowSlot.Length; ++slotIndex)
+                    {
+                        var inputSlot = from.inputFlowSlot[slotIndex];
+                        foreach (var link in inputSlot.link.ToArray())
+                        {
+                            // Try to break vertical links that cause a cycle
+                            if (link.context == to)
+                            {
+                                Debug.LogWarning(k_BreakCycleWarning);
+                                InnerUnlink(link.context, from, link.slotIndex, slotIndex, notify);
+                                found = true;
+                            }
+                            else
+                            {
+                                found |= BreakCyclesHorizontal(link.context, to, notify, contexts);
+                            }
+                        }
+                    }
+                }
+            }
+            return found;
+        }
+
         public VFXContextSlot[] inputFlowSlot { get { return m_InputFlowSlot == null ? new VFXContextSlot[] { } : m_InputFlowSlot; } }
         public VFXContextSlot[] outputFlowSlot { get { return m_OutputFlowSlot == null ? new VFXContextSlot[] { } : m_OutputFlowSlot; } }
         protected virtual int inputFlowCount { get { return 1; } }
@@ -485,6 +583,8 @@ namespace UnityEditor.VFX
 
             return null;
         }
+
+        public bool CanAccept(VFXDataType dataType) => VFXData.CanConvert(dataType, ownedType);
 
         public void SetDefaultData(bool notify)
         {
@@ -515,7 +615,7 @@ namespace UnityEditor.VFX
                 // Propagate data downwards
                 if (ownedType.HasFlag(VFXDataType.Particle)) // Only propagate for particle type atm
                     foreach (var output in m_OutputFlowSlot.SelectMany(o => o.link.Select(l => l.context)))
-                        if (output.ownedType == ownedType)
+                        if (output.CanAccept(ownedType))
                             output.InnerSetData(data, notify);
             }
         }

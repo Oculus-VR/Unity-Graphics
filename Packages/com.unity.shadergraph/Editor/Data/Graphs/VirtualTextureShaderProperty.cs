@@ -28,6 +28,7 @@ namespace UnityEditor.ShaderGraph
 
         internal override bool isExposable => true;         // the textures are exposable at least..
         internal override bool isRenamable => true;
+        internal override bool canPromoteToFinalShader => false;
 
         internal override void GetPropertyReferenceNames(List<string> result)
         {
@@ -206,9 +207,10 @@ namespace UnityEditor.ShaderGraph
                 var textureInfo = new PropertyCollector.TextureInfo
                 {
                     name = layerRefName,
-                    textureId = texture != null ? texture.GetInstanceID() : 0,
+                    textureId = texture != null ? texture.GetEntityId() : EntityId.None,
                     dimension = texture != null ? texture.dimension : UnityEngine.Rendering.TextureDimension.Any,
-                    modifiable = true
+                    modifiable = true,
+                    generatePropertyBlock = generatePropertyBlock
                 };
                 infos.Add(textureInfo);
             }

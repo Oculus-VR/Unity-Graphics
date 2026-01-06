@@ -1,15 +1,17 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace UnityEditor.Experimental.VFX.Utility
 {
     partial class PointCacheBakeTool : EditorWindow
     {
+        static readonly Vector2 kMinSize = new Vector2(310f, 210f);
+
         [MenuItem("Window/Visual Effects/Utilities/Point Cache Bake Tool", false, 3012)]
         static void OpenWindow()
         {
-            GetWindow<PointCacheBakeTool>();
+            var window = GetWindow<PointCacheBakeTool>();
+            window.minSize = kMinSize;
+            window.titleContent = Contents.title;
         }
 
         public enum BakeMode
@@ -22,7 +24,6 @@ namespace UnityEditor.Experimental.VFX.Utility
 
         private void OnGUI()
         {
-            titleContent = Contents.title;
             mode = (BakeMode)EditorGUILayout.EnumPopup(Contents.mode, mode);
             switch (mode)
             {
@@ -33,7 +34,7 @@ namespace UnityEditor.Experimental.VFX.Utility
 
         static partial class Contents
         {
-            public static GUIContent title = new GUIContent("pCache Tool");
+            public static GUIContent title = new GUIContent("Point Cache Tool");
             public static GUIContent mode = new GUIContent("Bake Mode");
         }
     }

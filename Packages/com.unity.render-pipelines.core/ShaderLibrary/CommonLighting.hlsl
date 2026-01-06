@@ -1,7 +1,7 @@
 #ifndef UNITY_COMMON_LIGHTING_INCLUDED
 #define UNITY_COMMON_LIGHTING_INCLUDED
 
-#if SHADER_API_MOBILE || SHADER_API_GLES3 || SHADER_API_SWITCH || defined(UNITY_UNIFIED_SHADER_PRECISION_MODEL)
+#if SHADER_API_MOBILE || SHADER_API_GLES3 || SHADER_API_SWITCH || SHADER_API_SWITCH2 || defined(UNITY_UNIFIED_SHADER_PRECISION_MODEL)
 #pragma warning (disable : 3205) // conversion of larger type to smaller
 #endif
 
@@ -79,7 +79,7 @@ real ConvertLuminanceToEv(real luminance)
 
 // Non physically based hack to limit light influence to attenuationRadius.
 // Square the result to smoothen the function.
-real DistanceWindowing(real distSquare, real rangeAttenuationScale, real rangeAttenuationBias)
+real DistanceWindowing(float distSquare, real rangeAttenuationScale, real rangeAttenuationBias)
 {
     // If (range attenuation is enabled)
     //   rangeAttenuationScale = 1 / r^2
@@ -552,7 +552,7 @@ bool IsMatchingLightLayer(uint lightLayers, uint renderingLayers)
     return (lightLayers & renderingLayers) != 0;
 }
 
-#if SHADER_API_MOBILE || SHADER_API_GLES3 || SHADER_API_SWITCH
+#if SHADER_API_MOBILE || SHADER_API_GLES3 || SHADER_API_SWITCH || SHADER_API_SWITCH2
 #pragma warning (enable : 3205) // conversion of larger type to smaller
 #endif
 

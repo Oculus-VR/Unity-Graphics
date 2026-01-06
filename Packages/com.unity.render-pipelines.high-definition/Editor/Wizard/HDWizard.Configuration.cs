@@ -5,7 +5,6 @@ using System.Linq.Expressions;
 using System.Reflection;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
-using UnityEditorInternal.VR;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
@@ -37,7 +36,7 @@ namespace UnityEditor.Rendering.HighDefinition
             => ((~thisScope) & scope) == 0;
     }
 
-    partial class HDWizard : EditorWindowWithHelpButton
+    partial class HDWizard
     {
         #region REFLECTION
 
@@ -165,7 +164,7 @@ namespace UnityEditor.Rendering.HighDefinition
                 void DelayedRebuildEntryList()
                 {
                     EditorApplication.update -= DelayedRebuildEntryList;
-                    HDWizard window = EditorWindow.GetWindow<HDWizard>(Style.title.text);
+                    HDWizard window = EditorWindow.GetWindow<HDWizard>();
                     window.ReBuildEntryList();
                 }
             }
@@ -187,7 +186,6 @@ namespace UnityEditor.Rendering.HighDefinition
                     (fromAsync) => HDRenderPipelineGlobalSettings.Ensure(true), indent: 1),
                 new Entry(QualityScope.Global, InclusiveMode.HDRP, Style.hdrpVolumeProfile, IsDefaultVolumeProfileCorrect, FixDefaultVolumeProfile, indent: 1),
                 new Entry(QualityScope.Global, InclusiveMode.HDRP, Style.hdrpDiffusionProfile, IsDiffusionProfileCorrect, FixDiffusionProfile, indent: 1),
-                new Entry(QualityScope.Global, InclusiveMode.HDRP, Style.hdrpLookDevVolumeProfile, IsDefaultLookDevVolumeProfileCorrect, FixDefaultLookDevVolumeProfile, indent: 1),
             });
 
             entryList.AddRange(new Entry[]
@@ -402,6 +400,7 @@ namespace UnityEditor.Rendering.HighDefinition
                 && GetLightmapEncodingQualityForPlatform(BuildTarget.Android) == LightmapEncodingQualityCopy.High
                 && GetLightmapEncodingQualityForPlatform(BuildTarget.iOS) == LightmapEncodingQualityCopy.High
                 && GetLightmapEncodingQualityForPlatform(BuildTarget.Switch) == LightmapEncodingQualityCopy.High
+                && GetLightmapEncodingQualityForPlatform(BuildTarget.Switch2) == LightmapEncodingQualityCopy.High
                 && GetLightmapEncodingQualityForPlatform(BuildTarget.WSAPlayer) == LightmapEncodingQualityCopy.High;
         }
 
@@ -414,6 +413,7 @@ namespace UnityEditor.Rendering.HighDefinition
             SetLightmapEncodingQualityForPlatform(BuildTarget.Android, LightmapEncodingQualityCopy.High);
             SetLightmapEncodingQualityForPlatform(BuildTarget.iOS, LightmapEncodingQualityCopy.High);
             SetLightmapEncodingQualityForPlatform(BuildTarget.Switch, LightmapEncodingQualityCopy.High);
+            SetLightmapEncodingQualityForPlatform(BuildTarget.Switch2, LightmapEncodingQualityCopy.High);
             SetLightmapEncodingQualityForPlatform(BuildTarget.WSAPlayer, LightmapEncodingQualityCopy.High);
 
             // After we update the lightmap encoding, we need to notify the C++ lightmapping logic so it can re-encode the lightmaps.
@@ -443,9 +443,7 @@ namespace UnityEditor.Rendering.HighDefinition
 
         void FixHdrpAssetGraphicsUsed(bool fromAsync)
         {
-            if (ObjectSelector.opened)
-                return;
-            CreateOrLoad<HDRenderPipelineAsset>(fromAsync
+            CreateOrLoad(fromAsync
                 ? () => m_Fixer.Stop()
                 : (Action)null,
                 asset => GraphicsSettings.defaultRenderPipeline = asset);
@@ -461,7 +459,7 @@ namespace UnityEditor.Rendering.HighDefinition
 
             return true;
         }
-        
+
 
         void FixHdrpAssetQualityUsed(bool fromAsync)
             => QualitySettings.renderPipeline = null;
@@ -571,40 +569,17 @@ namespace UnityEditor.Rendering.HighDefinition
             if (!IsHdrpGlobalSettingsUsedCorrect())
                 FixHdrpGlobalSettingsUsed(fromAsync: false);
 
-            var defaultVolumeProfileSettings = GraphicsSettings.GetRenderPipelineSettings<HDRPDefaultVolumeProfileSettings>();
-            var defaultValuesAsset = GraphicsSettings.GetRenderPipelineSettings<HDRenderPipelineEditorAssets>().defaultVolumeProfile;
-            var volumeProfileCopy = VolumeUtils.CopyVolumeProfileFromResourcesToAssets(defaultValuesAsset);
-            defaultVolumeProfileSettings.volumeProfile = volumeProfileCopy;
-            EditorUtility.SetDirty(HDRenderPipelineGlobalSettings.instance);
+            if (GraphicsSettings.TryGetRenderPipelineSettings<HDRPDefaultVolumeProfileSettings>(out var defaultVolumeProfileSettings)
+                && GraphicsSettings.TryGetRenderPipelineSettings<HDRenderPipelineEditorAssets>(out var editorAssets))
+            {
+                var defaultValuesAsset = editorAssets.defaultVolumeProfile;
+                var volumeProfileCopy = VolumeUtils.CopyVolumeProfileFromResourcesToAssets(defaultValuesAsset);
+                defaultVolumeProfileSettings.volumeProfile = volumeProfileCopy;
+                EditorUtility.SetDirty(HDRenderPipelineGlobalSettings.instance);
 
-            if (VolumeManager.instance.isInitialized)
-                VolumeManager.instance.SetGlobalDefaultProfile(volumeProfileCopy);
-        }
-
-        bool IsDefaultLookDevVolumeProfileCorrect()
-        {
-            if (!IsHdrpGlobalSettingsUsedCorrect())
-                return false;
-
-            if (!GraphicsSettings.TryGetRenderPipelineSettings<LookDevVolumeProfileSettings>(out var settings) ||
-                settings.volumeProfile == null)
-                return false;
-
-            if (!GraphicsSettings.TryGetRenderPipelineSettings<HDRenderPipelineEditorAssets>(out var editorAssets))
-                return false;
-
-            var defaultValuesAsset = editorAssets.lookDevVolumeProfile;
-            return !VolumeUtils.IsDefaultVolumeProfile(settings.volumeProfile, defaultValuesAsset);
-        }
-
-        void FixDefaultLookDevVolumeProfile(bool fromAsyncUnused)
-        {
-            if (!IsHdrpGlobalSettingsUsedCorrect())
-                FixHdrpGlobalSettingsUsed(fromAsync: false);
-
-            var settings = GraphicsSettings.GetRenderPipelineSettings<LookDevVolumeProfileSettings>();
-            var defaultValuesAsset = GraphicsSettings.GetRenderPipelineSettings<HDRenderPipelineEditorAssets>().lookDevVolumeProfile;
-            settings.volumeProfile = VolumeUtils.CopyVolumeProfileFromResourcesToAssets(defaultValuesAsset);
+                if (VolumeManager.instance.isInitialized)
+                    VolumeManager.instance.SetGlobalDefaultProfile(volumeProfileCopy);
+            }
         }
 
         IEnumerable<IMigratableAsset> migratableAssets
@@ -768,7 +743,7 @@ namespace UnityEditor.Rendering.HighDefinition
             {
                 if (EditorUtility.DisplayDialog("Changing editor graphics device",
                     "You've changed the active graphics API. This requires a restart of the Editor. After restarting, finish fixing DXR configuration by launching the wizard again.",
-                    "Restart Editor", "Not now"))
+                    "Restart Editor", "Restart Later"))
                 {
                     HDUserSettings.wizardNeedRestartAfterChangingToDX12 = false;
                     RequestCloseAndRelaunchWithCurrentArguments();
@@ -980,18 +955,16 @@ namespace UnityEditor.Rendering.HighDefinition
                 EditorApplication.delayCall += () => WaitForRequest<T>(request, onCompleted);
         }
 
-        void RefreshDisplayOfConfigPackageArea()
-        {
-            IsLocalConfigurationPackageEmbeddedAsync(present => UpdateDisplayOfConfigPackageArea(present ? ConfigPackageState.Present : ConfigPackageState.Missing));
-        }
-
         static void CheckPackages(PackageRegistrationEventArgs args)
         {
             if (EditorWindow.HasOpenInstances<HDWizard>() && !EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                HDWizard window = EditorWindow.GetWindow<HDWizard>(Style.title.text);
-                window.UpdateVRXRManagementInstalledCheck();
-                window.UpdateVRLegacyHelpersInstalledCheck();
+                EditorApplication.delayCall += () =>
+                {
+                    HDWizard window = EditorWindow.GetWindow<HDWizard>();
+                    window.UpdateVRXRManagementInstalledCheck();
+                    window.UpdateVRLegacyHelpersInstalledCheck();
+                };
             }
         }
 

@@ -94,6 +94,7 @@ namespace UnityEditor.ShaderGraph
                     { "Packages/com.unity.shadergraph/ShaderGraphLibrary/ShaderVariables.hlsl", IncludeLocation.Pregraph },
                     { "Packages/com.unity.shadergraph/ShaderGraphLibrary/ShaderVariablesFunctions.hlsl", IncludeLocation.Pregraph },
                     { "Packages/com.unity.shadergraph/ShaderGraphLibrary/Functions.hlsl", IncludeLocation.Pregraph },
+                    { "Packages/com.unity.shadergraph/Editor/Generation/Targets/BuiltIn/ShaderLibrary/Shim/UIShim.hlsl", IncludeLocation.Pregraph },
 
                     // Post-graph
                     { "Packages/com.unity.shadergraph/ShaderGraphLibrary/PreviewVaryings.hlsl", IncludeLocation.Postgraph },
@@ -119,6 +120,10 @@ namespace UnityEditor.ShaderGraph
                     StructFields.Varyings.texCoord1,
                     StructFields.Varyings.texCoord2,
                     StructFields.Varyings.texCoord3,
+                    StructFields.Varyings.texCoord4,
+                    StructFields.Varyings.texCoord5,
+                    StructFields.Varyings.texCoord6,
+                    StructFields.Varyings.texCoord7,
                     StructFields.Varyings.color,
                     StructFields.Varyings.screenPosition,
                     StructFields.Varyings.instanceID,

@@ -12,11 +12,12 @@ namespace UnityEngine.Rendering.Universal
     {
         public const string k_MotionOnlyShaderTagIdName = "XRMotionVectors";
         private static readonly ShaderTagId k_MotionOnlyShaderTagId = new ShaderTagId(k_MotionOnlyShaderTagIdName);
-        private PassData m_PassData;
+        private static readonly int k_SpaceWarpNDCModifier = Shader.PropertyToID("_SpaceWarpNDCModifier");
         private RTHandle m_XRMotionVectorColor;
         private TextureHandle xrMotionVectorColor;
         private RTHandle m_XRMotionVectorDepth;
         private TextureHandle xrMotionVectorDepth;
+        private bool m_XRSpaceWarpRightHandedNDC;
 
         /// <summary>
         /// Creates a new <c>XRDepthMotionPass</c> instance.
@@ -27,7 +28,6 @@ namespace UnityEngine.Rendering.Universal
         public XRDepthMotionPass(RenderPassEvent evt, Shader xrMotionVector)
         {
             base.profilingSampler = new ProfilingSampler(nameof(XRDepthMotionPass));
-            m_PassData = new PassData();
             renderPassEvent = evt;
             ResetMotionData();
             m_XRMotionVectorMaterial = CoreUtils.CreateEngineMaterial(xrMotionVector);
@@ -37,16 +37,19 @@ namespace UnityEngine.Rendering.Universal
             m_XRMotionVectorDepth = null;
         }
 
+        private const int k_XRViewCountPerPass = 2;
         private class PassData
         {
             internal RendererListHandle objMotionRendererList;
-            internal Matrix4x4[] previousViewProjectionStereo = new Matrix4x4[k_XRViewCount];
-            internal Matrix4x4[] viewProjectionStereo = new Matrix4x4[k_XRViewCount];
+            internal Matrix4x4[] previousViewProjectionStereo = new Matrix4x4[k_XRViewCountPerPass];
+            internal Matrix4x4[] viewProjectionStereo = new Matrix4x4[k_XRViewCountPerPass];
             internal Material xrMotionVector;
         }
 
         ///  View projection data
-        private const int k_XRViewCount = 2;
+        private Matrix4x4[] m_StagingMatrixArray = new Matrix4x4[k_XRViewCountPerPass]; // Staging matrix to avoid allocating memory every frame when setting shader properties.
+        private Matrix4x4[] m_PreviousStagingMatrixArray = new Matrix4x4[k_XRViewCountPerPass]; // Staging matrix to avoid allocating memory every frame when setting shader properties.
+        private const int k_XRViewCount = 4;
         private Matrix4x4[] m_ViewProjection = new Matrix4x4[k_XRViewCount];
         private Matrix4x4[] m_PreviousViewProjection = new Matrix4x4[k_XRViewCount];
         private int m_LastFrameIndex;
@@ -66,7 +69,7 @@ namespace UnityEngine.Rendering.Universal
                 enableInstancing = true,
             };
             drawingSettings.SetShaderPassName(0, k_MotionOnlyShaderTagId);
-            
+
             return drawingSettings;
         }
 
@@ -99,8 +102,14 @@ namespace UnityEngine.Rendering.Universal
             //passData.previousViewProjectionStereo[1] = gpuP0 * cameraData.xr.GetPrevViewMatrix(1);
 
             // Setup matrices and shader
-            passData.previousViewProjectionStereo = m_PreviousViewProjection;
-            passData.viewProjectionStereo = m_ViewProjection;
+            var xr = cameraData.xr;
+            var viewStartIndex = xr.viewCount * xr.multipassId;
+
+            Array.Copy(m_PreviousViewProjection, viewStartIndex, m_PreviousStagingMatrixArray, 0, xr.viewCount);
+            passData.previousViewProjectionStereo = m_PreviousStagingMatrixArray;
+
+            Array.Copy(m_ViewProjection, viewStartIndex, m_StagingMatrixArray, 0, xr.viewCount);
+            passData.viewProjectionStereo = m_StagingMatrixArray;
 
             // Setup camera motion material
             passData.xrMotionVector = m_XRMotionVectorMaterial;
@@ -157,6 +166,8 @@ namespace UnityEngine.Rendering.Universal
 
             xrMotionVectorColor = renderGraph.ImportTexture(m_XRMotionVectorColor, importInfo, importMotionColorParams);
             xrMotionVectorDepth = renderGraph.ImportTexture(m_XRMotionVectorDepth, importInfoDepth, importMotionDepthParams);
+
+            m_XRSpaceWarpRightHandedNDC = cameraData.xr.spaceWarpRightHandedNDC;
         }
 
 #region Recording
@@ -190,9 +201,15 @@ namespace UnityEngine.Rendering.Universal
             using (var builder = renderGraph.AddRasterRenderPass<PassData>("XR Motion Pass", out var passData, base.profilingSampler))
             {
                 builder.EnableFoveatedRasterization(cameraData.xr.supportsFoveatedRendering);
+
+                // Apply MultiviewRenderRegionsCompatible flag only to the peripheral view in Quad Views
+                if (cameraData.xr.multipassId == 0)
+                {
+                    builder.SetExtendedFeatureFlags(ExtendedFeatureFlags.MultiviewRenderRegionsCompatible);
+                }
                 // Setup Color and Depth attachments
                 builder.SetRenderAttachment(xrMotionVectorColor, 0, AccessFlags.Write);
-                builder.SetRenderAttachmentDepth(xrMotionVectorDepth, AccessFlags.Write);
+                builder.SetRenderAttachmentDepth(xrMotionVectorDepth, AccessFlags.ReadWrite);
 
                 // Setup RendererList
                 InitObjectMotionRendererLists(ref passData, ref renderingData.cullResults, renderGraph, cameraData.camera);
@@ -209,10 +226,14 @@ namespace UnityEngine.Rendering.Universal
                     context.cmd.SetGlobalMatrixArray(ShaderPropertyId.previousViewProjectionNoJitterStereo, data.previousViewProjectionStereo);
                     context.cmd.SetGlobalMatrixArray(ShaderPropertyId.viewProjectionNoJitterStereo, data.viewProjectionStereo);
 
+                    // SpaceWarp is only available on Vulkan, so these values are always true. This is to support 2 versions of spacewarp
+                    // One expects OpenGL NDC space motion vectors, the other expects Vulkan NDC space
+                    context.cmd.SetGlobalFloat(k_SpaceWarpNDCModifier, m_XRSpaceWarpRightHandedNDC ? -1.0f : 1.0f);
+
                     // Object Motion for both static and dynamic objects, fill stencil for mv filled pixels.
                     context.cmd.DrawRendererList(passData.objMotionRendererList);
 
-                    // Fill mv texturew with camera motion for pixels that don't have mv stencil bit. 
+                    // Fill mv texturew with camera motion for pixels that don't have mv stencil bit.
                     context.cmd.DrawProcedural(Matrix4x4.identity, data.xrMotionVector, 0, MeshTopology.Triangles, 3, 1);
                 });
             }
@@ -246,12 +267,15 @@ namespace UnityEngine.Rendering.Universal
                 {
                     var gpuVP0 = GL.GetGPUProjectionMatrix(cameraData.GetProjectionMatrixNoJitter(0), renderIntoTexture: false) * cameraData.GetViewMatrix(0);
                     var gpuVP1 = GL.GetGPUProjectionMatrix(cameraData.GetProjectionMatrixNoJitter(1), renderIntoTexture: false) * cameraData.GetViewMatrix(1);
-                    m_PreviousViewProjection[0] = m_ViewProjection[0];
-                    m_PreviousViewProjection[1] = m_ViewProjection[1];
-                    m_ViewProjection[0] = gpuVP0;
-                    m_ViewProjection[1] = gpuVP1;
+                    var xr = cameraData.xr;
+                    var viewStartIndex = xr.viewCount * xr.multipassId;
+                    m_PreviousViewProjection[viewStartIndex] = m_ViewProjection[viewStartIndex];
+                    m_PreviousViewProjection[viewStartIndex + 1] = m_ViewProjection[viewStartIndex + 1];
+                    m_ViewProjection[viewStartIndex] = gpuVP0;
+                    m_ViewProjection[viewStartIndex + 1] = gpuVP1;
                 }
-                m_LastFrameIndex = Time.frameCount;
+                if (cameraData.xr.isLastCameraPass)
+                    m_LastFrameIndex = Time.frameCount;
             }
         }
 

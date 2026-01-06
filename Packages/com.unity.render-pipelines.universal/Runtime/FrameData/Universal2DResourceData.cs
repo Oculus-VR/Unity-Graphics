@@ -1,12 +1,11 @@
-using System;
 using UnityEngine.Rendering.RenderGraphModule;
 
 namespace UnityEngine.Rendering.Universal
 {
     /// <summary>
-    /// Class that holds settings related to texture resources.
+    /// Class that holds settings related to texture resources for the 2D renderer.
     /// </summary>
-    internal class Universal2DResourceData : UniversalResourceDataBase
+    public class Universal2DResourceData : UniversalResourceDataBase
     {
         TextureHandle[][] CheckAndGetTextureHandle(ref TextureHandle[][] handle)
         {
@@ -16,7 +15,7 @@ namespace UnityEngine.Rendering.Universal
             return handle;
         }
 
-        void CheckAndSetTextureHandle(ref TextureHandle[][] handle, TextureHandle[][] newHandle)
+        void CheckAndSetTextureHandle(ref TextureHandle[][] handle, in TextureHandle[][] newHandle)
         {
             if (!CheckAndWarnAboutAccessibility())
                 return;
@@ -28,28 +27,50 @@ namespace UnityEngine.Rendering.Universal
                 handle[i] = newHandle[i];
         }
 
-        internal TextureHandle[][] lightTextures
+        /// <summary>
+        /// Light textures per sorting layer. Written to by the Light2D pass.
+        /// </summary>
+        public TextureHandle[][] lightTextures
         {
             get => CheckAndGetTextureHandle(ref _lightTextures);
             set => CheckAndSetTextureHandle(ref _lightTextures, value);
         }
         private TextureHandle[][] _lightTextures = new TextureHandle[0][];
 
-        internal TextureHandle[] normalsTexture
+        /// <summary>
+        /// Normal textures per sorting layer. Written to by the Normal pass.
+        /// </summary>
+        public TextureHandle[] normalsTexture
         {
             get => CheckAndGetTextureHandle(ref _cameraNormalsTexture);
             set => CheckAndSetTextureHandle(ref _cameraNormalsTexture, value);
         }
         private TextureHandle[] _cameraNormalsTexture = new TextureHandle[0];
 
-        internal TextureHandle[][] shadowTextures
+        /// <summary>
+        /// Normal depth texture. Written to by the Normal pass.
+        /// </summary>
+        public TextureHandle normalsDepth
+        {
+            get => CheckAndGetTextureHandle(ref _normalsDepth);
+            set => CheckAndSetTextureHandle(ref _normalsDepth, value);
+        }
+        private TextureHandle _normalsDepth;
+
+        /// <summary>
+        /// Shadow textures per sorting layer. Written to by the Light2D pass.
+        /// </summary>
+        public TextureHandle[][] shadowTextures
         {
             get => CheckAndGetTextureHandle(ref _shadowTextures);
             set => CheckAndSetTextureHandle(ref _shadowTextures, value);
         }
         private TextureHandle[][] _shadowTextures = new TextureHandle[0][];
 
-        internal TextureHandle shadowDepth
+        /// <summary>
+        /// Shadow depth texture. Written to by the Shadow pass.
+        /// </summary>
+        public TextureHandle shadowDepth
         {
             get => CheckAndGetTextureHandle(ref _shadowDepth);
             set => CheckAndSetTextureHandle(ref _shadowDepth, value);
@@ -63,7 +84,10 @@ namespace UnityEngine.Rendering.Universal
         }
         private TextureHandle _upscaleTexture;
 
-        internal TextureHandle cameraSortingLayerTexture
+        /// <summary>
+        /// Camera Sorting Layer Texture. Written to by the CopyCameraSortingLayerPass pass.
+        /// </summary>
+        public TextureHandle cameraSortingLayerTexture
         {
             get => CheckAndGetTextureHandle(ref _cameraSortingLayerTexture);
             set => CheckAndSetTextureHandle(ref _cameraSortingLayerTexture, value);
@@ -73,6 +97,7 @@ namespace UnityEngine.Rendering.Universal
         /// <inheritdoc />
         public override void Reset()
         {
+            _normalsDepth = TextureHandle.nullHandle;
             _shadowDepth = TextureHandle.nullHandle;
             _upscaleTexture = TextureHandle.nullHandle;
             _cameraSortingLayerTexture = TextureHandle.nullHandle;

@@ -1,4 +1,6 @@
 using System;
+using UnityEditor.Rendering;
+using UnityEditor;
 
 namespace UnityEngine.Rendering.HighDefinition
 {
@@ -48,7 +50,7 @@ namespace UnityEngine.Rendering.HighDefinition
         [SerializeField][HideInInspector]
         Version m_Version;
 
-      /// <summary>Current version of these settings container. Used only for upgrading a project.</summary>
+        /// <summary>Current version of these settings container. Used only for upgrading a project.</summary>
         public int version => (int)m_Version;
         #endregion
 
@@ -63,23 +65,28 @@ namespace UnityEngine.Rendering.HighDefinition
             get => m_VolumeProfile;
             set => this.SetValueAndNotify(ref m_VolumeProfile, value);
         }
-
-        void IRenderPipelineGraphicsSettings.Reset()
-        {
+        
 #if UNITY_EDITOR
-            if (UnityEditor.Rendering.EditorGraphicsSettings.TryGetRenderPipelineSettingsForPipeline<HDRenderPipelineEditorAssets, HDRenderPipeline>(out var rpgs))
+    //Overriding "Reset" in menu that is not called at HDRPDefaultVolumeProfileSettings creation such Reset()
+    struct ResetImplementation : IRenderPipelineGraphicsSettingsContextMenu2<LookDevVolumeProfileSettings>
+    {
+        public void PopulateContextMenu(LookDevVolumeProfileSettings setting, SerializedProperty _, ref GenericMenu menu)
+        {
+            void Reset()
             {
-                //UUM-100350
-                //For some reason, when the one in the HDRP template is modified, all its components are nullified instead of replaced.
-                //Removing it fully and creating it solve the issue.
-                string path = VolumeUtils.BuildDefaultNameForVolumeProfile(rpgs.lookDevVolumeProfile);
-                if (UnityEditor.AssetDatabase.AssetPathExists(path))
-                    UnityEditor.AssetDatabase.DeleteAsset(path);
-
-                volumeProfile = VolumeUtils.CopyVolumeProfileFromResourcesToAssets(rpgs.lookDevVolumeProfile);
+                if (EditorGraphicsSettings.TryGetRenderPipelineSettingsForPipeline<HDRenderPipelineEditorAssets, HDRenderPipeline>(out var rpgs))
+                {
+                    RenderPipelineGraphicsSettingsEditorUtility.Rebind(
+                        new LookDevVolumeProfileSettings() { volumeProfile = VolumeUtils.CopyVolumeProfileFromResourcesToAssets(rpgs.lookDevVolumeProfile, true) },
+                        typeof(HDRenderPipeline)
+                    );
+                }
             }
-#endif
+
+            menu.AddItem(new GUIContent("Reset"), false, Reset);
         }
+    }
+#endif
     }
 }
 

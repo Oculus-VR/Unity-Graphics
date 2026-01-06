@@ -29,8 +29,8 @@ namespace UnityEngine.Rendering
 
             [ReadOnly] public CPUInstanceData instanceData;
             [ReadOnly] public CPUSharedInstanceData sharedInstanceData;
-            [ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> rendererGroupIDs;
+            [ReadOnly] public NativeParallelMultiHashMap<EntityId, InstanceHandle> rendererGroupInstanceMultiHash;
+            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<EntityId> rendererGroupIDs;
 
             [NativeDisableContainerSafetyRestriction, NoAlias][WriteOnly] public NativeArray<int> instancesCount;
 
@@ -80,8 +80,8 @@ namespace UnityEngine.Rendering
         {
             public const int k_BatchSize = 128;
 
-            [ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> rendererGroupIDs;
+            [ReadOnly] public NativeParallelMultiHashMap<EntityId, InstanceHandle> rendererGroupInstanceMultiHash;
+            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<EntityId> rendererGroupIDs;
 
             [NativeDisableContainerSafetyRestriction, NoAlias][WriteOnly] public NativeArray<InstanceHandle> instances;
             [NativeDisableUnsafePtrRestriction] public UnsafeAtomicCounter32 atomicNonFoundInstancesCount;
@@ -113,8 +113,8 @@ namespace UnityEngine.Rendering
         {
             public const int k_BatchSize = 128;
 
-            [ReadOnly] public NativeParallelMultiHashMap<int, InstanceHandle> rendererGroupInstanceMultiHash;
-            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> rendererGroupIDs;
+            [ReadOnly] public NativeParallelMultiHashMap<EntityId, InstanceHandle> rendererGroupInstanceMultiHash;
+            [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<EntityId> rendererGroupIDs;
             [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> instancesOffsets;
             [NativeDisableContainerSafetyRestriction, NoAlias][ReadOnly] public NativeArray<int> instancesCounts;
 
@@ -170,7 +170,7 @@ namespace UnityEngine.Rendering
 
             [ReadOnly] public CPUInstanceData instanceData;
             [ReadOnly] public CPUSharedInstanceData sharedInstanceData;
-            [ReadOnly] public NativeArray<int> sortedMeshID;
+            [ReadOnly] public NativeArray<EntityId> sortedMeshID;
 
             [NativeDisableParallelForRestriction][WriteOnly] public NativeList<InstanceHandle> instances;
 
@@ -490,7 +490,7 @@ namespace UnityEngine.Rendering
             [ReadOnly] public bool implicitInstanceIndices;
             [ReadOnly] public GPUDrivenRendererGroupData rendererData;
             [ReadOnly] public NativeArray<InstanceHandle> instances;
-            [ReadOnly] public NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataMap;
+            [ReadOnly] public NativeParallelHashMap<EntityId, GPUInstanceIndex> lodGroupDataMap;
 
             [NativeDisableParallelForRestriction][NativeDisableContainerSafetyRestriction, NoAlias] public CPUInstanceData instanceData;
             [NativeDisableParallelForRestriction][NativeDisableContainerSafetyRestriction, NoAlias] public CPUSharedInstanceData sharedInstanceData;
@@ -508,7 +508,7 @@ namespace UnityEngine.Rendering
                 int materialOffset = rendererData.materialsOffset[index];
                 int materialCount = rendererData.materialsCount[index];
 
-                int meshID = rendererData.meshID[meshIndex];
+                EntityId meshID = rendererData.meshID[meshIndex];
                 var meshLodInfo = rendererData.meshLodInfo[meshIndex];
 
                 const int k_LightmapIndexMask = 0xFFFF;
@@ -584,11 +584,11 @@ namespace UnityEngine.Rendering
                     SharedInstanceHandle sharedInstance = instanceData.Get_SharedInstance(instance);
                     Assert.IsTrue(sharedInstance.valid);
 
-                    var materialIDs = new SmallIntegerArray(materialCount, Allocator.Persistent);
+                    var materialIDs = new SmallEntityIdArray(materialCount, Allocator.Persistent);
                     for (int i = 0; i < materialCount; i++)
                     {
                         int matIndex = rendererData.materialIndex[materialOffset + i];
-                        int materialInstanceID = rendererData.materialID[matIndex];
+                        EntityId materialInstanceID = rendererData.materialID[matIndex];
                         materialIDs[i] = materialInstanceID;
                     }
 
@@ -654,7 +654,7 @@ namespace UnityEngine.Rendering
 
             [NativeDisableParallelForRestriction] public ParallelBitArray processedBits;
 
-            [NativeDisableParallelForRestriction][WriteOnly] public NativeArray<int> rendererIDs;
+            [NativeDisableParallelForRestriction][WriteOnly] public NativeArray<EntityId> rendererIDs;
             [NativeDisableParallelForRestriction][WriteOnly] public NativeArray<InstanceHandle> instances;
 
             [NativeDisableUnsafePtrRestriction] public UnsafeAtomicCounter32 atomicTreeInstancesCount;
@@ -711,7 +711,7 @@ namespace UnityEngine.Rendering
                         int instanceIndex = startIndex + validBitIndex;
                         InstanceHandle instance = instanceData.IndexToInstance(instanceIndex);
                         SharedInstanceHandle sharedInstanceHandle = instanceData.Get_SharedInstance(instance);
-                        int rendererID = sharedInstanceData.Get_RendererGroupID(sharedInstanceHandle);
+                        EntityId rendererID = sharedInstanceData.Get_RendererGroupID(sharedInstanceHandle);
 
                         rendererIDs[writeIndex] = rendererID;
                         instances[writeIndex] = instance;

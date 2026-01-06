@@ -16,7 +16,6 @@ namespace UnityEngine.Rendering.Universal
         private FilteringSettings m_FilteringSettings;
         private List<ShaderTagId> m_ShaderTagIdList;
         private DecalDrawFowardEmissiveSystem m_DrawSystem;
-        private PassData m_PassData;
 
         public DecalForwardEmissivePass(DecalDrawFowardEmissiveSystem drawSystem)
         {
@@ -30,26 +29,6 @@ namespace UnityEngine.Rendering.Universal
             m_ShaderTagIdList = new List<ShaderTagId>();
             m_ShaderTagIdList.Add(new ShaderTagId(DecalShaderPassNames.DecalMeshForwardEmissive));
             m_ShaderTagIdList.Add(new ShaderTagId(DecalShaderPassNames.DecalProjectorForwardEmissive));
-
-            m_PassData = new PassData();
-        }
-
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            InitPassData(ref m_PassData);
-
-            UniversalRenderingData universalRenderingData = renderingData.frameData.Get<UniversalRenderingData>();
-            UniversalCameraData cameraData = renderingData.frameData.Get<UniversalCameraData>();
-            UniversalLightData lightData = renderingData.frameData.Get<UniversalLightData>();
-
-            var param = InitRendererListParams(universalRenderingData, cameraData, lightData);
-
-            var rendererList = context.CreateRendererList(ref param);
-            using (new ProfilingScope(universalRenderingData.commandBuffer, profilingSampler))
-            {
-                ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(universalRenderingData.commandBuffer), m_PassData, rendererList);
-            }
         }
 
         private class PassData
@@ -95,7 +74,7 @@ namespace UnityEngine.Rendering.Universal
                 builder.SetRenderAttachment(resourceData.activeColorTexture, 0, AccessFlags.Write);
                 builder.SetRenderAttachmentDepth(resourceData.activeDepthTexture, AccessFlags.Read);
 
-                builder.SetRenderFunc((PassData data, RasterGraphContext rgContext) =>
+                builder.SetRenderFunc(static (PassData data, RasterGraphContext rgContext) =>
                 {
                     ExecutePass(rgContext.cmd, data, data.rendererList);
                 });

@@ -3,6 +3,7 @@ using UnityEngine.Serialization;
 using UnityEngine.Scripting.APIUpdating;
 using UnityEngine.U2D;
 using UnityEngine.Rendering.RenderGraphModule;
+using System.Collections.Generic;
 #if UNITY_EDITOR
 using System.Linq;
 #endif
@@ -174,15 +175,14 @@ namespace UnityEngine.Rendering.Universal
         internal ushort[] indices { get { return m_Triangles; } set { m_Triangles = value; } }
 
         // Transients
-        int m_PreviousLightCookieSprite;
+        EntityId m_PreviousLightCookieSprite;
         internal Vector3 m_CachedPosition;
 
         // We use Blue Channel of LightMesh's vertex color to indicate Slot Index.
         int m_BatchSlotIndex = 0;
         internal int batchSlotIndex { get { return m_BatchSlotIndex; } set {  m_BatchSlotIndex = value; } }
-        internal int[] affectedSortingLayers => m_ApplyToSortingLayers;
 
-        private int lightCookieSpriteInstanceID => lightCookieSprite?.GetInstanceID() ?? 0;
+        private EntityId lightCookieSpriteEntityId => lightCookieSprite?.GetEntityId() ?? EntityId.None;
 
         internal bool useCookieSprite => (lightType == LightType.Point || lightType == LightType.Sprite) && (lightCookieSprite != null && lightCookieSprite.texture != null);
 
@@ -269,7 +269,7 @@ namespace UnityEngine.Rendering.Universal
         /// The lights current intensity
         /// </summary>
         ///
-        [Obsolete]
+        [Obsolete("#from(2021.1)")]
         public float volumeOpacity => m_LightVolumeIntensity;
 
         /// <summary>
@@ -281,7 +281,7 @@ namespace UnityEngine.Rendering.Universal
         /// Enables or disables the light's volume
         /// </summary>
         ///
-        [Obsolete]
+        [Obsolete("#from(2023.1)")]
         public bool volumeIntensityEnabled { get => m_LightVolumeEnabled; set => m_LightVolumeEnabled = value; }
 
 
@@ -310,7 +310,7 @@ namespace UnityEngine.Rendering.Universal
         /// Checks if the alpha overlap operation is alpha blend.
         /// This is obsolete.
         /// </summary>
-        [Obsolete]
+        [Obsolete("#from(2021.1)")]
         public bool alphaBlendOnOverlap { get { return m_OverlapOperation == OverlapOperation.AlphaBlend; } }
 
         /// <summary>
@@ -337,6 +337,96 @@ namespace UnityEngine.Rendering.Universal
         /// Returns if volumetric shadows should be rendered.
         /// </summary>
         public bool renderVolumetricShadows => volumetricShadowsEnabled && shadowVolumeIntensity > 0;
+
+        /// <summary>
+        /// Gets or sets the target sorting layers for the light. Contains an array of sorting layer IDs.
+        /// </summary>
+        public int[] targetSortingLayers
+        {
+            get => m_ApplyToSortingLayers;
+            set
+            {
+                var layers = new List<int>();
+                foreach (var layerID in value)
+                {
+                    if (SortingLayer.IsValid(layerID))
+                        layers.Add(layerID);
+                }
+                m_ApplyToSortingLayers = layers.ToArray();
+            }
+        }
+
+        bool IsValidLayer(string name)
+        {
+            // Have this check as SortingLayer.NameToID returns 0 (default layer) if layer is not found
+            foreach (var layer in Light2DManager.GetCachedSortingLayer())
+            {
+                if (layer.name == name)
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Adds a target sorting layer to the light.
+        /// </summary>
+        /// <param name="layerName">The sorting layer name to be added.</param>
+        /// <returns>Returns true if the sorting layer is added. Returns false if the layer name is invalid or has already been added.</returns>
+        public bool AddTargetSortingLayer(string layerName)
+        {
+            var layers = new List<int>(m_ApplyToSortingLayers);
+            var id = SortingLayer.NameToID(layerName);
+
+            // Invalid or duplicate layerID
+            if (!IsValidLayer(layerName) || layers.Contains(id))
+                return false;
+
+            layers.Add(id);
+            m_ApplyToSortingLayers = layers.ToArray();
+
+            return true;
+        }
+
+        /// <summary>
+        /// Adds a target sorting layer to the light.
+        /// </summary>
+        /// <param name="layerID">The sorting layer ID to be added.</param>
+        /// <returns>Returns true if the sorting layer is added. Returns false if the layer ID is invalid or has already been added.</returns>
+        public bool AddTargetSortingLayer(int layerID)
+        {
+            return AddTargetSortingLayer(SortingLayer.IDToName(layerID));
+        }
+
+        /// <summary>
+        /// Removes a target sorting layer from the light.
+        /// </summary>
+        /// <param name="layerName">The sorting layer name to be removed.</param>
+        /// <returns>Returns true if the sorting layer is removed. Returns false if the layer name is invalid or doesn't exist.</returns>
+        public bool RemoveTargetSortingLayer(string layerName)
+        {
+            var layers = new List<int>(m_ApplyToSortingLayers);
+            var id = SortingLayer.NameToID(layerName);
+
+            // Invalid or layerID does not exist
+            if (!IsValidLayer(layerName) || !layers.Contains(id))
+                return false;
+
+            layers.Remove(id);
+            m_ApplyToSortingLayers = layers.ToArray();
+
+            return true;
+        }
+
+        /// <summary>
+        /// Removes a target sorting layer from the light.
+        /// </summary>
+        /// <param name="layerID">The sorting layer ID to be removed.</param>
+        /// <returns>Returns true if the sorting layer is removed. Returns false if the layer ID is invalid or doesn't exist.</returns>
+        public bool RemoveTargetSortingLayer(int layerID)
+        {
+            return RemoveTargetSortingLayer(SortingLayer.IDToName(layerID));
+        }
 
         internal void MarkForUpdate()
         {
@@ -394,7 +484,7 @@ namespace UnityEngine.Rendering.Universal
             }
             return false;
         }
-        
+
         internal void UpdateCookieSpriteTexture()
         {
             m_CookieSpriteTexture?.Release();
@@ -411,7 +501,7 @@ namespace UnityEngine.Rendering.Universal
             var parametricRadiusChanged = LightUtility.CheckForChange(m_ShapeLightParametricRadius, ref m_PreviousShapeLightParametricRadius);
             var parametricSidesChanged = LightUtility.CheckForChange(m_ShapeLightParametricSides, ref m_PreviousShapeLightParametricSides);
             var parametricAngleOffsetChanged = LightUtility.CheckForChange(m_ShapeLightParametricAngleOffset, ref m_PreviousShapeLightParametricAngleOffset);
-            var spriteInstanceChanged = LightUtility.CheckForChange(lightCookieSpriteInstanceID, ref m_PreviousLightCookieSprite);
+            var spriteInstanceChanged = LightUtility.CheckForChange(lightCookieSpriteEntityId, ref m_PreviousLightCookieSprite);
             var shapePathHashChanged = LightUtility.CheckForChange(shapePathHash, ref m_PreviousShapePathHash);
             var lightTypeChanged = LightUtility.CheckForChange(m_LightType, ref m_PreviousLightType);
             var hashChanged = fallOffSizeChanged || parametricRadiusChanged || parametricSidesChanged ||
@@ -495,7 +585,7 @@ namespace UnityEngine.Rendering.Universal
 
         void OnEnable()
         {
-            m_PreviousLightCookieSprite = lightCookieSpriteInstanceID;
+            m_PreviousLightCookieSprite = lightCookieSpriteEntityId;
             Light2DManager.RegisterLight(this);
             UpdateCookieSpriteTexture();
 

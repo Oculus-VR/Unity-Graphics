@@ -24,6 +24,8 @@ namespace UnityEngine.Experimental.Rendering
         internal int cullingPassId;
         internal bool copyDepth;
         internal bool hasMotionVectorPass;
+        internal bool spaceWarpRightHandedNDC;
+        internal bool isLastCameraPass;
 
 #if ENABLE_VR && ENABLE_XR_MODULE
         internal UnityEngine.XR.XRDisplaySubsystem.XRRenderPass xrSdkRenderPass;
@@ -51,6 +53,7 @@ namespace UnityEngine.Experimental.Rendering
             m_Views = new List<XRView>(2);
             m_OcclusionMesh = new XROcclusionMesh(this);
             m_VisibleMesh = new XRVisibleMesh(this);
+            isLastCameraPass = true;    // default to last camera pass when creating from default constructor
         }
 
         /// <summary>
@@ -109,17 +112,30 @@ namespace UnityEngine.Experimental.Rendering
         public bool hasMotionVectorPass { get; private set; }
 
         /// <summary>
+        /// Reports which NDC convention the render pipeline should use when calculating motion vectors.
+        /// if <c>true</c>, motion vector data must use the right-handed NDC space. If <c>false</c> motion vector data 
+        /// must use the left-handed NDC space.
+        /// </summary>
+        /// <remarks>
+        /// The render pipeline must write motion vector data to the <see cref="UnityEngine.XR.XRDisplaySubsystem.XRRenderPass.motionVectorRenderTarget"/>.
+        ///
+        /// > [!NOTE]
+        /// > The OpenXR specification doesn't specify which coordinate space convention to use for the
+        /// > motion vector data. Unity only supports SpaceWarp when using the Vulkan graphics API, which uses the right-handed convention for normalized device coordinates, but
+        /// > devices still can choose either convention for motion data when the
+        /// > application is using the Vulkan graphics API.
+        /// </remarks>
+        public bool spaceWarpRightHandedNDC { get; private set; }
+
+        /// <summary>
         /// If true, is the first pass of a xr camera
         /// </summary>
         public bool isFirstCameraPass => multipassId == 0;
 
         /// <summary>
         /// If true, is the last pass of a xr camera
-        /// Multipass last pass: pass ID == 1, viewCount == 1
-        /// Singlepass last pass: pass ID == 0, viewCount ==2
-        /// Emptypass(non-XR) last pass: pass ID == 0, viewCount == 0
         /// </summary>
-        public bool isLastCameraPass => (multipassId == 1 && viewCount <= 1) || (multipassId == 0 && viewCount > 1) || (multipassId == 0 && viewCount == 0) /* ViewCount 0 handles the empty pass*/;
+        public bool isLastCameraPass { get; private set; }
 
         /// <summary>
         /// Index of the pass inside the frame.
@@ -400,7 +416,7 @@ namespace UnityEngine.Experimental.Rendering
         /// <param name="renderIntoTexture">Set to true when rendering into a render texture. Used for handling Unity yflip.</param>
         public void RenderOcclusionMesh(CommandBuffer cmd, bool renderIntoTexture = false)
         {
-            if(occlusionMeshScale > 0)
+            if (occlusionMeshScale > 0)
                 m_OcclusionMesh.RenderOcclusionMesh(cmd, occlusionMeshScale, renderIntoTexture);
         }
 
@@ -537,9 +553,11 @@ namespace UnityEngine.Experimental.Rendering
             motionVectorRenderTarget = new RenderTargetIdentifier(createInfo.motionVectorRenderTarget, 0, CubemapFace.Unknown, -1);
             motionVectorRenderTargetDesc = createInfo.motionVectorRenderTargetDesc;
             hasMotionVectorPass = createInfo.hasMotionVectorPass;
+            spaceWarpRightHandedNDC = createInfo.spaceWarpRightHandedNDC;
             m_OcclusionMesh.SetMaterial(createInfo.occlusionMeshMaterial);
             occlusionMeshScale = createInfo.occlusionMeshScale;
             foveatedRenderingInfo = createInfo.foveatedRenderingInfo;
+            isLastCameraPass = createInfo.isLastCameraPass;
         }
 
         internal void AddView(XRView xrView)

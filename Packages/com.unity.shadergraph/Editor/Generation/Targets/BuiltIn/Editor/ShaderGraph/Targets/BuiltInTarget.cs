@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
-using UnityEditor.UIElements;
+
 using UnityEditor.ShaderGraph;
 using UnityEditor.ShaderGraph.Legacy;
 using UnityEditor.ShaderGraph.Serialization;
@@ -153,7 +153,7 @@ namespace UnityEditor.Rendering.BuiltIn.ShaderGraph
             }
         }
 
-        public SubTarget activeSubTarget
+        public override SubTarget activeSubTarget
         {
             get => m_ActiveSubTarget.value;
             set => m_ActiveSubTarget = value;

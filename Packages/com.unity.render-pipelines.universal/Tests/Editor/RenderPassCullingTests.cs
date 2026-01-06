@@ -22,19 +22,12 @@ namespace UnityEngine.Rendering.Tests
 
             var cullingResults = cullContextData.Cull(ref cullingParameters);
 
-            Assert.IsTrue(cullingResults != null);
-            Assert.IsTrue(cullingResults.visibleLights.Length != 0);
-        }
-
-        /// <inheritdoc/>
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            // This path does not implement the CullContextData.
+            var lightsInScene = Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
+            Assert.IsTrue(cullingResults.visibleLights.Length == lightsInScene.Length);
         }
     }
 
-    class RenderGraphTests
+    class RenderGraphTestsCulling
     {
         static Recorder gcAllocRecorder = Recorder.Get("GC.Alloc");
 
@@ -42,6 +35,8 @@ namespace UnityEngine.Rendering.Tests
 
         CullingTestRenderPass m_TestRenderPass;
         ScriptableRenderContext? m_RenderContext;
+        Camera m_Camera;
+        List<GameObject> m_GameObjects = new();
 
         [SetUp]
         public void Setup()
@@ -49,6 +44,25 @@ namespace UnityEngine.Rendering.Tests
             m_TestRenderPass = new CullingTestRenderPass();
             RenderPipelineManager.beginCameraRendering += OnBeginCamera;
             m_RenderContext = null;
+
+            // We need a real ScriptableRenderContext and a camera to execute the render graph
+            // add the default camera
+            var cameraGO = new GameObject("Culling_GameObject")
+            {
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            cameraGO.tag = "MainCamera";
+            m_Camera = cameraGO.AddComponent<Camera>();
+
+            m_GameObjects.Add(cameraGO);
+
+            for (int i = 0; i < kLightCount; ++i)
+            {
+                var lightGO = new GameObject("Light_GameObject" + i);
+                var light = lightGO.AddComponent<Light>();
+                light.type = LightType.Point;
+                m_GameObjects.Add(lightGO);
+            }
         }
 
         [TearDown]
@@ -57,6 +71,11 @@ namespace UnityEngine.Rendering.Tests
             m_TestRenderPass = null;
             m_RenderContext = null;
             RenderPipelineManager.beginCameraRendering -= OnBeginCamera;
+
+            foreach (var obj in m_GameObjects)
+            {
+                GameObject.DestroyImmediate(obj);
+            }
         }
 
         [Test]
@@ -65,37 +84,7 @@ namespace UnityEngine.Rendering.Tests
             if (DisableTestWhenExecutedOnNonURPProject())
                 return;
 
-            // We need a real ScriptableRenderContext and a camera to execute the render graph
-            // add the default camera
-            var cameraGO = new GameObject("Culling_GameObject")
-            {
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            cameraGO.tag = "MainCamera";
-            var camera = cameraGO.AddComponent<Camera>();
-
-            var goToRemove = new List<GameObject>();
-            goToRemove.Add(cameraGO);
-
-            for (int i = 0; i < kLightCount; ++i)
-            {
-                var lightGO = new GameObject("Light_GameObject" + i)
-                {
-                    hideFlags = HideFlags.HideAndDontSave
-                };
-
-                var light = lightGO.AddComponent<Light>();
-                light.type = LightType.Point;
-
-                goToRemove.Add(lightGO);
-            }
-
-            SubmitCameraRenderRequest(camera);
-
-            foreach (var obj in goToRemove)
-            {
-                GameObject.DestroyImmediate(obj);
-            }
+            SubmitCameraRenderRequest(m_Camera);
         }
 
         [Test]
@@ -104,16 +93,7 @@ namespace UnityEngine.Rendering.Tests
             if (DisableTestWhenExecutedOnNonURPProject())
                 return;
 
-            // We need a real ScriptableRenderContext and a camera to execute the render graph
-            // add the default camera
-            var cameraGO = new GameObject("Culling_GameObject")
-            {
-                hideFlags = HideFlags.HideAndDontSave
-            };
-            cameraGO.tag = "MainCamera";
-            var camera = cameraGO.AddComponent<Camera>();
-
-            SubmitCameraRenderRequest(camera);
+            SubmitCameraRenderRequest(m_Camera);
 
             Assert.IsTrue(m_RenderContext != null);
 
@@ -124,8 +104,6 @@ namespace UnityEngine.Rendering.Tests
             {
                 cullData.SetRenderContext(m_RenderContext.Value);
             });
-
-            GameObject.DestroyImmediate(cameraGO);
         }
 
         bool DisableTestWhenExecutedOnNonURPProject()

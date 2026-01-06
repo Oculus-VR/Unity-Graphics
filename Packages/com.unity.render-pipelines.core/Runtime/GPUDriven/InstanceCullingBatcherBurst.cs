@@ -111,8 +111,8 @@ namespace UnityEngine.Rendering
         }
 
         private static void ProcessRenderer(int i, bool implicitInstanceIndices, in GPUDrivenRendererGroupData rendererData,
-            NativeParallelHashMap<int, BatchMeshID> batchMeshHash, NativeParallelHashMap<int, GPUDrivenPackedMaterialData> packedMaterialDataHash,
-            NativeParallelHashMap<int, BatchMaterialID> batchMaterialHash, NativeArray<InstanceHandle> instances, NativeList<DrawInstance> drawInstances,
+            NativeParallelHashMap<EntityId, BatchMeshID> batchMeshHash, NativeParallelHashMap<EntityId, GPUDrivenPackedMaterialData> packedMaterialDataHash,
+            NativeParallelHashMap<EntityId, BatchMaterialID> batchMaterialHash, NativeArray<InstanceHandle> instances, NativeList<DrawInstance> drawInstances,
             NativeParallelHashMap<RangeKey, int> rangeHash, NativeList<DrawRange> drawRanges, NativeParallelHashMap<DrawKey, int> batchHash,
             NativeList<DrawBatch> drawBatches)
         {
@@ -228,7 +228,7 @@ namespace UnityEngine.Rendering
                 var materialID = rendererData.materialID[materialIndex];
                 var packedMaterialData = packedMaterialDatas[matIndex];
 
-                if (materialID == 0)
+                if (materialID == EntityId.None)
                 {
                     Debug.LogWarning("Material in the shared materials list is null. Object will be partially rendered.");
                     continue;
@@ -266,7 +266,7 @@ namespace UnityEngine.Rendering
                         submeshIndex = submeshIndex,
                         activeMeshLod = meshLodInfo.lodSelectionActive ? lodLoopIndex : -1,
                         flags = flags,
-                        transparentInstanceId = packedMaterialData.isTransparent ? rendererGroupID : 0,
+                        transparentInstanceId = packedMaterialData.isTransparent ? rendererGroupID : EntityId.None,
                         range = rangeKey,
                         overridenComponents = (uint)overridenComponents,
                         // When we've opted out of lightmap texture arrays, we
@@ -296,8 +296,8 @@ namespace UnityEngine.Rendering
 
         [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
         public static void CreateDrawBatches(bool implicitInstanceIndices, in NativeArray<InstanceHandle> instances, in GPUDrivenRendererGroupData rendererData,
-            in NativeParallelHashMap<int, BatchMeshID> batchMeshHash, in NativeParallelHashMap<int, BatchMaterialID> batchMaterialHash,
-            in NativeParallelHashMap<int, GPUDrivenPackedMaterialData> packedMaterialDataHash,
+            in NativeParallelHashMap<EntityId, BatchMeshID> batchMeshHash, in NativeParallelHashMap<EntityId, BatchMaterialID> batchMaterialHash,
+            in NativeParallelHashMap<EntityId, GPUDrivenPackedMaterialData> packedMaterialDataHash,
             ref NativeParallelHashMap<RangeKey, int> rangeHash, ref NativeList<DrawRange> drawRanges, ref NativeParallelHashMap<DrawKey, int> batchHash, ref NativeList<DrawBatch> drawBatches,
             ref NativeList<DrawInstance> drawInstances)
         {

@@ -37,7 +37,7 @@ namespace UnityEditor.ShaderGraph
             {
                 try
                 {
-                    File.WriteAllText(path, text);
+                    File.WriteAllText(FileUtil.PathToAbsolutePath(path), text);
                 }
                 catch (Exception e)
                 {
@@ -74,13 +74,42 @@ namespace UnityEditor.ShaderGraph
             string result = null;
             try
             {
-                result = File.ReadAllText(assetPath, Encoding.UTF8);
+                result = File.ReadAllText(FileUtil.PathToAbsolutePath(assetPath), Encoding.UTF8);
             }
             catch
             {
                 result = null;
             }
             return result;
+        }
+
+        internal static bool TryReadGraphDataFromDisk(string path, out GraphData graph)
+        {
+            try
+            {
+                var textGraph = File.ReadAllText(FileUtil.PathToAbsolutePath(path), Encoding.UTF8);
+                graph = new GraphData
+                {
+                    messageManager = new Graphing.Util.MessageManager(),
+                    assetGuid = AssetDatabase.AssetPathToGUID(path)
+                };
+
+                MultiJson.Deserialize(graph, textGraph);
+            }
+            catch
+            {
+                graph = null;
+                return false;
+            }
+            return true;
+        }
+
+        internal static bool TryGetImporter(string assetPath, out ShaderGraphImporter importer)
+        {
+            importer = null;
+            return (!string.IsNullOrEmpty(assetPath)
+                && assetPath.EndsWith(ShaderGraphImporter.Extension)
+                && (importer = AssetImporter.GetAtPath(assetPath) as ShaderGraphImporter) != null);
         }
 
         static void CheckoutIfValid(string path)

@@ -33,7 +33,6 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             m_ContextVFX = context;
             m_TaskDataVFX = data;
         }
-
 #endif
 
         protected SubShaderDescriptor PostProcessSubShader(SubShaderDescriptor subShaderDescriptor)
@@ -76,7 +75,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 urpMetadata.hasVertexModificationInMotionVector = false;
             }
             
-            urpMetadata.isVFXCompatible = graphData.IsVFXCompatible();
+            urpMetadata.isVFXCompatible = target.SupportsVFX();
             return urpMetadata;
         }
 

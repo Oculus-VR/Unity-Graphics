@@ -24,7 +24,8 @@ public class ShaderGraphGraphicsTests
     [IgnoreGraphicsTest("InstanceIDWithKeywords", "Platform Independent", graphicsDeviceTypes: new GraphicsDeviceType[] { GraphicsDeviceType.PlayStation5NGGC })]
     [IgnoreGraphicsTest("InstanceIDWithKeywords", "Platform Independent", graphicsDeviceTypes: new GraphicsDeviceType[] { GraphicsDeviceType.WebGPU })]
     [IgnoreGraphicsTest("TransformNode", "Test is unstable", colorSpaces: new ColorSpace[] { ColorSpace.Linear }, runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.Android }, graphicsDeviceTypes: new GraphicsDeviceType[] { GraphicsDeviceType.Vulkan })]
-
+    [IgnoreGraphicsTest("InstancedRendering", "Test requires conversion to Render Graph")]
+    
     [SceneGraphicsTest("Assets/Scenes")]
     [UnityTest, Category("ShaderGraph")]
     public IEnumerator Run(SceneGraphicsTestCase testCase)

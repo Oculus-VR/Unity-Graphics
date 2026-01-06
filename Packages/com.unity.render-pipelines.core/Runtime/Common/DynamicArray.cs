@@ -375,7 +375,7 @@ namespace UnityEngine.Rendering
         /// </summary>
         /// <param name="array">Input DynamicArray.</param>
         /// <returns>The internal array.</returns>
-        [Obsolete("This is deprecated because it returns an incorrect value. It may returns an array with elements beyond the size. Please use Span/ReadOnly if you want safe raw access to the DynamicArray memory.",false)]
+        [Obsolete("This is deprecated because it returns an incorrect value. It may returns an array with elements beyond the size. Please use Span/ReadOnly if you want safe raw access to the DynamicArray memory. #from(2023.2)")]
         public static implicit operator T[](DynamicArray<T> array) => array.m_Array;
 
         /// <summary>
@@ -695,8 +695,7 @@ namespace UnityEngine.Rendering
             }
         }
 
-        // C# SUCKS
-        // Had to copy paste because it's apparently impossible to pass a sort delegate where T is Comparable<T>, otherwise some boxing happens and allocates...
+        // A copy/paste because it's apparently impossible to pass a sort delegate where T is Comparable<T>, otherwise some boxing happens and allocates...
         // So two identical versions of the function, one with delegate but no Comparable and the other with just the comparable.
         static int Partition<T>(Span<T> data, int left, int right, DynamicArray<T>.SortComparer comparer) where T : new()
         {

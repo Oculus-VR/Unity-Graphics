@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor.Callbacks;
 #if UNITY_2020_2_OR_NEWER
@@ -62,7 +63,8 @@ namespace UnityEditor.ShaderGraph
                 Debug.Assert(importer != null, "importer != null");
                 ShowGraphEditWindow(importer.assetPath);
             }
-            using (var horizontalScope = new GUILayout.HorizontalScope("box"))
+
+            using (var horizontalScope = new GUILayout.HorizontalScope())
             {
                 AssetImporter importer = target as AssetImporter;
                 string assetName = Path.GetFileNameWithoutExtension(importer.assetPath);
@@ -80,16 +82,34 @@ namespace UnityEditor.ShaderGraph
                 if (alreadyExists && GUILayout.Button("Regenerate"))
                     update = true;
 
+                var pathList = new List<string>();
+                pathList.Add(path);
+
                 if (update)
                 {
                     var graphData = GetGraphData(importer);
                     var generator = new Generator(graphData, null, GenerationMode.ForReals, assetName, humanReadable: true);
                     if (!GraphUtil.WriteToFile(path, generator.generatedShader))
                         open = false;
+                    var generatedShaderCount = 0;
+                    foreach (var generatedShader in generator.allGeneratedShaders)
+                    {
+                        if (generatedShaderCount > 0)
+                        {
+                            string pathSub = String.Format("Temp/GeneratedFromGraph-{0}_{1}.shader", assetName.Replace(" ", ""), generatedShaderCount);
+                            pathList.Add(pathSub);
+                            GraphUtil.WriteToFile(pathSub, generatedShader.codeString);
+                        }
+                        generatedShaderCount++;
+                    }
                 }
 
                 if (open)
-                    GraphUtil.OpenFile(path);
+                {
+                    for (int i = 1; i < pathList.Count; ++i)
+                        GraphUtil.OpenFile(pathList[i]);
+                    GraphUtil.OpenFile(pathList[0]);
+                }
             }
             if (Unsupported.IsDeveloperMode())
             {
@@ -115,7 +135,26 @@ namespace UnityEditor.ShaderGraph
                 GUIUtility.systemCopyBuffer = generator.generatedShader;
             }
 
+            EditorGUILayout.Space();
+            EditorGUI.BeginChangeCheck();
+            EditorGUILayout.PropertyField(serializedObject.FindProperty(ShaderGraphImporter.UseAsTemplateFieldName));
+            bool needsReimport = EditorGUI.EndChangeCheck();
+            using (new EditorGUI.IndentLevelScope(1))
+            using (new EditorGUI.DisabledScope(!(target as ShaderGraphImporter)?.UseAsTemplate ?? true))
+            {
+                EditorGUI.BeginChangeCheck();
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(ShaderGraphImporter.ExposeTemplateAsShaderFieldName), new GUIContent("Expose as Shader", "Toggle whether or not the template shader should be exposed in shader dropdowns."));
+                needsReimport |= EditorGUI.EndChangeCheck();
+
+                EditorGUILayout.PropertyField(serializedObject.FindProperty(ShaderGraphImporter.TemplateFieldName));
+            }
+
             ApplyRevertGUI();
+            if (needsReimport)
+            {
+                AssetImporter importer = target as AssetImporter;
+                AssetDatabase.ImportAsset(importer.assetPath);
+            }
 
             if (materialEditor)
             {
@@ -158,8 +197,11 @@ namespace UnityEditor.ShaderGraph
             {
                 if (w.selectedGuid == guid)
                 {
-                    w.Focus();
-                    return true;
+                    if (w.m_Parent != null)
+                    {
+                        w.Focus();
+                        return true;
+                    }
                 }
             }
 
@@ -170,9 +212,9 @@ namespace UnityEditor.ShaderGraph
         }
 
         [OnOpenAsset(0)]
-        public static bool OnOpenAsset(int instanceID, int line)
+        public static bool OnOpenAsset(EntityId entityId, int line)
         {
-            var path = AssetDatabase.GetAssetPath(instanceID);
+            var path = AssetDatabase.GetAssetPath(entityId);
             return ShowGraphEditWindow(path);
         }
     }

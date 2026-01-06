@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.HighDefinition;
@@ -16,10 +17,11 @@ namespace UnityEditor.Rendering.HighDefinition
         public List<HDRenderPipelineAsset> renderPipelineAssets { get; private set; } = new List<HDRenderPipelineAsset>();
         public bool playerNeedRaytracing { get; private set; }
         public bool stripDebugVariants { get; private set; } = true;
+        public bool dynamicLightmapsUsed { get; private set; }
         public bool waterDecalMaskAndCurrent { get; private set; }
-        public Dictionary<int, ComputeShader> rayTracingComputeShaderCache { get; private set; } = new();
-        public Dictionary<int, ComputeShader> computeShaderCache { get; private set; } = new();
-        
+        public Dictionary<EntityId, ComputeShader> rayTracingComputeShaderCache { get; private set; } = new();
+        public Dictionary<EntityId, ComputeShader> computeShaderCache { get; private set; } = new();
+
         public HDRenderPipelineRuntimeShaders runtimeShaders { get; private set; }
         public HDRenderPipelineRuntimeMaterials materialResources { get; private set; }
 
@@ -51,11 +53,11 @@ namespace UnityEditor.Rendering.HighDefinition
                 if (hdrpGlobalSettingsInstance != null)
                 {
                     GraphicsSettings.GetRenderPipelineSettings<HDRPRayTracingResources>()
-                        .ForEachFieldOfType<ComputeShader>(computeShader => rayTracingComputeShaderCache.Add(computeShader.GetInstanceID(), computeShader));
+                        .ForEachFieldOfType<ComputeShader>(computeShader => rayTracingComputeShaderCache.Add(computeShader.GetEntityId(), computeShader));
 
                     runtimeShaders = GraphicsSettings.GetRenderPipelineSettings<HDRenderPipelineRuntimeShaders>();
-                    runtimeShaders?.ForEachFieldOfType<ComputeShader>(computeShader => computeShaderCache.Add(computeShader.GetInstanceID(), computeShader));
-                    
+                    runtimeShaders?.ForEachFieldOfType<ComputeShader>(computeShader => computeShaderCache.Add(computeShader.GetEntityId(), computeShader));
+
                     materialResources = GraphicsSettings.GetRenderPipelineSettings<HDRenderPipelineRuntimeMaterials>();
 
                     stripDebugVariants = !isDevelopmentBuild || GraphicsSettings.GetRenderPipelineSettings<ShaderStrippingSetting>().stripRuntimeDebugShaders;
@@ -69,6 +71,35 @@ namespace UnityEditor.Rendering.HighDefinition
             m_Instance = this;
         }
 
+        public void SetDynamicLightmapsUsedInBuildScenes()
+        {
+            dynamicLightmapsUsed = DynamicLightmapsUsedInBuildScenes();
+        }
+
+        static bool DynamicLightmapsUsedInBuildScenes()
+        {
+            var originalSetup = EditorSceneManager.GetSceneManagerSetup();
+
+            bool dynamicLightmapsUsed = false;
+            foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
+            {
+                if (!scene.enabled) continue;
+
+                EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Single);
+
+                if (Lightmapping.HasDynamicGILightmapTextures())
+                {
+                    dynamicLightmapsUsed = true;
+                    break;
+                }
+            }
+
+            if (originalSetup.Length > 0)
+                EditorSceneManager.RestoreSceneManagerSetup(originalSetup);
+
+            return dynamicLightmapsUsed;
+        }
+
         public void Dispose()
         {
             renderPipelineAssets?.Clear();
@@ -76,6 +107,7 @@ namespace UnityEditor.Rendering.HighDefinition
             computeShaderCache?.Clear();
             playerNeedRaytracing = false;
             stripDebugVariants = true;
+            dynamicLightmapsUsed = false;
             waterDecalMaskAndCurrent = false;
             buildingPlayerForHDRenderPipeline = false;
             runtimeShaders = null;

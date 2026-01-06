@@ -4,6 +4,10 @@ using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine.U2D;
 
+#if USING_2DCOMMON
+using UnityEngine.U2D.Common;
+#endif
+
 namespace UnityEngine.Rendering.Universal
 {
     // Per Light parameters to batch.
@@ -44,6 +48,14 @@ namespace UnityEngine.Rendering.Universal
             b = a;
             return changed;
         }
+
+        public static bool CheckForChange(EntityId a, ref EntityId b)
+        {
+            var changed = a != b;
+            b = a;
+            return changed;
+        }
+
 
         public static bool CheckForChange(float a, ref float b)
         {
@@ -291,9 +303,11 @@ namespace UnityEngine.Rendering.Universal
             NativeArray<int2> tessOutEdges = new NativeArray<int2>(tessInEdges.Length * 8, Allocator.Temp);
             int tessOutVertexCount = 0;
             int tessOutIndexCount = 0;
-            int tessOutEdgeCount = 0;
 
-            UTess.ModuleHandle.Tessellate(Allocator.Temp, tessInVertices, tessInEdges, ref tessOutVertices, ref tessOutVertexCount, ref tessOutIndices, ref tessOutIndexCount, ref tessOutEdges, ref tessOutEdgeCount);
+#if USING_2DCOMMON
+            int tessOutEdgeCount = 0;
+            U2D.Common.UTess.ModuleHandle.Tessellate(Allocator.Temp, tessInVertices, tessInEdges, ref tessOutVertices, out tessOutVertexCount, ref tessOutIndices, out tessOutIndexCount, ref tessOutEdges, out tessOutEdgeCount, false);
+#endif
 
             // Create falloff geometry with random noise to account for collinear points
             var inputPointCount = shapePath.Length;

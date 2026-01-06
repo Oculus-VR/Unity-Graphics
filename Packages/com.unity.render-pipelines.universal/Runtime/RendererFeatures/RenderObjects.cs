@@ -239,10 +239,5 @@ namespace UnityEngine.Rendering.Universal
                 return;
             renderer.EnqueuePass(renderObjectsPass);
         }
-
-        internal override bool SupportsNativeRenderPass()
-        {
-            return true;
-        }
     }
 }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using Unity.Collections;
 using UnityEngine.SceneManagement;
 using UnityEditor;
-
+using System.Runtime.InteropServices;
 using Brick = UnityEngine.Rendering.ProbeBrickIndex.Brick;
 
 namespace UnityEngine.Rendering
@@ -56,7 +56,7 @@ namespace UnityEngine.Rendering
             ProbeReferenceVolume.instance.globalBounds = globalBounds;
         }
 
-        static List<ProbeVolumePerSceneData> GetPerSceneDataList()
+        internal static List<ProbeVolumePerSceneData> GetPerSceneDataList()
         {
             var fullPerSceneDataList = ProbeReferenceVolume.instance.perSceneDataList;
             if (!isBakingSceneSubset)
@@ -127,17 +127,19 @@ namespace UnityEngine.Rendering
             return true;
         }
 
-        static NativeList<Vector3> RunPlacement(ref bool canceledByUser)
+        static NativeList<Vector3> RunPlacement(ProbeVolumeProfileInfo profileInfo, ProbeReferenceVolume refVolume, ref bool canceledByUser)
         {
+            Debug.Assert(profileInfo != null);
+
             // Overwrite loaded settings with data from profile. Note that the m_BakingSet.profile is already patched up if isFreezingPlacement
-            float prevBrickSize = ProbeReferenceVolume.instance.MinBrickSize();
-            int prevMaxSubdiv = ProbeReferenceVolume.instance.GetMaxSubdivision();
-            Vector3 prevOffset = ProbeReferenceVolume.instance.ProbeOffset();
-            ProbeReferenceVolume.instance.SetSubdivisionDimensions(m_ProfileInfo.minBrickSize, m_ProfileInfo.maxSubdivision, m_ProfileInfo.probeOffset);
+            float prevBrickSize = refVolume.MinBrickSize();
+            int prevMaxSubdiv = refVolume.GetMaxSubdivision();
+            Vector3 prevOffset = refVolume.ProbeOffset();
+            refVolume.SetSubdivisionDimensions(profileInfo.minBrickSize, profileInfo.maxSubdivision, profileInfo.probeOffset);
 
             // All probes need to be baked only once for the whole batch and not once per cell
             // The reason is that the baker is not deterministic so the same probe position baked in two different cells may have different values causing seams artefacts.
-            m_BakingBatch = new BakingBatch(cellCount);
+            m_BakingBatch = new BakingBatch(cellCount, refVolume);
 
             // Run subdivision
             ProbeSubdivisionResult result;
@@ -153,18 +155,20 @@ namespace UnityEngine.Rendering
                 positions = ApplySubdivisionResults(result, ref canceledByUser);
 
             // Restore loaded asset settings
-            ProbeReferenceVolume.instance.SetSubdivisionDimensions(prevBrickSize, prevMaxSubdiv, prevOffset);
+            refVolume.SetSubdivisionDimensions(prevBrickSize, prevMaxSubdiv, prevOffset);
 
             return positions;
         }
 
         static ProbeSubdivisionResult GetWorldSubdivision(ref bool canceledByUser)
         {
-            if (isFreezingPlacement)
-                return GetBricksFromLoaded();
+            var perSceneDataList = GetPerSceneDataList();
 
-            var ctx = PrepareProbeSubdivisionContext();
-            return BakeBricks(ctx, m_BakingBatch.contributors, ref canceledByUser);
+            if (isFreezingPlacement)
+                return GetBricksFromLoaded(perSceneDataList);
+
+            var ctx = PrepareProbeSubdivisionContext(perSceneDataList);
+            return BakeBricks(ctx, m_BakingBatch.contributors, showProgress: true, ref canceledByUser);
         }
 
         static NativeList<Vector3> ApplySubdivisionResults(ProbeSubdivisionResult results, ref bool canceledByUser)
@@ -187,7 +191,8 @@ namespace UnityEngine.Rendering
                 int positionStart = positions.Length;
 
                 ConvertBricksToPositions(bricks, out var probePositions, out var brickSubdivLevels);
-                DeduplicateProbePositions(in probePositions, in brickSubdivLevels, m_BakingBatch, positions, out var probeIndices);
+                if (!DeduplicateProbePositions(in probePositions, in brickSubdivLevels, m_BakingBatch, positions, out var probeIndices))
+                    return new NativeList<Vector3>(Allocator.Persistent);
 
                 BakingCell cell = new BakingCell()
                 {
@@ -206,9 +211,22 @@ namespace UnityEngine.Rendering
             return positions;
         }
 
-        private static void DeduplicateProbePositions(in Vector3[] probePositions, in int[] brickSubdivLevel, BakingBatch batch,
+        // We know that the current limitation on native containers is this. When an integer overflow bug (https://jira.unity3d.com/browse/UUM-113721) has been fixed, we can raise the limit
+        // This and related work is tracked by https://jira.unity3d.com/browse/GFXLIGHT-1738
+        static readonly long k_MaxNumberOfPositions = 67180350;
+
+        static bool DeduplicateProbePositions(in Vector3[] probePositions, in int[] brickSubdivLevel, BakingBatch batch,
             NativeList<Vector3> uniquePositions, out int[] indices)
         {
+            long numberOfPositions = (long)probePositions.Length + batch.positionToIndex.Count;
+            if (numberOfPositions > k_MaxNumberOfPositions)
+            {
+                Debug.LogError($"The number of Adaptive Probe Volume (APV) probes Unity generated exceeds the current system limit of {k_MaxNumberOfPositions} probes per Baking Set. Reduce density either by adjusting the general Probe Spacing in the Lighting window, or by modifying the Adaptive Probe Volumes in the scene to limit where the denser subdivision levels are used.");
+                indices = null;
+
+                return false;
+            }
+
             indices = new int[probePositions.Length];
             int uniqueIndex = batch.positionToIndex.Count;
 
@@ -234,12 +252,20 @@ namespace UnityEngine.Rendering
                     uniqueIndex++;
                 }
             }
+
+            return true;
         }
 
-        static ProbeSubdivisionResult GetBricksFromLoaded()
+        static ProbeSubdivisionResult GetBricksFromLoaded(List<ProbeVolumePerSceneData> dataList)
         {
-            var dataList = GetPerSceneDataList();
             var result = new ProbeSubdivisionResult();
+
+            // We read bricks from the asset rather than using the currently loaded cells.
+            // This is because not all bricks from the previous bake are guaranteed to be currently loaded,
+            // we may for example have hit the max brick count given the selected memory budget.
+            ProbeVolumeStreamableAsset bricksDataAsset = m_BakingSet.cellBricksDataAsset;
+            bricksDataAsset.EnsureAssetLoaded();
+            using NativeArray<Brick> previousBricks = bricksDataAsset.asset.GetData<Brick>();
 
             foreach (var data in dataList)
             {
@@ -252,7 +278,6 @@ namespace UnityEngine.Rendering
                 foreach (var cellIndex in cells)
                 {
                     var cellDesc = m_BakingSet.GetCellDesc(cellIndex);
-                    var cellData = m_BakingSet.GetCellData(cellIndex);
                     var cellPos = cellDesc.position;
 
                     if (!result.scenesPerCells.ContainsKey(cellPos))
@@ -260,7 +285,13 @@ namespace UnityEngine.Rendering
                         result.scenesPerCells[cellPos] = new HashSet<string>();
 
                         var center = new Vector3((cellPos.x + 0.5f) * cellSize, (cellPos.y + 0.5f) * cellSize, (cellPos.z + 0.5f) * cellSize);
-                        result.cells.Add((cellPos, new Bounds(center, cellDimensions), cellData.bricks.ToArray()));
+
+                        var cellStreamingDesc = bricksDataAsset.streamableCellDescs[cellIndex];
+                        int bricksOffset = cellStreamingDesc.offset / bricksDataAsset.elementSize;
+                        int bricksCount = Mathf.Min(cellStreamingDesc.elementCount, cellDesc.bricksCount);
+                        Brick[] bricks = previousBricks.GetSubArray(bricksOffset, bricksCount).ToArray();
+
+                        result.cells.Add((cellPos, new Bounds(center, cellDimensions), bricks));
                     }
                     result.scenesPerCells[cellPos].Add(data.sceneGUID);
                 }
@@ -269,17 +300,14 @@ namespace UnityEngine.Rendering
             return result;
         }
 
-        static internal ProbeSubdivisionContext PrepareProbeSubdivisionContext(bool liveContext = false)
+        static internal ProbeSubdivisionContext PrepareProbeSubdivisionContext(List<ProbeVolumePerSceneData> perSceneDataList, bool liveContext = false)
         {
-            ProbeSubdivisionContext ctx = new ProbeSubdivisionContext();
-
             // Prepare all the information in the scene for baking GI.
             Vector3 refVolOrigin = Vector3.zero; // TODO: This will need to be center of the world bounds.
-            var perSceneDataList = GetPerSceneDataList();
 
             if (m_BakingSet == null)
             {
-                if (perSceneDataList.Count == 0) return ctx;
+                if (perSceneDataList.Count == 0) return new ProbeSubdivisionContext();
                 SetBakingContext(perSceneDataList);
             }
 
@@ -287,11 +315,12 @@ namespace UnityEngine.Rendering
             if (liveContext || m_ProfileInfo == null)
                 profileInfo = GetProfileInfoFromBakingSet(m_BakingSet);
 
+            ProbeSubdivisionContext ctx = new ProbeSubdivisionContext();
             ctx.Initialize(m_BakingSet, profileInfo, refVolOrigin);
             return ctx;
         }
 
-        static internal ProbeSubdivisionResult BakeBricks(ProbeSubdivisionContext ctx, in GIContributors contributors, ref bool canceledByUser)
+        static internal ProbeSubdivisionResult BakeBricks(ProbeSubdivisionContext ctx, in GIContributors contributors, bool showProgress, ref bool canceledByUser)
         {
             var result = new ProbeSubdivisionResult();
 
@@ -306,7 +335,7 @@ namespace UnityEngine.Rendering
                 // subdivide all the cells and generate brick positions
                 foreach (var cell in ctx.cells)
                 {
-                    if (cellIdx++ % freq == 0)  // Don't refresh progress bar at every iteration because it's slow
+                    if (showProgress && cellIdx++ % freq == 0)  // Don't refresh progress bar at every iteration because it's slow
                     {
                         if (EditorUtility.DisplayCancelableProgressBar("Generating Probe Volume Bricks", $"Processing cell {cellIdx} out of {ctx.cells.Count}", Mathf.Lerp(progress0, progress1, cellIdx / (float)ctx.cells.Count)))
                         {

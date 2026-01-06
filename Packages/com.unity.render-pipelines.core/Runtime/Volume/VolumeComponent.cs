@@ -45,7 +45,7 @@ namespace UnityEngine.Rendering
     /// This attribute allows you to add commands to the <b>Add Override</b> popup menu on Volumes,
     /// while also specifying the render pipeline(s) for which the command will be supported.
     /// </summary>
-    [Obsolete(@"VolumeComponentMenuForRenderPipelineAttribute is deprecated. Use VolumeComponentMenu with SupportedOnRenderPipeline instead. #from(2023.1)", false)]
+    [Obsolete(@"VolumeComponentMenuForRenderPipelineAttribute is deprecated. Use VolumeComponentMenu with SupportedOnRenderPipeline instead. #from(2023.1)")]
     public class VolumeComponentMenuForRenderPipeline : VolumeComponentMenu
     {
         /// <summary>
@@ -85,7 +85,7 @@ namespace UnityEngine.Rendering
     /// overrides in the Volume Inspector via the <b>Add Override</b> button.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    [Obsolete("VolumeComponentDeprecated has been deprecated (UnityUpgradable) -> [UnityEngine] UnityEngine.HideInInspector #from(2023.1)", false)]
+    [Obsolete("VolumeComponentDeprecated has been deprecated. #from(2023.1) (UnityUpgradable) -> [UnityEngine] UnityEngine.HideInInspector")]
     public sealed class VolumeComponentDeprecated : Attribute
     {
     }
@@ -157,26 +157,20 @@ namespace UnityEngine.Rendering
         /// The name displayed in the component header. If you do not set a name, Unity generates one from
         /// the class name automatically.
         /// </summary>
-        public string displayName { get; protected set; } = "";
+        [Obsolete("Use DisplayInfo attribute to define a display name instead. #from(6000.3)", false)]
+        public string displayName { get; protected set; }
 
         /// <summary>
         /// The backing storage of <see cref="parameters"/>. Use this for performance-critical work.
         /// </summary>
-        internal readonly List<VolumeParameter> parameterList = new();
-
+        internal VolumeParameter[] parameterList;
+        
         ReadOnlyCollection<VolumeParameter> m_ParameterReadOnlyCollection;
+
         /// <summary>
         /// A read-only collection of all the <see cref="VolumeParameter"/>s defined in this class.
         /// </summary>
-        public ReadOnlyCollection<VolumeParameter> parameters
-        {
-            get
-            {
-                if (m_ParameterReadOnlyCollection == null)
-                    m_ParameterReadOnlyCollection = parameterList.AsReadOnly();
-                return m_ParameterReadOnlyCollection;
-            }
-        }
+        public ReadOnlyCollection<VolumeParameter> parameters => m_ParameterReadOnlyCollection ??= new ReadOnlyCollection<VolumeParameter>(parameterList);
 
         /// <summary>
         /// Extracts all the <see cref="VolumeParameter"/>s defined in this class and nested classes.
@@ -195,26 +189,19 @@ namespace UnityEngine.Rendering
 
             foreach (var field in fields)
             {
-                if (field.FieldType.IsSubclassOf(typeof(VolumeParameter)))
+                var fieldType = field.FieldType;
+                if (fieldType.IsSubclassOf(typeof(VolumeParameter)))
                 {
                     if (filter?.Invoke(field) ?? true)
                     {
                         VolumeParameter volumeParameter = (VolumeParameter)field.GetValue(o);
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
-                        var attr = (DisplayInfoAttribute[])field.GetCustomAttributes(typeof(DisplayInfoAttribute), true);
-                        if (attr.Length != 0)
-                        {
-                            volumeParameter.debugId = attr[0].name;
-                        }
-                        else
-                        {
-                            volumeParameter.debugId = field.Name;
-                        }
+                        VolumeDebugData.AddVolumeParameterDebugId(volumeParameter, field);
 #endif
                         parameters.Add(volumeParameter);
                     }
                 }
-                else if (!field.FieldType.IsArray && field.FieldType.IsClass)
+                else if (!fieldType.IsArray && fieldType.IsClass)
                     FindParameters(field.GetValue(o), parameters, filter);
             }
         }
@@ -228,8 +215,10 @@ namespace UnityEngine.Rendering
         protected virtual void OnEnable()
         {
             // Automatically grab all fields of type VolumeParameter for this instance
-            parameterList.Clear();
-            FindParameters(this, parameterList);
+            ListPool<VolumeParameter>.Get(out var tempList);
+            FindParameters(this, tempList);
+            parameterList = tempList.ToArray();
+            ListPool<VolumeParameter>.Release(tempList);
 
             foreach (var parameter in parameterList)
             {
@@ -290,7 +279,7 @@ namespace UnityEngine.Rendering
         /// </example>
         public virtual void Override(VolumeComponent state, float interpFactor)
         {
-            int count = parameterList.Count;
+            int count = parameterList.Length;
 
             for (int i = 0; i < count; i++)
             {
@@ -351,7 +340,7 @@ namespace UnityEngine.Rendering
 
                 int hash = 17;
 
-                for (int i = 0; i < parameterList.Count; i++)
+                for (int i = 0; i < parameterList.Length; i++)
                     hash = hash * 23 + parameterList[i].GetHashCode();
 
                 return hash;
@@ -364,9 +353,10 @@ namespace UnityEngine.Rendering
         /// <returns>True if any of the volume properites has been overridden.</returns>
         public bool AnyPropertiesIsOverridden()
         {
-            for (int i = 0; i < parameterList.Count; ++i)
+            for (int i = 0; i < parameterList.Length; ++i)
             {
-                if (parameterList[i].overrideState) return true;
+                if (parameterList[i].overrideState) 
+                    return true;
             }
             return false;
         }
@@ -384,7 +374,7 @@ namespace UnityEngine.Rendering
             if (parameterList == null)
                 return;
 
-            for (int i = 0; i < parameterList.Count; i++)
+            for (int i = 0; i < parameterList.Length; i++)
             {
                 if (parameterList[i] != null)
                     parameterList[i].Release();

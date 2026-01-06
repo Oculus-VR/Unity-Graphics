@@ -48,7 +48,7 @@ namespace UnityEditor.VFX
         {
             base.OnEnable();
 
-            if (object.ReferenceEquals(shader, null)) shader = VFXResources.defaultResources.shader;
+            if (object.ReferenceEquals(shader, null)) shader = VFXResources.defaultResources.StaticMeshShader;
 
             if (m_Shader != null)
             {
@@ -146,7 +146,8 @@ namespace UnityEditor.VFX
 
                 var taskDesc = new VFXEditorTaskDesc()
                 {
-                    externalProcessor = shader,
+                    processor = shader,
+                    shaderSourceIndex = -1,
                     values = mappings.ToArray(),
                     type = (UnityEngine.VFX.VFXTaskType)VFXTaskType.Output,
                     model = context
@@ -184,7 +185,7 @@ namespace UnityEditor.VFX
         {
             if (shader == null && m_ShaderName == "Hidden/Default StaticMeshOutput")
             {
-                shader = VFXResources.defaultResources.shader;
+                shader = VFXResources.defaultResources.StaticMeshShader;
                 owners.OfType<VFXStaticMeshOutput>().First().Invalidate(InvalidationCause.kSettingChanged);
             }
 

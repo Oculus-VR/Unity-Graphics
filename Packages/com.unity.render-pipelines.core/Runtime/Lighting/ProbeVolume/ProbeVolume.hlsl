@@ -1,9 +1,9 @@
 #ifndef __PROBEVOLUME_HLSL__
 #define __PROBEVOLUME_HLSL__
 
-#if defined(SHADER_API_MOBILE) || defined(SHADER_API_SWITCH)
+#if defined(SHADER_API_MOBILE) || defined(SHADER_API_SWITCH) || defined(SHADER_API_SWITCH2)
 //#define USE_APV_TEXTURE_HALF
-#endif // SHADER_API_MOBILE || SHADER_API_SWITCH
+#endif // SHADER_API_MOBILE || SHADER_API_SWITCH || SHADER_API_SWITCH2
 
 #include "Packages/com.unity.render-pipelines.core/Runtime/Lighting/ProbeVolume/ShaderVariablesProbeVolumes.cs.hlsl"
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/SphericalHarmonics.hlsl"
@@ -77,14 +77,20 @@ struct APVResources
 
 struct APVResourcesRW
 {
+#ifdef SHADER_API_METAL
+    // We need to use float4 on Metal, since HLSLcc will generate invalid MSL otherwise.
+    // See https://jira.unity3d.com/browse/UUM-127198
     RWTexture3D<float4> L0_L1Rx;
-    RWTexture3D<float4> L1G_L1Ry;
-    RWTexture3D<float4> L1B_L1Rz;
-    RWTexture3D<float4> L2_0;
-    RWTexture3D<float4> L2_1;
-    RWTexture3D<float4> L2_2;
-    RWTexture3D<float4> L2_3;
-    RWTexture3D<float4> ProbeOcclusion;
+#else
+    RWTexture3D<half4> L0_L1Rx;
+#endif
+    RWTexture3D<unorm float4> L1G_L1Ry;
+    RWTexture3D<unorm float4> L1B_L1Rz;
+    RWTexture3D<unorm float4> L2_0;
+    RWTexture3D<unorm float4> L2_1;
+    RWTexture3D<unorm float4> L2_2;
+    RWTexture3D<unorm float4> L2_3;
+    RWTexture3D<unorm float4> ProbeOcclusion;
 };
 
 #ifndef USE_APV_PROBE_OCCLUSION
@@ -749,6 +755,7 @@ void EvaluateAPVL1L2(APVSample apvSample, float3 N, out float3 diffuseLighting)
 // -------------------------------------------------------------
 void EvaluateAdaptiveProbeVolume(APVSample apvSample, float3 normalWS, out float3 bakeDiffuseLighting)
 {
+    bakeDiffuseLighting = float3(0.0f, 0.0f, 0.0f);
     if (apvSample.status != APV_SAMPLE_STATUS_INVALID)
     {
         apvSample.Decode();
@@ -900,6 +907,21 @@ void EvaluateAdaptiveProbeVolume(in float3 posWS, in float3 normalWS, in float3 
     EvaluateAdaptiveProbeVolume(apvSample, normalWS, bakeDiffuseLighting);
 }
 
+void EvaluateAdaptiveProbeVolume(in float3 posWS, in float3 normalWS, in float3 viewDir, in uint renderingLayer,
+    out float3 bakeDiffuseLighting, out float4 probeOcclusion)
+{
+    bakeDiffuseLighting = float3(0.0, 0.0, 0.0);
+
+    APVSample apvSample = SampleAPV(posWS, normalWS, renderingLayer, viewDir);
+    #ifdef USE_APV_PROBE_OCCLUSION
+    probeOcclusion = apvSample.probeOcclusion;
+    #else
+    probeOcclusion = 1;
+    #endif
+
+    EvaluateAdaptiveProbeVolume(apvSample, normalWS, bakeDiffuseLighting);
+}
+
 void EvaluateAdaptiveProbeVolume(in float3 posWS, in float3 normalWS, in float3 viewDir, in float2 positionSS, in uint renderingLayer,
     out float3 bakeDiffuseLighting)
 {
@@ -910,18 +932,24 @@ void EvaluateAdaptiveProbeVolume(in float3 posWS, in float3 normalWS, in float3 
 void EvaluateAdaptiveProbeVolume(in float3 posWS, in float2 positionSS, out float3 bakeDiffuseLighting)
 {
     APVResources apvRes = FillAPVResources();
-
     posWS = AddNoiseToSamplingPosition(posWS, positionSS, 1);
     posWS -= _APVWorldOffset;
+
+    float3 ambientProbe = EvaluateAmbientProbe(0);
 
     float3 uvw;
     if (TryToGetPoolUVW(apvRes, posWS, 0, 0, uvw))
     {
         bakeDiffuseLighting = SAMPLE_TEXTURE3D_LOD(apvRes.L0_L1Rx, s_linear_clamp_sampler, uvw, 0).rgb;
+        if (_APVSkyOcclusionWeight > 0)
+        {
+            float skyOcclusionL0 = kSHBasis0 * SAMPLE_TEXTURE3D_LOD(apvRes.SkyOcclusionL0L1, s_linear_clamp_sampler, uvw, 0).x;
+            bakeDiffuseLighting += ambientProbe * skyOcclusionL0;
+        }
     }
     else
     {
-        bakeDiffuseLighting = EvaluateAmbientProbe(0);
+        bakeDiffuseLighting = ambientProbe;
     }
 }
 

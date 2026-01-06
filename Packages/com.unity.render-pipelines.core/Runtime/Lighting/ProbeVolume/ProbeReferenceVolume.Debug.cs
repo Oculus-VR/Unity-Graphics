@@ -246,7 +246,7 @@ namespace UnityEngine.Rendering
         /// </summary>
         /// <param name="camera">The <see cref="Camera"/></param>
         /// <param name="exposureTexture">Texture containing the exposure value for this frame.</param>
-        [Obsolete("Use the other override to support sampling offset in debug modes.")]
+        [Obsolete("Use the other override to support sampling offset in debug modes. #from(6000.0)")]
         public void RenderDebug(Camera camera, Texture exposureTexture)
         {
             RenderDebug(camera, null, exposureTexture);
@@ -566,7 +566,11 @@ namespace UnityEngine.Rendering
                     displayName = "Max Subdivisions Displayed",
                     tooltip = "The highest (most dense) probe subdivision level displayed in the debug view.",
                     getter = () => probeVolumeDebug.maxSubdivToVisualize,
-                    setter = (v) => probeVolumeDebug.maxSubdivToVisualize = Mathf.Max(0, Mathf.Min(v, GetMaxSubdivision() - 1)),
+                    setter = (v) =>
+                    {
+                        // If no baked data, force to set the value as kMaxSubdivisionLevels for UX.
+                        probeVolumeDebug.maxSubdivToVisualize = GetMaxSubdivision() == 0 ? ProbeBrickIndex.kMaxSubdivisionLevels : Mathf.Max(0, Mathf.Min(v, GetMaxSubdivision() - 1));
+                    },
                     min = () => 0,
                     max = () => Mathf.Max(0, GetMaxSubdivision() - 1),
                 });
@@ -823,24 +827,28 @@ namespace UnityEngine.Rendering
             if (!m_ProbeReferenceVolumeInit || !probeVolumeDebug.displayIndexFragmentation)
                 return;
 
-            using (var builder = renderGraph.AddRenderPass<RenderFragmentationOverlayPassData>("APVFragmentationOverlay", out var passData))
+            using (var builder = renderGraph.AddUnsafePass<RenderFragmentationOverlayPassData>("APVFragmentationOverlay", out var passData))
             {
                 passData.debugOverlay = debugOverlay;
                 passData.debugFragmentationMaterial = m_DebugFragmentationMaterial;
-                passData.colorBuffer = builder.UseColorBuffer(colorBuffer, 0);
-                passData.depthBuffer = builder.UseDepthBuffer(depthBuffer, DepthAccess.ReadWrite);
+                passData.colorBuffer = colorBuffer;
+                builder.SetRenderAttachment(colorBuffer, 0);
+                passData.depthBuffer = depthBuffer;
+                builder.SetRenderAttachmentDepth(depthBuffer, AccessFlags.ReadWrite);
                 passData.debugFragmentationData = m_Index.GetDebugFragmentationBuffer();
                 passData.chunkCount = passData.debugFragmentationData.count;
 
                 builder.SetRenderFunc(
-                    (RenderFragmentationOverlayPassData data, RenderGraphContext ctx) =>
+                    static (RenderFragmentationOverlayPassData data, UnsafeGraphContext ctx) =>
                     {
+                        var natCmd = CommandBufferHelpers.GetNativeCommandBuffer(ctx.cmd);
+
                         var mpb = ctx.renderGraphPool.GetTempMaterialPropertyBlock();
 
-                        data.debugOverlay.SetViewport(ctx.cmd);
+                        data.debugOverlay.SetViewport(natCmd);
                         mpb.SetInt("_ChunkCount", data.chunkCount);
                         mpb.SetBuffer("_DebugFragmentation", data.debugFragmentationData);
-                        ctx.cmd.DrawProcedural(Matrix4x4.identity, data.debugFragmentationMaterial, 0, MeshTopology.Triangles, 3, 1, mpb);
+                        natCmd.DrawProcedural(Matrix4x4.identity, data.debugFragmentationMaterial, 0, MeshTopology.Triangles, 3, 1, mpb);
                         data.debugOverlay.Next();
                     });
             }
@@ -1122,7 +1130,8 @@ namespace UnityEngine.Rendering
             out float[] validity,
             out Vector4[] occlusion,
             out Vector4[] skyOcclusion,
-            out Vector3[] skyOcclusionDirections)
+            out Vector3[] skyOcclusionDirections,
+            out Vector3[] virtualOffset)
         {
             positions = null;
             irradiance = null;
@@ -1130,6 +1139,7 @@ namespace UnityEngine.Rendering
             occlusion = null;
             skyOcclusion = null;
             skyOcclusionDirections = null;
+            virtualOffset = null;
 
             var positionsList = new List<Vector3>();
             var irradianceList = new List<SphericalHarmonicsL2>();
@@ -1137,6 +1147,7 @@ namespace UnityEngine.Rendering
             var occlusionList = new List<Vector4>();
             var skyOcclusionList = new List<Vector4>();
             var skyOcclusionDirectionList = new List<Vector3>();
+            var virtualOffsetList = new List<Vector3>();
 
             foreach (var cell in cells.Values)
             {
@@ -1178,12 +1189,16 @@ namespace UnityEngine.Rendering
 
                                 positionsList.Add(position);
                                 validityList.Add(cell.data.validity[probeFlatIndex]);
+
                                 var occlusionOffset = probeFlatIndex * 4;
-                                float occlusionValue0 = scenarioData.probeOcclusion[occlusionOffset] / 255.0f;
-                                float occlusionValue1 = scenarioData.probeOcclusion[occlusionOffset+1] / 255.0f;
-                                float occlusionValue2 = scenarioData.probeOcclusion[occlusionOffset+2] / 255.0f;
-                                float occlusionValue3 = scenarioData.probeOcclusion[occlusionOffset+3] / 255.0f;
-                                occlusionList.Add(new Vector4(occlusionValue0, occlusionValue1, occlusionValue2, occlusionValue3));
+                                if (scenarioData.probeOcclusion.Length != 0)
+                                {
+                                    float occlusionValue0 = scenarioData.probeOcclusion[occlusionOffset] / 255.0f;
+                                    float occlusionValue1 = scenarioData.probeOcclusion[occlusionOffset+1] / 255.0f;
+                                    float occlusionValue2 = scenarioData.probeOcclusion[occlusionOffset+2] / 255.0f;
+                                    float occlusionValue3 = scenarioData.probeOcclusion[occlusionOffset+3] / 255.0f;
+                                    occlusionList.Add(new Vector4(occlusionValue0, occlusionValue1, occlusionValue2, occlusionValue3));
+                                }
 
                                 if (cell.data.skyOcclusionDataL0L1.Length > 0)
                                 {
@@ -1201,6 +1216,12 @@ namespace UnityEngine.Rendering
                                     var skyOccSDI = cell.data.skyShadingDirectionIndices[probeFlatIndex];
                                     var skyOcclusionDirection = DecodeSkyShadingDirection(skyOccSDI);
                                     skyOcclusionDirectionList.Add(skyOcclusionDirection);
+                                }
+
+                                if (cell.data.offsetVectors.Length > 0)
+                                {
+                                    var offsetValue = cell.data.offsetVectors[probeFlatIndex];
+                                    virtualOffsetList.Add(offsetValue);
                                 }
 
                                 Vector4 L0_L1Rx  = Vector4.zero;
@@ -1304,6 +1325,7 @@ namespace UnityEngine.Rendering
             occlusion = occlusionList.ToArray();
             skyOcclusion = skyOcclusionList.ToArray();
             skyOcclusionDirections = skyOcclusionDirectionList.ToArray();
+            virtualOffset = virtualOffsetList.ToArray();
 
             return true;
         }

@@ -18,8 +18,18 @@ namespace UnityEditor.VFX.Test
 
         private static readonly string kSampleExpectedPath = "Assets/Samples";
 
+        [Test]
+        public void ImportSampleDependencies_Reflection_Still_Valid()
+        {
+            var packageInfo = PackageManager.PackageInfo.FindForAssetPath(VisualEffectGraphPackageInfo.assetPackagePath);
+            var sample = Sample.FindByPackage(VisualEffectGraphPackageInfo.name, null).FirstOrDefault();
+            Assert.IsNotNull(packageInfo);
+            Assert.IsNotNull(sample);
+            VFXTemplateHelperInternal.ImportSampleDependencies(packageInfo, sample);
+        }
+
         [SerializeField]
-        private static string m_CurrentMatch;
+        private string m_CurrentMatch;
 
         [UnityTest, Timeout(10 * 60 * 1000)]
         public IEnumerator Check_Additional_Doesnt_Generate_Any_Errors([ValueSource(nameof(kAdditionalSampleMatches))] string expectedMatch)
@@ -55,14 +65,7 @@ namespace UnityEditor.VFX.Test
             //Workaround for UUM-63664
             var current = matching[0];
             {
-                foreach (var extension in PackageManagerExtensions.Extensions)
-                    extension.OnPackageSelectionChange(searchRequest.Result[0]);
-
-                //Force import of dependencies before importing anything else
-                var samplePath = Path.Combine(kSampleExpectedPath, "Visual Effect Graph", version, current.displayName);
-                Directory.CreateDirectory(samplePath);
-                File.WriteAllText(samplePath + "/dummy.txt", "UUM-63664 workaround for test.");
-                AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+                VFXTemplateHelperInternal.ImportSampleDependencies(searchRequest.Result[0], current);
             }
 
             var result = current.Import(Sample.ImportOptions.HideImportWindow | Sample.ImportOptions.OverridePreviousImports);
@@ -85,11 +88,11 @@ namespace UnityEditor.VFX.Test
                     {
                         var dataParticle = initialize.GetData() as VFXDataParticle;
                         Assert.IsNotNull(dataParticle);
-                        Assert.AreEqual(BoundsSettingMode.Manual, dataParticle.boundsMode);
+                        Assert.AreEqual(BoundsSettingMode.Manual, dataParticle.boundsMode, "Failure at " + path);
                     }
 
-                    Assert.IsTrue(graph.children.OfType<VFXAbstractRenderedOutput>().Any());
-                    Assert.IsTrue(graph.UIInfos.stickyNoteInfos.Length > 0);
+                    Assert.IsTrue(graph.children.OfType<VFXAbstractRenderedOutput>().Any(), "Failure at " + path);
+                    Assert.IsTrue(graph.UIInfos.stickyNoteInfos.Length > 0, "Failure at " + path);
                 }
             }
             m_CurrentMatch = null;

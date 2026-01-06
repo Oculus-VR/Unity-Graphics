@@ -374,19 +374,7 @@ namespace UnityEditor.VFX
                         AssetDatabase.StartAssetEditing();
                     }
                     var vfxResource = VisualEffectResource.GetResourceAtPath(path);
-                    if (vfxResource != null)
-                    {
-                        vfxResource.GetOrCreateGraph().UpdateSubAssets();
-                        try
-                        {
-                            VFXGraph.compilingInEditMode = vfxResource.GetOrCreateGraph().GetCompilationMode() == VFXCompilationMode.Edition;
-                            vfxResource.WriteAsset(); // write asset as the AssetDatabase won't do it.
-                        }
-                        finally
-                        {
-                            VFXGraph.compilingInEditMode = false;
-                        }
-                    }
+                    vfxResource?.WriteAssetWithSubAssets();
                 }
             }
             finally
@@ -430,6 +418,13 @@ namespace UnityEditor.VFX
         public static void UpdateSubAssets(this VisualEffectResource resource)
         {
             resource.GetOrCreateGraph().UpdateSubAssets();
+        }
+
+        public static void WriteAssetWithSubAssets(this VisualEffectResource resource)
+        {
+            var graph = resource.GetOrCreateGraph();
+            graph.UpdateSubAssets();
+            resource.WriteAsset();
         }
 
         public static bool IsAssetEditable(this VisualEffectResource resource)
@@ -486,15 +481,12 @@ namespace UnityEditor.VFX
         // 16: Add a collection of custom attributes (to be listed in blackboard)
         // 17: New Flipbook player and split the different Flipbook modes in UVMode into separate variables
         // 18: Change ProbabilitySampling m_IntegratedRandomDeprecated changed to m_Mode
-        public static readonly int CurrentVersion = 18;
+        // 19: Change sticky notes theme serialization
+        public static readonly int CurrentVersion = 19;
 
-        [NonSerialized]
-        internal static bool compilingInEditMode = false;
-
-        public override void OnEnable()
+        void OnDestroy()
         {
-            base.OnEnable();
-            m_ExpressionGraphDirty = true;
+            ClearPreviewAssets();
         }
 
         public override void OnSRPChanged()
@@ -963,6 +955,62 @@ namespace UnityEditor.VFX
             UpdateSubAssets(); //Force remove no more referenced object from the asset & *important* register as persistent new dependencies
         }
 
+        internal void SyncContextLetters()
+        {
+            Dictionary<VFXData, List<VFXContext>> systems = new Dictionary<VFXData, List<VFXContext>>();
+
+            var models = new HashSet<ScriptableObject>();
+            CollectDependencies(models, false);
+            var allContexts = models.OfType<VFXContext>();
+            foreach (var context in allContexts)
+            {
+                var data = context.GetData();
+                if (data != null)
+                {
+                    if (systems.TryGetValue(data, out var systemContexts))
+                    {
+                        systemContexts.Add(context);
+                    }
+                    else
+                    {
+                        systems[data] = new List<VFXContext>() { context };
+                    }
+                }
+            }
+            foreach (var system in systems)
+            {
+                VFXContextType type = VFXContextType.None;
+                VFXContext prevContext = null;
+                char letter = 'A';
+                foreach (var context in system.Value.OrderBy(t => t.contextType))
+                {
+                    if (context.contextType == type)
+                    {
+                        if (prevContext != null)
+                        {
+                            letter = 'A';
+                            prevContext.letter = letter;
+                            prevContext = null;
+                        }
+
+                        if (letter == 'Z') // loop back to A in the unlikely event that there are more than 26 contexts
+                            letter = 'a';
+                        else if (letter == 'z')
+                            letter = 'α';
+                        else if (letter == 'ω')
+                            letter = 'A';
+                        context.letter = ++letter;
+                    }
+                    else
+                    {
+                        context.letter = '\0';
+                        prevContext = context;
+                    }
+                    type = context.contextType;
+                }
+            }
+        }
+
         private IEnumerable<VFXModel> GetCustomAttributeUsage(string attributeName)
         {
             bool IsAttributeUsed(IVFXAttributeUsage attributeUsage, string attrName)
@@ -1036,14 +1084,6 @@ namespace UnityEditor.VFX
             }
         }
 
-        public void ClearCompileData()
-        {
-            m_CompiledData = null;
-
-
-            m_ExpressionValuesDirty = true;
-        }
-
         [SerializeField]
         List<string> m_ImportDependencies;
 
@@ -1104,6 +1144,7 @@ namespace UnityEditor.VFX
 
             if ((cause == InvalidationCause.kStructureChanged ||
                 cause == InvalidationCause.kParamChanged ||
+                cause == InvalidationCause.kMaterialChanged ||
                 cause == InvalidationCause.kSettingChanged ||
                 cause == InvalidationCause.kSpaceChanged ||
                 cause == InvalidationCause.kConnectionChanged ||
@@ -1139,7 +1180,7 @@ namespace UnityEditor.VFX
 
         public void SetCompilationMode(VFXCompilationMode mode, bool reimport = true)
         {
-            if (m_CompilationMode != mode)
+            if (m_CompilationMode != mode && !GetResource().isSubgraph)
             {
                 m_CompilationMode = mode;
                 SetExpressionGraphDirty();
@@ -1398,13 +1439,156 @@ namespace UnityEditor.VFX
             SanitizeGraph();
         }
 
+        internal VFXGraphCompiledData.VFXCompileOutput Compile()
+        {
+            return compiledData.Compile(m_CompilationMode, VFXViewPreference.generateShadersWithDebugSymbols || m_ForceShaderDebugSymbols, VFXAnalytics.GetInstance());
+        }
+
+        private static System.Reflection.PropertyInfo kGetAllowLocking = typeof(Material).GetProperty("allowLocking", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        private List<UnityObject> m_PreviewAsset = new();
+        private void ClearPreviewAssets()
+        {
+            foreach (var previewAsset in m_PreviewAsset)
+            {
+                if (!previewAsset.hideFlags.HasFlag(HideFlags.HideAndDontSave))
+                    Debug.LogError("Unexpected preview asset: " + previewAsset);
+
+                UnityObject.DestroyImmediate(previewAsset, true);
+            }
+            m_PreviewAsset.Clear();
+        }
+
+        internal UnityObject[] CompileAndUpdateAsset(VisualEffectAsset asset)
+        {
+            ClearPreviewAssets();
+
+            SetExpressionGraphDirty();
+            var compilationOutput = RecompileIfNeeded(false, true);
+            if (compilationOutput.success)
+            {
+                //This following behavior must be in sync with VisualEffectImporter::GenerateAssetData
+                bool instancingEnabled = asset.instancingMode != VFXInstancingMode.Disabled;
+
+                var overridenSystemDesc = new List<VFXEditorSystemDesc>();
+                foreach (var system in compilationOutput.systemDesc)
+                {
+                    var overridenTask = new List<VFXEditorTaskDesc>();
+                    if (system.tasks != null) foreach (var task in system.tasks)
+                    {
+                        UnityObject currentProcessor = null;
+                        if (task.shaderSourceIndex >= 0)
+                        {
+                            var shaderSource = compilationOutput.shaderSourceDesc[task.shaderSourceIndex];
+                            if (shaderSource.compute)
+                            {
+                                currentProcessor = ShaderUtil.CreateComputeShaderAsset(shaderSource.source);
+                                m_PreviewAsset.Add(currentProcessor);
+                                currentProcessor.hideFlags = HideFlags.HideAndDontSave;
+                            }
+                            else
+                            {
+                                currentProcessor = ShaderUtil.CreateShaderAsset(shaderSource.source);
+                                m_PreviewAsset.Add(currentProcessor);
+                                currentProcessor.name = shaderSource.name;
+                                currentProcessor.hideFlags = HideFlags.HideAndDontSave;
+                            }
+                        }
+                        else if (task.processor is Shader || task.processor is MonoScript)
+                        {
+                            currentProcessor = task.processor;
+                        }
+                        else if (task.processor != null)
+                        {
+                            throw new InvalidOperationException("Unexpected processor type:" + task.processor.GetType());
+                        }
+
+                        if (currentProcessor != null && currentProcessor is Shader shader)
+                        {
+                            Material writableMaterial;
+
+                            bool systemHasInstancing = instancingEnabled && system.flags.HasFlag(VFXSystemFlag.SystemUsesInstancedRendering);
+                            if (!task.usesMaterialVariant)
+                            {
+                                writableMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                                m_PreviewAsset.Add(writableMaterial);
+                                writableMaterial.name = shader.name;
+                                writableMaterial.enableInstancing = systemHasInstancing;
+                            }
+                            else
+                            {
+                                var parentMaterial = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                                m_PreviewAsset.Add(parentMaterial);
+                                parentMaterial.name = shader.name + "_Parent";
+                                parentMaterial.enableInstancing = systemHasInstancing;
+                                parentMaterial.SetPropertyLock(1 << 2, true); //Matches MaterialSerializedProperty.EnableInstancingVariants
+
+                                writableMaterial = new Material(parentMaterial)
+                                {
+                                    parent = parentMaterial,
+                                    hideFlags = HideFlags.HideAndDontSave
+                                };
+                                parentMaterial.name = shader.name;
+                                kGetAllowLocking.SetValue(writableMaterial, false);
+                                m_PreviewAsset.Add(writableMaterial);
+                            }
+
+                            //OnSetupMaterial equivalent
+                            var model = task.model;
+                            if (model is IVFXSubRenderer subRenderer)
+                            {
+                                subRenderer.SetupMaterial(writableMaterial);
+                            }
+
+                            currentProcessor = writableMaterial;
+                        }
+
+                        var newTask = task;
+                        newTask.processor = currentProcessor;
+                        overridenTask.Add(newTask);
+                    }
+
+                    var newSystem = system;
+                    if (system.tasks != null && system.tasks.Length != overridenTask.Count)
+                        throw new InvalidOperationException("Unexpected copy of task");
+
+                    newSystem.tasks = overridenTask.ToArray();
+                    overridenSystemDesc.Add(newSystem);
+                }
+
+                if (compilationOutput.systemDesc.Length != overridenSystemDesc.Count)
+                    throw new InvalidOperationException("Unexpected copy of system");
+
+                var desc = new VisualEffectAssetDesc()
+                {
+                    sheet = compilationOutput.sheet,
+                    systemDesc = overridenSystemDesc.ToArray(),
+                    eventDesc = compilationOutput.eventDesc,
+                    gpuBufferDesc = compilationOutput.gpuBufferDesc,
+                    cpuBufferDesc = compilationOutput.cpuBufferDesc,
+                    temporaryBufferDesc = compilationOutput.temporaryBufferDesc,
+                    shaderSourceDesc = compilationOutput.shaderSourceDesc,
+                    rendererSettings = compilationOutput.rendererSettings,
+                    compilationMode = m_CompilationMode,
+                    version = compilationOutput.version
+                };
+
+                VisualEffectAssetUtility.SetVisualEffectAssetDesc(asset, desc);
+            }
+            else
+            {
+                //LogError is already handled by "Unity cannot compile the VisualEffectAsset", only empty asset
+                VisualEffectAssetUtility.SetVisualEffectAssetDesc(asset, new VisualEffectAssetDesc() { compilationMode = m_CompilationMode });
+            }
+            return m_PreviewAsset.ToArray();
+        }
+
         public void CompileForImport()
         {
-            if (compilingInEditMode)
-                m_CompilationMode = VFXCompilationMode.Edition;
+            bool isSubgraph = GetResource().isSubgraph;
 
             SyncCustomAttributes();
-            if (!GetResource().isSubgraph)
+            if (!isSubgraph)
             {
                 // Check Graph Before Import can be needed to synchronize modified shaderGraph
                 foreach (var child in children)
@@ -1413,15 +1597,49 @@ namespace UnityEditor.VFX
                 // Graph must have been sanitized at this point by the VFXGraphPreprocessor.OnPreprocess
                 BuildSubgraphDependencies();
                 PrepareSubgraphs();
+                //Need to sync the context letters after PrepareSubgraphs because it recreates the subgraph's contexts
+                SyncContextLetters();
 
-                compiledData.Compile(m_CompilationMode, m_ForceShaderValidation, VFXViewPreference.generateShadersWithDebugSymbols || m_ForceShaderDebugSymbols, VFXAnalytics.GetInstance());
+                var compilationOutput = Compile();
+
+                var resource = GetResource();
+                if (compilationOutput.success)
+                {
+                    resource.SetRuntimeData(
+                        compilationOutput.sheet,
+                        compilationOutput.systemDesc,
+                        compilationOutput.eventDesc,
+                        compilationOutput.gpuBufferDesc,
+                        compilationOutput.cpuBufferDesc,
+                        compilationOutput.temporaryBufferDesc,
+                        compilationOutput.shaderSourceDesc,
+                        compilationOutput.rendererSettings.shadowCastingMode,
+                        compilationOutput.rendererSettings.motionVectorGenerationMode,
+                        compilationOutput.instancingDisabledReason,
+                        m_CompilationMode,
+                        compilationOutput.version);
+
+                    resource.ClearSourceDependencies();
+                    foreach (var dependency in compilationOutput.sourceDependencies)
+                        resource.AddSourceDependency(dependency);
+                }
+                else
+                {
+                    resource.ClearRuntimeData();
+                }
+
             }
             m_ExpressionGraphDirty = false;
             m_ExpressionValuesDirty = false;
         }
 
-        public void RecompileIfNeeded(bool preventRecompilation = false, bool preventDependencyRecompilation = false)
+        public VFXGraphCompiledData.VFXCompileOutput RecompileIfNeeded(bool preventRecompilation = false, bool preventDependencyRecompilation = false)
         {
+            var output = new VFXGraphCompiledData.VFXCompileOutput
+            {
+                success = false
+            };
+
             SanitizeGraph();
 
             if (!GetResource().isSubgraph)
@@ -1431,8 +1649,7 @@ namespace UnityEditor.VFX
                 {
                     BuildSubgraphDependencies();
                     PrepareSubgraphs();
-
-                    compiledData.Compile(m_CompilationMode, m_ForceShaderValidation, VFXViewPreference.generateShadersWithDebugSymbols || m_ForceShaderDebugSymbols, VFXAnalytics.GetInstance());
+                    output = Compile();
                 }
                 else
                 {
@@ -1465,6 +1682,7 @@ namespace UnityEditor.VFX
             }
 
             errorManager.GenerateErrors();
+            return output;
         }
 
         public void RegisterCompileError(string error, string description, VFXModel model)
@@ -1494,19 +1712,14 @@ namespace UnityEditor.VFX
 
         [NonSerialized]
         private bool m_GraphSanitized = false;
-        [NonSerialized]
         private bool m_ExpressionGraphDirty = true;
-        [NonSerialized]
         private bool m_ExpressionValuesDirty = true;
-        [NonSerialized]
         private bool m_DependentDirty = true;
-        [NonSerialized]
         private bool m_MaterialsDirty = false;
-        [NonSerialized]
         private bool m_CustomAttributesDirty = false;
 
-        [NonSerialized]
         private VFXGraphCompiledData m_CompiledData;
+
         private VFXCompilationMode m_CompilationMode = VFXCompilationMode.Runtime;
         private bool m_ForceShaderDebugSymbols = false;
         private bool m_ForceShaderValidation = false;
@@ -1535,13 +1748,13 @@ namespace UnityEditor.VFX
         {
             visualEffectResource.ClearImportDependencies();
 
-            var dependencies = new HashSet<int>();
+            var dependencies = new HashSet<EntityId>();
             GetImportDependentAssets(dependencies);
 
             var guids = new HashSet<string>();
             foreach (var dependency in dependencies)
             {
-                if (dependency == 0)
+                if (dependency == EntityId.None)
                     continue;
 
                 if (AssetDatabase.TryGetGUIDAndLocalFileIdentifier(dependency, out string guid, out long localId))

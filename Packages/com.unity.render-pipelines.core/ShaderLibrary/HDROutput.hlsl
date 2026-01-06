@@ -21,9 +21,9 @@ int _HDREncoding;
 // ACES2065-1: A gamut that covers the full XYZ space, part of the ACES specs. Mostly used for storage since it is harder to work with than ACEScg.
 // WCG: Wide color gamut. This is defined as a color gamut that is wider than the Rec709 one.
 // LMS: A color space represented by the response of the three cones of human eye (responsivity peaks Long, Medium, Short)
-// OETF (Optical Eelectro Transfer Function): This is a function to goes from optical (linear light) to electro (signal transmitted to the display).
-// EOTF (Eelectro Optical  Transfer Function): The inverse of the OETF, used by the TV/Monitor.
-// EETF (Eelectro-Electro Transfer Function): This is generally just a remapping function, we use the BT2390 EETF to perform range reduction based on the actual display.
+// OETF (Optical-Electro Transfer Function): This is a function to goes from optical (linear light) to electro (signal transmitted to the display).
+// EOTF (Electro-Optical Transfer Function): The inverse of the OETF, used by the TV/Monitor.
+// EETF (Electro-Electro Transfer Function): This is generally just a remapping function, we use the BT2390 EETF to perform range reduction based on the actual display.
 // PQ (Perceptual Quantizer): the EOTF used for HDR10 TVs. It works in the range [0, 10000] nits. Important to keep in mind that this represents an absolute intensity and not relative as for SDR. Sometimes this can be referenced as ST2084. As OETF we'll use the inverse of the PQ curve.
 // scRGB: a wide color gamut that uses same color space and white point as sRGB, but with much wider coordinates. Used on windows when 16 bit depth is selected. Most of the color space is imaginary colors. Works differently than with PQ (encoding is linear).
 // G22 (Gamma 2.2): the EOTF used for exact gamma 2.2 curve.
@@ -151,6 +151,17 @@ float3 RotateRec2020ToP3D65(float3 Rec2020Input)
     return mul(Rec2020ToP3D65Mat, Rec2020Input);
 }
 
+float3 RotateP3D65ToRec709(float3 P3D65Input)
+{
+    static const float3x3 P3D65ToRec709Mat = float3x3(
+        1.224940, -0.224940,  0.000000,
+       -0.042057,  1.042057,  0.000000,
+       -0.019638, -0.078635,  1.098274
+    );
+
+    return mul(P3D65ToRec709Mat, P3D65Input);
+}
+
 float3 RotateP3D65ToRec2020(float3 P3D65Input)
 {
     static const float3x3 P3D65ToRec2020Mat = float3x3(
@@ -192,6 +203,22 @@ float3 RotateRec2020ToOutputSpace(float3 Rec2020Input)
     else // HDRCOLORSPACE_REC709
     {
         return RotateRec2020ToRec709(Rec2020Input);
+    }
+}
+
+float3 RotateOutputSpaceToRec709(float3 ODTInput)
+{
+    if (_HDRColorspace == HDRCOLORSPACE_REC2020)
+    {
+        return RotateRec2020ToRec709(ODTInput);
+    }
+    else if (_HDRColorspace == HDRCOLORSPACE_P3D65)
+    {
+        return RotateP3D65ToRec709(ODTInput);
+    }
+    else // HDRCOLORSPACE_REC709
+    {
+        return ODTInput;
     }
 }
 

@@ -41,6 +41,7 @@ namespace UnityEditor.Rendering.HighDefinition
         public SerializedProperty maximumWaterDecalCount;
         public SerializedProperty waterScriptInteractionsMode;
         public SerializedProperty waterFullCPUSimulation;
+        public SerializedProperty waterCausticsMeshResolution;
 
         public SerializedProperty supportComputeThickness;
         public SerializedProperty computeThicknessResolution;
@@ -49,6 +50,7 @@ namespace UnityEditor.Rendering.HighDefinition
         public SerializedProperty supportLightLayers;
         public SerializedProperty supportedLitShaderMode;
         public SerializedProperty colorBufferFormat;
+        public SerializedProperty depthBufferFormat;
         public SerializedProperty supportCustomPass;
         public SerializedProperty supportVariableRateShading;
         public SerializedProperty customBufferFormat;
@@ -101,10 +103,10 @@ namespace UnityEditor.Rendering.HighDefinition
         public SerializedScalableSetting maximumLODLevel;
 
 #pragma warning disable 618 // Type or member is obsolete
-        [FormerlySerializedAs("enableUltraQualitySSS"), FormerlySerializedAs("increaseSssSampleCount"), Obsolete("For data migration")]
+        [FormerlySerializedAs("enableUltraQualitySSS"), FormerlySerializedAs("increaseSssSampleCount"), Obsolete("For data migration. #from(2021.1)")]
         SerializedProperty m_ObsoleteincreaseSssSampleCount;
 
-        [FormerlySerializedAs("supportDitheringCrossFade"), Obsolete("Merged with LOD Quality Setting")]
+        [FormerlySerializedAs("supportDitheringCrossFade"), Obsolete("Merged with LOD Quality Setting. #from(2023.2)")]
         private SerializedProperty m_ObsoleteSupportDitheringCrossFade;
 #pragma warning restore 618
 
@@ -134,6 +136,7 @@ namespace UnityEditor.Rendering.HighDefinition
             maximumWaterDecalCount = root.Find((RenderPipelineSettings s) => s.maximumWaterDecalCount);
             waterScriptInteractionsMode = root.Find((RenderPipelineSettings s) => s.waterScriptInteractionsMode);
             waterFullCPUSimulation = root.Find((RenderPipelineSettings s) => s.waterFullCPUSimulation);
+            waterCausticsMeshResolution = root.Find((RenderPipelineSettings s) => s.waterCausticsMeshResolution);
 
             supportComputeThickness = root.Find((RenderPipelineSettings s) => s.supportComputeThickness);
             computeThicknessResolution = root.Find((RenderPipelineSettings s) => s.computeThicknessResolution);
@@ -141,6 +144,7 @@ namespace UnityEditor.Rendering.HighDefinition
 
             supportLightLayers = root.Find((RenderPipelineSettings s) => s.supportLightLayers);
             colorBufferFormat = root.Find((RenderPipelineSettings s) => s.colorBufferFormat);
+            depthBufferFormat = root.Find((RenderPipelineSettings s) => s.depthBufferFormat);
             customBufferFormat = root.Find((RenderPipelineSettings s) => s.customBufferFormat);
             renderingLayerMaskBuffer = root.Find((RenderPipelineSettings s) => s.renderingLayerMaskBuffer);
             supportCustomPass = root.Find((RenderPipelineSettings s) => s.supportCustomPass);

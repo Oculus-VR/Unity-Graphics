@@ -25,7 +25,7 @@ public class HDRP_Runtime_Graphics_Tests
     )]
     [IgnoreGraphicsTest(
         "001-HDTemplate$",
-        "Huge divergence: missing textures, wrong tonemapping, wrong reflections, etc. Needs further investigation.",
+        "Small issue with incorrect rendering on bubble. Some half overflow issue and flickering artifacts. Will need image update when fixed",
         runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.Switch }
     )]
     [IgnoreGraphicsTest(
@@ -35,33 +35,20 @@ public class HDRP_Runtime_Graphics_Tests
         graphicsDeviceTypes: new GraphicsDeviceType[] { GraphicsDeviceType.Vulkan }
     )]
     [IgnoreGraphicsTest(
+        "001-HDTemplate$",
+        "https://jira.unity3d.com/browse/UUM-105789",
+        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.PS5, RuntimePlatform.WindowsPlayer }
+    )]
+    [IgnoreGraphicsTest(
         "002-HDMaterials$",
         "",
         graphicsDeviceTypes: new GraphicsDeviceType[] { GraphicsDeviceType.Metal }
-    )]
-    [IgnoreGraphicsTest(
-        "002-HDMaterials$",
-        "Multiple materials are fully black or completely missing.",
-        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.Switch }
-    )]
-    [IgnoreGraphicsTest(
-        "003-VirtualTexturing$",
-        "Unstable: https://jira.unity3d.com/browse/UUM-51336"
-    )]
-    [IgnoreGraphicsTest(
-        "003-VirtualTexturing-Forward$",
-        "Unstable: https://jira.unity3d.com/browse/UUM-51336"
     )]
     [IgnoreGraphicsTest(
         "004-CloudsFlaresDecals$",
         "Area with cloud-coverage is blue on Intel-based MacOS (CI).",
         graphicsDeviceTypes: new[] { GraphicsDeviceType.Metal },
         architectures: new [] { Architecture.X64 }
-    )]
-    [IgnoreGraphicsTest(
-        "006-Compositor$",
-        "Quite different compositing results from the reference (strong shadows on the BG + character not-so blue).",
-        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.Switch }
     )]
     [IgnoreGraphicsTest(
         "007-BasicAPV$",
@@ -71,13 +58,13 @@ public class HDRP_Runtime_Graphics_Tests
     )]
     [IgnoreGraphicsTest(
         "011-HighQualityLines$",
-        "Getting NVN_QUEUE_GET_ERROR_RESULT_GPU_ERROR_MMU_FAULT GPU Error. Needs further investigation.",
-        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.Switch }
+        "Getting NVN_QUEUE_GET_ERROR_RESULT_GPU_ERROR_MMU_FAULT GPU Error. Tracked in https://jira.unity3d.com/browse/UUM-127274.",
+        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.Switch, RuntimePlatform.Switch2 }
     )]
     [IgnoreGraphicsTest(
         "012-SVL_Check$",
         "https://jira.unity3d.com/browse/UUM-70791",
-        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.PS4, RuntimePlatform.PS5, RuntimePlatform.Switch }
+        runtimePlatforms: new RuntimePlatform[] { RuntimePlatform.PS4, RuntimePlatform.PS5, RuntimePlatform.Switch, RuntimePlatform.Switch2 }
     )]
     public IEnumerator Run(SceneGraphicsTestCase testCase)
     {

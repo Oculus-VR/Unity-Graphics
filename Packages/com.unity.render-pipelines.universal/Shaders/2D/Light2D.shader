@@ -21,6 +21,7 @@ Shader "Hidden/Light2D"
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_local USE_NORMAL_MAP __
+            #pragma multi_compile_local USE_SHADOW_MAP __
             #pragma multi_compile_local USE_ADDITIVE_BLENDING __
             #pragma multi_compile_local USE_VOLUMETRIC __
             #pragma multi_compile_local USE_POINT_LIGHT_COOKIES __
@@ -155,11 +156,11 @@ Shader "Hidden/Light2D"
 #if USE_ADDITIVE_BLENDING
                     lightColor *= cookie * cookie.a;
 #else
-                    lightColor *= cookie;
+                    lightColor *= cookie;          
 #endif
                 }
                 else
-                {
+                {  
 #if USE_ADDITIVE_BLENDING
                     lightColor *= SAMPLE_TEXTURE2D(_FalloffLookup, sampler_FalloffLookup, i.uv).r;
 #elif USE_VOLUMETRIC
@@ -172,7 +173,11 @@ Shader "Hidden/Light2D"
 #if !USE_VOLUMETRIC
                 APPLY_NORMALS_LIGHTING(i, lightColor, _L2D_POSITION.xyz, _L2D_POSITION.w);
 #endif
+
+#if USE_SHADOW_MAP
                 APPLY_SHADOWS(i, lightColor, _L2D_SHADOW_INTENSITY);
+#endif
+
                 return ToFragmentOutput(lightColor);
             }
 
@@ -208,7 +213,10 @@ Shader "Hidden/Light2D"
 #if !USE_VOLUMETRIC
                 APPLY_NORMALS_LIGHTING(i, lightColor, _L2D_POSITION.xyz, _L2D_POSITION.w);
 #endif
+
+#if USE_SHADOW_MAP
                 APPLY_SHADOWS(i, lightColor, _L2D_SHADOW_INTENSITY);
+#endif
 
 #if USE_VOLUMETRIC
                 lightColor *= _L2D_VOLUME_OPACITY;

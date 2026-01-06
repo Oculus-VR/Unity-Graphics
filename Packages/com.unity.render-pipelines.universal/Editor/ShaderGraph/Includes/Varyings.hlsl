@@ -34,7 +34,7 @@ VertexDescription BuildVertexDescription(Attributes input)
 #endif
 #endif
 
-#if (SHADERPASS == SHADERPASS_MOTION_VECTORS)
+#if (SHADERPASS == SHADERPASS_MOTION_VECTORS || SHADERPASS == SHADERPASS_XR_MOTION_VECTORS)
 // We want to gather some internal data from the BuildVaryings call to
 // avoid rereading and recalculating these values again in the ShaderGraph motion vector pass
 struct MotionVectorPassOutput
@@ -55,7 +55,7 @@ struct MotionVectorPassOutput
 
 #if defined(HAVE_VFX_MODIFICATION)
 bool PrepareVFXModification(inout Attributes input, inout Varyings output, inout AttributesElement element
-    #if (SHADERPASS == SHADERPASS_MOTION_VECTORS)
+    #if (SHADERPASS == SHADERPASS_MOTION_VECTORS || SHADERPASS == SHADERPASS_XR_MOTION_VECTORS)
     , inout MotionVectorPassOutput motionVectorOutput
     #endif
 )
@@ -72,7 +72,7 @@ bool PrepareVFXModification(inout Attributes input, inout Varyings output, inout
 
     SetupVFXMatrices(element, output);
 
-#if (SHADERPASS == SHADERPASS_MOTION_VECTORS)
+#if (SHADERPASS == SHADERPASS_MOTION_VECTORS || SHADERPASS == SHADERPASS_XR_MOTION_VECTORS)
     motionVectorOutput.vfxParticlePositionOS = input.positionOS;
 #endif
 
@@ -81,7 +81,7 @@ bool PrepareVFXModification(inout Attributes input, inout Varyings output, inout
 #endif
 
 Varyings BuildVaryings(Attributes input
-#if (SHADERPASS == SHADERPASS_MOTION_VECTORS)
+#if (SHADERPASS == SHADERPASS_MOTION_VECTORS || SHADERPASS == SHADERPASS_XR_MOTION_VECTORS)
     , inout MotionVectorPassOutput motionVectorOutput
 #endif
 )
@@ -98,7 +98,7 @@ Varyings BuildVaryings(Attributes input
     AttributesElement element;
     ZERO_INITIALIZE(AttributesElement, element);
 
-    #if (SHADERPASS == SHADERPASS_MOTION_VECTORS)
+    #if (SHADERPASS == SHADERPASS_MOTION_VECTORS || SHADERPASS == SHADERPASS_XR_MOTION_VECTORS)
     isCulledOrDead = PrepareVFXModification(input, output, element, motionVectorOutput);
     #else
     isCulledOrDead = PrepareVFXModification(input, output, element);
@@ -108,6 +108,10 @@ Varyings BuildVaryings(Attributes input
     if (!isCulledOrDead)
     {
         UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(output);
+
+        #ifdef UNIVERSAL_TERRAIN_ENABLED
+        TerrainVaryingGeneration(input, output);
+        #endif
 
     #if defined(FEATURES_GRAPH_VERTEX)
         #if defined(HAVE_VFX_MODIFICATION)
@@ -135,9 +139,9 @@ Varyings BuildVaryings(Attributes input
         VertexPositionInputs vertexInput = GetVertexPositionInputs(input.positionOS.xyz);
 
         // Returns the camera relative position (if enabled)
-        float3 positionWS = TransformObjectToWorld(input.positionOS);
+        float3 positionWS = vertexInput.positionWS;
 
-    #if (SHADERPASS == SHADERPASS_MOTION_VECTORS)
+    #if (SHADERPASS == SHADERPASS_MOTION_VECTORS || SHADERPASS == SHADERPASS_XR_MOTION_VECTORS)
         motionVectorOutput.positionOS = input.positionOS;
         motionVectorOutput.positionWS = positionWS;
         #if defined(FEATURES_GRAPH_VERTEX_MOTION_VECTOR_OUTPUT)
@@ -155,11 +159,25 @@ Varyings BuildVaryings(Attributes input
         // Required to compile ApplyVertexModification that doesn't use normal.
         float3 normalWS = float3(0.0, 0.0, 0.0);
     #endif
+    #ifdef UNIVERSAL_TERRAIN_ENABLED
+        #if defined(_NORMALMAP) && !defined(ENABLE_TERRAIN_PERPIXEL_NORMAL)
+            half3 viewDirWS = GetWorldSpaceNormalizeViewDir(positionWS);
+            float4 vertexTangent = float4(cross(float3(0.0, 0.0, 1.0), input.normalOS), 1.0);
+            VertexNormalInputs normalInput = GetVertexNormalInputs(input.normalOS, vertexTangent);
 
-    #ifdef ATTRIBUTES_NEED_TANGENT
-        float4 tangentWS = float4(TransformObjectToWorldDir(input.tangentOS.xyz), input.tangentOS.w);
+            output.normalViewDir = float4(normalInput.normalWS, viewDirWS.x);
+            output.tangentViewDir = float4(normalInput.tangentWS, viewDirWS.y);
+            output.bitangentViewDir = float4(normalInput.bitangentWS, viewDirWS.z);
+
+            float4 tangentWS = float4(normalInput.tangentWS, 1.0);
+        #else
+            float4 tangentWS = float4(1.0, 0.0, 0.0, 0.0);
+        #endif
+    #else
+        #ifdef ATTRIBUTES_NEED_TANGENT
+            float4 tangentWS = float4(TransformObjectToWorldDir(input.tangentOS.xyz), input.tangentOS.w);
+        #endif
     #endif
-
         // TODO: Change to inline ifdef
         // Do vertex modification in camera relative space (if enabled)
     #if defined(HAVE_VERTEX_MODIFICATION)
@@ -219,6 +237,22 @@ Varyings BuildVaryings(Attributes input
         output.texCoord3 = input.uv3;
     #endif
 
+    #if defined(VARYINGS_NEED_TEXCOORD4) || defined(VARYINGS_DS_NEED_TEXCOORD4)
+        output.texCoord4 = input.uv4;
+    #endif
+
+    #if defined(VARYINGS_NEED_TEXCOORD5) || defined(VARYINGS_DS_NEED_TEXCOORD5)
+        output.texCoord5 = input.uv5;
+    #endif
+
+    #if defined(VARYINGS_NEED_TEXCOORD6) || defined(VARYINGS_DS_NEED_TEXCOORD6)
+        output.texCoord6 = input.uv6;
+    #endif
+
+    #if defined(VARYINGS_NEED_TEXCOORD7) || defined(VARYINGS_DS_NEED_TEXCOORD7)
+        output.texCoord7 = input.uv7;
+    #endif
+
     #if defined(VARYINGS_NEED_COLOR) || defined(VARYINGS_DS_NEED_COLOR)
         output.color = input.color;
     #endif
@@ -230,15 +264,23 @@ Varyings BuildVaryings(Attributes input
     #ifdef VARYINGS_NEED_SCREENPOSITION
         output.screenPosition = vertexInput.positionNDC;
     #endif
-
-    #if (SHADERPASS == SHADERPASS_FORWARD) || (SHADERPASS == SHADERPASS_GBUFFER)
-        OUTPUT_LIGHTMAP_UV(input.uv1, unity_LightmapST, output.staticLightmapUV);
-    #if defined(DYNAMICLIGHTMAP_ON)
-        output.dynamicLightmapUV.xy = input.uv2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
+    #ifdef UNIVERSAL_TERRAIN_ENABLED
+        #if (SHADERPASS == SHADERPASS_FORWARD) || (SHADERPASS == SHADERPASS_GBUFFER)
+            OUTPUT_LIGHTMAP_UV(input.uv0, unity_LightmapST, output.staticLightmapUV);
+        #if defined(DYNAMICLIGHTMAP_ON)
+            output.dynamicLightmapUV.xy = input.uv0.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
+        #endif
+            OUTPUT_SH4(vertexInput.positionWS, normalWS.xyz, GetWorldSpaceNormalizeViewDir(vertexInput.positionWS), output.sh, output.probeOcclusion);
+        #endif
+    #else
+        #if (SHADERPASS == SHADERPASS_FORWARD) || (SHADERPASS == SHADERPASS_GBUFFER)
+            OUTPUT_LIGHTMAP_UV(input.uv1, unity_LightmapST, output.staticLightmapUV);
+        #if defined(DYNAMICLIGHTMAP_ON)
+            output.dynamicLightmapUV.xy = input.uv2.xy * unity_DynamicLightmapST.xy + unity_DynamicLightmapST.zw;
+        #endif
+            OUTPUT_SH4(vertexInput.positionWS, normalWS.xyz, GetWorldSpaceNormalizeViewDir(vertexInput.positionWS), output.sh, output.probeOcclusion);
+        #endif
     #endif
-        OUTPUT_SH4(vertexInput.positionWS, normalWS.xyz, GetWorldSpaceNormalizeViewDir(vertexInput.positionWS), output.sh, output.probeOcclusion);
-    #endif
-
     #ifdef VARYINGS_NEED_FOG_AND_VERTEX_LIGHT
         half fogFactor = 0;
     #if !defined(_FOG_FRAGMENT)
@@ -253,7 +295,7 @@ Varyings BuildVaryings(Attributes input
     #endif
 
     #if defined(VARYINGS_NEED_SIX_WAY_DIFFUSE_GI_DATA)
-        GatherDiffuseGIData(vertexInput.positionWS, normalWS.xyz, tangentWS.xyz, output.diffuseGIData0, output.diffuseGIData1, output.diffuseGIData2);
+        GatherDiffuseGIData(vertexInput.positionWS, normalWS.xyz, tangentWS, output.diffuseGIData0, output.diffuseGIData1, output.diffuseGIData2);
     #endif
     }
 

@@ -7,6 +7,8 @@ namespace UnityEngine.Rendering.HighDefinition
     /// </summary>
     [SupportedOnRenderPipeline(typeof(HDRenderPipelineAsset))]
     [Serializable, VolumeComponentMenu("Rendering/High Quality Lines")]
+    [HDRPHelpURL("Override-High-Quality-Lines")]
+    [DisplayInfo(name = "High Quality Line Rendering")]
     public class HighQualityLineRenderingVolumeComponent : VolumeComponent
     {
         /// <summary>
@@ -71,10 +73,5 @@ namespace UnityEngine.Rendering.HighDefinition
         /// </summary>
         [Tooltip("Threshold for determining when to write depth to output.")]
         public ClampedFloatParameter writeDepthAlphaThreshold = new ClampedFloatParameter(0.0f, 0.0f, 1.0f);
-
-        HighQualityLineRenderingVolumeComponent()
-        {
-            displayName = "High Quality Line Rendering";
-        }
     }
 }

@@ -270,9 +270,10 @@ namespace UnityEditor.VFX.UI
         {
             return new Parameter
             {
-                originalInstanceID = parameter.GetInstanceID(),
+                originalEntityId = parameter.GetEntityId(),
                 name = parameter.exposedName,
                 category = parameter.category,
+                order = parameter.order,
                 value = new VFXSerializableObject(parameter.type, parameter.value),
                 exposed = parameter.exposed,
                 isOutput = parameter.isOutput,

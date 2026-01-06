@@ -27,21 +27,6 @@ namespace UnityEngine.Rendering.Universal
             m_intensity = intensity;
         }
 
-        [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            CommandBuffer rawcmd = CommandBufferPool.Get();
-            var cmd = CommandBufferHelpers.GetRasterCommandBuffer(rawcmd);
-
-            ExecutePass(renderingData.cameraData.renderer.cameraColorTargetHandle, cmd, renderingData.cameraData.camera, m_Material, m_intensity);
-
-            context.ExecuteCommandBuffer(rawcmd);
-            rawcmd.Clear();
-
-            CommandBufferPool.Release(rawcmd);
-        }
-
-
         static void ExecutePass(RTHandle targetHandle, RasterCommandBuffer cmd, Camera camera, Material material, float motionIntensity)
         {
             if (camera.cameraType != CameraType.Game)

@@ -331,7 +331,7 @@ SHADOW_TYPE EvaluateShadow_Directional( LightLoopContext lightLoopContext, Posit
         }
 
         // See comment in EvaluateBSDF_Punctual
-        if (light.nonLightMappedOnly)
+        if (light.useShadowMask)
         {
             shadow = min(shadowMask, shadow);
         }
@@ -408,18 +408,27 @@ float4 EvaluateCookie_Punctual(LightLoopContext lightLoopContext, LightData ligh
         float z = positionLS.z;
         float r = light.range;
 
+        cookie.a = 1.0;
         // Box lights have no range attenuation, so we must clip manually.
-        bool isInBounds = Max3(abs(positionCS.x), abs(positionCS.y), abs(z - 0.5 * r) - 0.5 * r + 1) <= light.boxLightSafeExtent;
-        if (lightType != GPULIGHTTYPE_PROJECTOR_PYRAMID && lightType != GPULIGHTTYPE_PROJECTOR_BOX)
+        if ( Max3(abs(positionCS.x), abs(positionCS.y), abs(z - 0.5 * r) - 0.5 * r + 1) > light.boxLightSafeExtent )
         {
-            isInBounds = isInBounds && (dot(positionCS, positionCS) <= light.iesCut * light.iesCut);
+            cookie.a = 0.0;
         }
-
+        else
+        {
+            if (lightType != GPULIGHTTYPE_PROJECTOR_PYRAMID && lightType != GPULIGHTTYPE_PROJECTOR_BOX)
+            {
+                float iesCut = light.iesCut;
+                if (dot(positionCS, positionCS) > (iesCut * iesCut))
+                {
+                    cookie.a = 0;
+                }
+            }
+        }
         float2 positionNDC = positionCS * 0.5 + 0.5;
 
         // Manually clamp to border (black).
         cookie.rgb = SampleCookie2D(positionNDC, light.cookieScaleOffset, lod);
-        cookie.a   = isInBounds ? 1.0 : 0.0;
     }
 
 #else
@@ -455,12 +464,12 @@ float4 EvaluateCookie_Punctual(LightLoopContext lightLoopContext, LightData ligh
     return cookie;
 }
 
-real PunctualLightAttenuationWithDistanceModification(real4 distances, real rangeAttenuationScale, real rangeAttenuationBias,
+real PunctualLightAttenuationWithDistanceModification(float4 distances, real rangeAttenuationScale, real rangeAttenuationBias,
                               real lightAngleScale, real lightAngleOffset)
 {
-    real distSq   = distances.y;
-    real distRcp  = distances.z; //distance contains light size modification. See ModifyDistancesForFillLighting
-    real distProj = distances.w;
+    float distSq   = distances.y;
+    float distRcp  = distances.z; //distance contains light size modification. See ModifyDistancesForFillLighting
+    float distProj = distances.w;
     real cosFwd   = distProj * rcp(distances.x); //we recompute inv distance here
 
     real attenuation = min(distRcp, 1.0 / PUNCTUAL_LIGHT_THRESHOLD);
@@ -544,7 +553,7 @@ SHADOW_TYPE EvaluateShadow_Punctual(LightLoopContext lightLoopContext, PositionI
         // The min handle the case of having only dynamic objects in the ShadowMap
         // The second case for blend with distance is handled with ShadowDimmer. ShadowDimmer is define manually and by shadowDistance by light.
         // With distance, ShadowDimmer become one and only the ShadowMask appear, we get the blend with distance behavior.
-        shadow = light.nonLightMappedOnly ? min(shadowMask, shadow) : shadow;
+        shadow = light.useShadowMask ? min(shadowMask, shadow) : shadow;
     #endif
 
         shadow = lerp(shadowMask, shadow, light.shadowDimmer);
@@ -617,7 +626,7 @@ SHADOW_TYPE EvaluateShadow_RectArea( LightLoopContext lightLoopContext, Position
 
 #ifdef SHADOWS_SHADOWMASK
         // See comment for punctual light shadow mask
-        shadow = light.nonLightMappedOnly ? min(shadowMask, shadow) : shadow;
+        shadow = light.useShadowMask ? min(shadowMask, shadow) : shadow;
 #endif
         shadow = lerp(shadowMask, shadow, light.shadowDimmer);
     }

@@ -4,6 +4,7 @@ using System.Reflection;
 
 #if UNITY_EDITOR
 using UnityEditor;
+using static UnityEngine.Rendering.DebugUI;
 #endif
 
 namespace UnityEngine.Rendering
@@ -14,7 +15,7 @@ namespace UnityEngine.Rendering
     public class DebugDisplaySettingsVolume : IDebugDisplaySettingsData
     {
         /// <summary>Current volume debug settings.</summary>
-        [Obsolete("This property has been obsoleted and will be removed in a future version. #from(6000.2)", false)]
+        [Obsolete("This property has been obsoleted and will be removed in a future version. #from(6000.2)")]
         public IVolumeDebugSettings volumeDebugSettings { get; }
 
         private int m_SelectedComponentIndex = -1;
@@ -59,23 +60,10 @@ namespace UnityEngine.Rendering
         /// <summary>Current camera to debug.</summary>
         public Camera selectedCamera
         {
-            get
-            {
-#if UNITY_EDITOR
-                // By default pick the one scene camera
-                if (m_SelectedCamera == null && SceneView.lastActiveSceneView != null)
-                {
-                    var sceneCamera = SceneView.lastActiveSceneView.camera;
-                    if (sceneCamera != null)
-                        m_SelectedCamera = sceneCamera;
-                }
-#endif
-
-                return m_SelectedCamera;
-            }
+            get => m_SelectedCamera;
             set
             {
-                if (value != null && value != m_SelectedCamera)
+                if (value != m_SelectedCamera)
                 {
                     m_SelectedCamera = value;
                     OnSelectionChanged();
@@ -204,7 +192,7 @@ namespace UnityEngine.Rendering
         /// Constructor with the settings
         /// </summary>
         /// <param name="volumeDebugSettings">The volume debug settings object used for configuration.</param>
-        [Obsolete("This constructor has been obsoleted and will be removed in a future version. #from(6000.2)", false)]
+        [Obsolete("This constructor has been obsoleted and will be removed in a future version. #from(6000.2)")]
         public DebugDisplaySettingsVolume(IVolumeDebugSettings volumeDebugSettings)
             : this()
         {
@@ -296,12 +284,42 @@ namespace UnityEngine.Rendering
         const string k_PanelTitle = "Volume";
 
 #if UNITY_EDITOR
-        internal static void OpenInRenderingDebugger()
+        internal static void OpenInRenderingDebugger(VolumeComponent volumeComponent = null)
         {
             EditorApplication.ExecuteMenuItem("Window/Analysis/Rendering Debugger");
+            var panel = DebugManager.instance.GetPanel(k_PanelTitle);
+            if (panel == null)
+                return;
+
             var idx = DebugManager.instance.FindPanelIndex(k_PanelTitle);
             if (idx != -1)
+            {
                 DebugManager.instance.RequestEditorWindowPanelIndex(idx);
+            }
+
+            // Try to select the given volume component in the component selector drop down
+            if (volumeComponent != null &&
+                VolumeManager.instance.TryGetVolumePathAndType(volumeComponent.GetType(), out var result) &&
+                panel.TryFindChild<DebugUI.EnumField>(Strings.component, out var componentSelector))
+            {
+                int selectedIndex = -1;
+                for (int i = 0; i < componentSelector.enumNames.Length; ++i)
+                {
+                    var current = componentSelector.enumNames[i];
+                    if (current.text.Equals(result.path))
+                    {
+                        selectedIndex = i;
+                        break;
+                    }
+                }
+
+                if (selectedIndex > -1)
+                    EditorApplication.delayCall = () =>
+                    {
+                        componentSelector.SetValue(selectedIndex);
+                        (componentSelector as ISyncUIState).syncState = true;
+                    };
+            }
         }
 #endif
 
@@ -333,7 +351,7 @@ namespace UnityEngine.Rendering
                 };
             }
 
-            public static DebugUI.ObjectPopupField CreateCameraSelector(SettingsPanel panel, Action<DebugUI.Field<Object>, Object> refresh)
+            public static DebugUI.CameraSelector CreateCameraSelector(SettingsPanel panel, Action<DebugUI.Field<Object>, Object> refresh)
             {
                 return new DebugUI.CameraSelector()
                 {
@@ -627,7 +645,7 @@ namespace UnityEngine.Rendering
                     ((DebugUI.Table.Row)table.children[++iRowIndex]).children.Add(s_EmptyDebugUIValue);
 
                     bool isResultParameter = i == 0;
-                    for (int j = 0; j < chain.volumeComponent.parameterList.Count; ++j)
+                    for (int j = 0; j < chain.volumeComponent.parameterList.Length; ++j)
                     {
                         var parameter = chain.volumeComponent.parameterList[j];
                         ((DebugUI.Table.Row)table.children[++iRowIndex]).children.Add(
@@ -675,18 +693,14 @@ namespace UnityEngine.Rendering
                 table.children.Add(separatorRow);
 
                 var results = resolutionChain[0].volumeComponent;
-                for (int i = 0; i < results.parameterList.Count; ++i)
+                for (int i = 0; i < results.parameterList.Length; ++i)
                 {
                     var parameter = results.parameterList[i];
-
-#if UNITY_EDITOR
-                    string displayName = ObjectNames.NicifyVariableName(parameter.debugId); // In the editor, make the name more readable
-#elif DEVELOPMENT_BUILD
-                    string displayName = parameter.debugId; // In the development player, just the debug id
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                    string displayName = VolumeDebugData.GetVolumeParameterDebugId(parameter);// In the development player, just the debug id
 #else
                     string displayName = i.ToString(); // Everywhere else, just a dummy id ( TODO: The Volume panel code should be stripped completely in nom-development builds )
 #endif
-
                     table.children.Add(new DebugUI.Table.Row()
                     {
                         displayName = displayName
@@ -712,7 +726,14 @@ namespace UnityEngine.Rendering
             public SettingsPanel(DebugDisplaySettingsVolume data)
                 : base(data)
             {
-                AddWidget(WidgetFactory.CreateCameraSelector(this, (_, __) => Refresh()));
+                var cameraSelector = WidgetFactory.CreateCameraSelector(this, (_, __) => Refresh());
+
+                // Select first camera if none is selected
+                var availableCameras = cameraSelector.getObjects() as List<Camera>;
+                if (data.selectedCamera == null && availableCameras is { Count: > 0 })
+                    data.selectedCamera = availableCameras[0];
+
+                AddWidget(cameraSelector);
                 AddWidget(WidgetFactory.CreateComponentSelector(this, (_, __) => Refresh()));
 
                 Func<bool> hiddenCallback = () => data.selectedCamera == null || data.selectedComponent <= 0;

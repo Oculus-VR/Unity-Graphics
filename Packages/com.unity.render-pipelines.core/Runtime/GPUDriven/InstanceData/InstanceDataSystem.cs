@@ -16,7 +16,7 @@ namespace UnityEngine.Rendering
         private CPUPerCameraInstanceData m_PerCameraInstanceData;
 
         //@ We may want something a bit faster instead of multi hash map. Remove and search performance for multiple instances per renderer group is not great.
-        private NativeParallelMultiHashMap<int, InstanceHandle> m_RendererGroupInstanceMultiHash;
+        private NativeParallelMultiHashMap<EntityId, InstanceHandle> m_RendererGroupInstanceMultiHash;
 
         private ComputeShader m_TransformUpdateCS;
         private ComputeShader m_WindDataUpdateCS;
@@ -60,7 +60,7 @@ namespace UnityEngine.Rendering
             m_PerCameraInstanceData.Initialize(maxInstances);
             Assert.IsTrue(m_PerCameraInstanceData.instancesCapacity == m_InstanceData.instancesCapacity);
 
-            m_RendererGroupInstanceMultiHash = new NativeParallelMultiHashMap<int, InstanceHandle>(maxInstances, Allocator.Persistent);
+            m_RendererGroupInstanceMultiHash = new NativeParallelMultiHashMap<EntityId, InstanceHandle>(maxInstances, Allocator.Persistent);
 
             m_TransformUpdateCS = resources.transformUpdaterKernels;
             m_WindDataUpdateCS = resources.windDataUpdaterKernels;
@@ -489,7 +489,7 @@ namespace UnityEngine.Rendering
                 ref m_PerCameraInstanceData, ref m_SharedInstanceData, ref instances, ref m_RendererGroupInstanceMultiHash);
         }
 
-        public void FreeRendererGroupInstances(NativeArray<int> rendererGroupsID)
+        public void FreeRendererGroupInstances(NativeArray<EntityId> rendererGroupsID)
         {
             InstanceDataSystemBurst.FreeRendererGroupInstances(rendererGroupsID.AsReadOnly(), ref m_InstanceAllocators, ref m_InstanceData,
                 ref m_PerCameraInstanceData, ref m_SharedInstanceData, ref m_RendererGroupInstanceMultiHash);
@@ -501,7 +501,7 @@ namespace UnityEngine.Rendering
                 ref m_SharedInstanceData, ref m_RendererGroupInstanceMultiHash);
         }
 
-        public JobHandle ScheduleUpdateInstanceDataJob(NativeArray<InstanceHandle> instances, in GPUDrivenRendererGroupData rendererData, NativeParallelHashMap<int, GPUInstanceIndex> lodGroupDataMap)
+        public JobHandle ScheduleUpdateInstanceDataJob(NativeArray<InstanceHandle> instances, in GPUDrivenRendererGroupData rendererData, NativeParallelHashMap<EntityId, GPUInstanceIndex> lodGroupDataMap)
         {
             bool implicitInstanceIndices = rendererData.instancesCount.Length == 0;
 
@@ -565,7 +565,7 @@ namespace UnityEngine.Rendering
             UpdateInstanceMotionsData(renderersParameters, outputBuffer);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId> rendererGroupIDs, NativeArray<InstanceHandle> instances)
         {
             Assert.AreEqual(rendererGroupIDs.Length, instances.Length);
 
@@ -582,7 +582,7 @@ namespace UnityEngine.Rendering
             return queryJob.ScheduleBatch(rendererGroupIDs.Length, QueryRendererGroupInstancesJob.k_BatchSize);
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId> rendererGroupIDs, NativeList<InstanceHandle> instances)
         {
             if (rendererGroupIDs.Length == 0)
                 return default;
@@ -598,7 +598,7 @@ namespace UnityEngine.Rendering
             return jobHandle;
         }
 
-        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<int> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQueryRendererGroupInstancesJob(NativeArray<EntityId> rendererGroupIDs, NativeArray<int> instancesOffset, NativeArray<int> instancesCount, NativeList<InstanceHandle> instances)
         {
             Assert.AreEqual(rendererGroupIDs.Length, instancesOffset.Length);
             Assert.AreEqual(rendererGroupIDs.Length, instancesCount.Length);
@@ -632,7 +632,7 @@ namespace UnityEngine.Rendering
             }.ScheduleBatch(rendererGroupIDs.Length, QueryRendererGroupInstancesMultiJob.k_BatchSize, computeOffsetsAndResizeArrayJobHandle);
         }
 
-        public JobHandle ScheduleQuerySortedMeshInstancesJob(NativeArray<int> sortedMeshIDs, NativeList<InstanceHandle> instances)
+        public JobHandle ScheduleQuerySortedMeshInstancesJob(NativeArray<EntityId> sortedMeshIDs, NativeList<InstanceHandle> instances)
         {
             if (sortedMeshIDs.Length == 0)
                 return default;
@@ -712,7 +712,7 @@ namespace UnityEngine.Rendering
             return true;
         }
 
-        public unsafe void GetVisibleTreeInstances(in ParallelBitArray compactedVisibilityMasks, in ParallelBitArray processedBits, NativeList<int> visibeTreeRendererIDs,
+        public unsafe void GetVisibleTreeInstances(in ParallelBitArray compactedVisibilityMasks, in ParallelBitArray processedBits, NativeList<EntityId> visibeTreeRendererIDs,
             NativeList<InstanceHandle> visibeTreeInstances, bool becomeVisibleOnly, out int becomeVisibeTreeInstancesCount)
         {
             Assert.AreEqual(visibeTreeRendererIDs.Length, 0);
@@ -824,12 +824,12 @@ namespace UnityEngine.Rendering
             public static readonly int _WindHistoryParamAddressArray = Shader.PropertyToID("_WindHistoryParamAddressArray");
         }
 
-        public void DeallocatePerCameraInstanceData(NativeArray<int> cameraIDs)
+        public void DeallocatePerCameraInstanceData(NativeArray<EntityId> cameraIDs)
         {
             m_PerCameraInstanceData.DeallocateCameras(cameraIDs);
         }
 
-        public void AllocatePerCameraInstanceData(NativeArray<int> cameraIDs)
+        public void AllocatePerCameraInstanceData(NativeArray<EntityId> cameraIDs)
         {
             m_PerCameraInstanceData.AllocateCameras(cameraIDs);
         }

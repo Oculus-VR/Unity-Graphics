@@ -20,11 +20,6 @@ namespace UnityEditor.Rendering
         public static CoreBuildData instance => m_Instance ??= CreateInstance();
 
         /// <summary>
-        /// Returns if the build is done for debug
-        /// </summary>
-        public bool isDevelopmentBuild { get; set; }
-
-        /// <summary>
         /// If the target build has an SRP configured
         /// </summary>
         public bool buildingPlayerForRenderPipeline { get; private set; } = false;
@@ -39,37 +34,29 @@ namespace UnityEditor.Rendering
         /// </summary>
         public List<RenderPipelineAsset> renderPipelineAssets { get; private set; } = new();
 
-        internal Dictionary<int, ComputeShader> computeShaderCache { get; private set; } = new();
+        internal Dictionary<EntityId, ComputeShader> computeShaderCache { get; private set; } = new();
 
         internal bool pipelineSupportGPUResidentDrawer { get; private set; } = false;
         internal bool playerNeedGPUResidentDrawer { get; private set; } = false;
 
-        /// <summary>
-        /// Initializes a new instance of the <see cref="CoreBuildData"/> class for the core library.
-        /// This constructor may also be invoked when building Asset Bundles.
-        /// </summary>
-        /// <param name="buildTarget">The target platform for the build (e.g., Standalone, iOS, Android).</param>
-        /// <param name="isDevelopmentBuild">Indicates whether the build is a development build. If true, the build includes debugging and logging features.</param>
-        public CoreBuildData(BuildTarget buildTarget, bool isDevelopmentBuild)
-
+        private CoreBuildData(BuildTarget buildTarget)
         {
-            if (buildTarget.TryGetRenderPipelineAssets(renderPipelineAssets))
-            {
-                buildingPlayerForRenderPipeline = true;
-
-                //We can check only the first as we don't support multiple pipeline type in player
-                var asset = renderPipelineAssets[0];
-                currentRenderPipelineAssetType = asset.GetType();
-
-                CheckGPUResidentDrawerUsage();
-            }
-
-            this.isDevelopmentBuild = isDevelopmentBuild;
             m_Instance = this;
+
+            if (!buildTarget.TryGetRenderPipelineAssets(renderPipelineAssets))
+                return;
+
+            buildingPlayerForRenderPipeline = true;
+
+            //We can check only the first as we don't support multiple pipeline type in player
+            var asset = renderPipelineAssets[0];
+            currentRenderPipelineAssetType = asset.GetType();
+
+            CheckGPUResidentDrawerUsage();
         }
 
         private static CoreBuildData CreateInstance()
-            => new(EditorUserBuildSettings.activeBuildTarget, Debug.isDebugBuild);
+            => new(EditorUserBuildSettings.activeBuildTarget);
 
         private void CheckGPUResidentDrawerUsage()
         {
@@ -93,8 +80,10 @@ namespace UnityEditor.Rendering
             if (!playerNeedGPUResidentDrawer)
                 return;
 
+            #pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
             GraphicsSettings.GetRenderPipelineSettings<GPUResidentDrawerResources>()
-                .ForEachFieldOfType<ComputeShader>(computeShader => computeShaderCache.Add(computeShader.GetInstanceID(), computeShader));
+                .ForEachFieldOfType<ComputeShader>(computeShader => computeShaderCache.Add(computeShader.GetEntityId(), computeShader));
+            #pragma warning restore 618
         }
 
         /// <summary>

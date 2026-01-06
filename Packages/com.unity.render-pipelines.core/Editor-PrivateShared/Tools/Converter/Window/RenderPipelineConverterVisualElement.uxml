@@ -1,0 +1,35 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements"
+         xmlns:uie="UnityEditor.UIElements"
+         xmlns:uir="UnityEditor.Rendering"
+         xmlns:uirc="UnityEditor.Rendering.Converter"
+         editor-extension-mode="False">
+    <uir:HeaderFoldout name="conveterFoldout">
+    <ui:VisualElement name="informationVE" class="render-pipeline-converter-information">
+        <ui:HelpBox message-type="Info" text="No items found to convert" name="noItemsFoundHelpBox" class="render-pipeline-converter-helpbox" />
+        <ui:HelpBox message-type="Info" text="Press Scan to fetch elements to convert" name="pressScanHelpBox" class="render-pipeline-converter-helpbox"/>
+        <ui:VisualElement name="listViewHeader" class="render-pipeline-converter-items-header">
+            <ui:VisualElement name="allNoneVE" class="render-pipeline-converter-all-none">
+                <ui:Label tabindex="-1" text="ALL" display-tooltip-when-elided="true" name="all" class="not_selected render-pipeline-converter-label-all" />
+                <ui:Label tabindex="-1" text="NONE" display-tooltip-when-elided="true" name="none" class="not_selected render-pipeline-converter-label-none" />
+            </ui:VisualElement>
+            <ui:Label name="converterStats" />
+            <ui:Label text="&#10;" class="render-pipeline-converter-header-label" />
+            <ui:VisualElement class="render-pipeline-converter-items-header-flexrow">
+                <ui:Image name="converterStateInfoIcon" class="render-pipeline-converter-header-image" />
+                <ui:Label tabindex="-1" display-tooltip-when-elided="true" class="render-pipeline-converter-header-label" />
+                <uirc:RenderPipelineConverterVisualElementListFilter name="listViewFilter"/>
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+    <ui:MultiColumnTreeView name="converterItemsTreeView" class="render-pipeline-converter-list-view" show-alternating-row-backgrounds="All">
+        <!-- Columns and Column aren't Visual Elements or controls; they are considered attributes of MultiColumnListView. -->
+        <ui:Columns reorderable="false">
+            <ui:Column name="selected" width="40" resizable="false" />
+            <ui:Column name="icon" width="30" resizable="false"/>
+            <ui:Column name="name" title="Name" width="200" min-width="100" sortable="true"/>
+            <ui:Column name="info" title="Info" />
+            <ui:Column name="state" />
+        </ui:Columns>
+    </ui:MultiColumnTreeView>
+    </uir:HeaderFoldout>
+</ui:UXML>

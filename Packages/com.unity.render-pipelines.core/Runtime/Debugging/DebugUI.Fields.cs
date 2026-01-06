@@ -15,6 +15,9 @@ namespace UnityEngine.Rendering
         /// <typeparam name="T">The type of data managed by the field.</typeparam>
         public abstract class Field<T> : Widget, IValueField
         {
+            /// <inheritdoc/>
+            public bool syncState { get; set; }
+
             /// <summary>
             /// Getter for this field.
             /// </summary>
@@ -85,7 +88,9 @@ namespace UnityEngine.Rendering
             /// <param name="value">Input value.</param>
             public virtual void SetValue(T value)
             {
-                Assert.IsNotNull(setter);
+                if (setter == null)
+                    return;
+
                 var v = ValidateValue(value);
 
                 if (v == null || !v.Equals(getter()))
@@ -431,8 +436,10 @@ namespace UnityEngine.Rendering
         /// <summary>
         /// A dropdown that contains the values from an enum.
         /// </summary>
-        public class EnumField : EnumField<int>
+        public class EnumField : EnumField<int>, ISyncUIState
         {
+            bool ISyncUIState.syncState { get; set; }
+
             internal int[] quickSeparators;
 
             private int[] m_Indexes;
@@ -572,9 +579,7 @@ namespace UnityEngine.Rendering
 
                         if (camera.cameraType != CameraType.Preview && camera.cameraType != CameraType.Reflection)
                         {
-                            if (!camera.TryGetComponent<IAdditionalData>(out var additionalData))
-                                Debug.LogWarning($"Camera {camera.name} does not contain an additional camera data component. Open the Game Object in the inspector to add additional camera data.");
-                            else
+                            if (camera.TryGetComponent<IAdditionalData>(out _))
                                 m_Cameras.Add(camera);
                         }
                     }

@@ -1,7 +1,7 @@
 #pragma kernel CopyHistoryAccumulation COPY_HISTORY=CopyHistoryAccumulation ACCUMULATION
 #pragma kernel CopyHistory COPY_HISTORY=CopyHistory
 
-#pragma only_renderers d3d11 xboxseries ps5
+#pragma only_renderers d3d11 xboxseries ps5 switch2
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
@@ -13,7 +13,7 @@
 // Input textures
 TEXTURE2D_X(_LightingDistanceTexture);
 #if defined(ACCUMULATION)
-TEXTURE2D_X_UINT(_AccumulationTexture);
+TYPED_TEXTURE2D_X(uint, _AccumulationTexture);
 #endif
 
 // Output texture

@@ -187,6 +187,14 @@ class VFXSlotContainerEditor : Editor
         static bool s_HasGizmos;
         static int currentIndex;
 
+        public static void ClearGizmos()
+        {
+            s_AllGizmosInfo.Clear();
+            s_Entries = null;
+            s_HasGizmos = false;
+            currentIndex = 0;
+        }
+
         public static void UpdateFromVFXView(VFXView vfxView, List<IGizmoController> controllers)
         {
             Profiler.BeginSample("SceneViewVFXSlotContainerOverlay.UpdateFromVFXView");
@@ -203,21 +211,32 @@ class VFXSlotContainerEditor : Editor
 
                 if (controllers != null)
                 {
+                    var currentGizmoInfo = s_AllGizmosInfo.ElementAtOrDefault(currentIndex);
+
                     var index = s_AllGizmosInfo.TakeWhile(x => x.view != vfxView).Count();
+                    bool sortNeeded = false;
                     foreach (var controller in controllers)
                     {
                         controller.CollectGizmos();
                         if (s_AllGizmosInfo.All(x => x.view != vfxView || x.controller != controller))
                         {
                             s_AllGizmosInfo.AddRange(controller.gizmoables.Select(x => new GizmoInfo(vfxView, controller, x)));
+                            sortNeeded = true;
                         }
 
                         var currentGizmo = controller.gizmoables.ElementAtOrDefault(currentIndex - index);
-                        if (currentGizmo != null)
+                        if (currentGizmo != null && currentGizmoInfo.controller != null)
                         {
+                            currentGizmoInfo.controller.currentGizmoable = currentGizmoInfo.gizmo;
                             controller.DrawGizmos(vfxView.attachedComponent);
                         }
                         index += controller.gizmoables.Count;
+                    }
+
+                    if (sortNeeded)
+                    {
+                        s_AllGizmosInfo.Sort();
+                        currentIndex = s_AllGizmosInfo.FindIndex(x => x.gizmo == currentGizmoInfo.gizmo && x.controller == currentGizmoInfo.controller);
                     }
                 }
 
@@ -238,7 +257,6 @@ class VFXSlotContainerEditor : Editor
             {
                 if (s_AllGizmosInfo.Count > 0)
                 {
-                    s_AllGizmosInfo.Sort();
                     GUILayout.BeginHorizontal();
                     try
                     {
@@ -369,10 +387,7 @@ class VFXSlotContainerEditor : Editor
         public static GUIStyle header;
         public static GUIStyle cell;
         public static GUIStyle foldout;
-        public static GUIStyle spawnStyle;
-        public static GUIStyle particleStyle;
-        public static GUIStyle particleStripeStyle;
-        public static GUIStyle meshStyle;
+        public static GUIStyle contextHeaderStyle;
         public static GUIStyle warningStyle;
         public static GUIStyle frameButtonStyle;
         static Styles()
@@ -412,22 +427,8 @@ class VFXSlotContainerEditor : Editor
             foldout = new GUIStyle(EditorStyles.foldout);
             foldout.fontStyle = FontStyle.Bold;
 
-            spawnStyle = new GUIStyle(GUI.skin.label);
-            spawnStyle.fontSize = 20;
-            spawnStyle.normal.textColor = new Color(0f, 1f, 0.5607843f);
-            spawnStyle.hover.textColor = spawnStyle.normal.textColor;
-
-            particleStyle = new GUIStyle(spawnStyle);
-            particleStyle.normal.textColor = new Color(1f, 0.7372549f, 0.1294118f);
-            particleStyle.hover.textColor = particleStyle.normal.textColor;
-
-            particleStripeStyle = new GUIStyle(spawnStyle);
-            particleStripeStyle.normal.textColor = new Color(1f, 0.6666667f, 0.4196078f);
-            particleStripeStyle.hover.textColor = particleStripeStyle.normal.textColor;
-
-            meshStyle = new GUIStyle(spawnStyle);
-            meshStyle.normal.textColor = new Color(0.231f, 0.369f, 0.573f);
-            meshStyle.hover.textColor = meshStyle.normal.textColor;
+            contextHeaderStyle = new GUIStyle(GUI.skin.label);
+            contextHeaderStyle.fontSize = 20;
         }
 
         static Dictionary<VFXValueType, Color> valueTypeColors = new Dictionary<VFXValueType, Color>()
@@ -442,6 +443,7 @@ class VFXSlotContainerEditor : Editor
             { VFXValueType.Int32, new Color32(125, 110, 191, 255) },
             { VFXValueType.Matrix4x4, new Color32(118, 118, 118, 255) },
             { VFXValueType.Mesh, new Color32(130, 223, 226, 255) },
+            { VFXValueType.SkinnedMeshRenderer, new Color32(130, 223, 226, 255) },
             { VFXValueType.None, new Color32(118, 118, 118, 255) },
             { VFXValueType.Spline, new Color32(130, 223, 226, 255) },
             { VFXValueType.Texture2D, new Color32(250, 137, 137, 255) },

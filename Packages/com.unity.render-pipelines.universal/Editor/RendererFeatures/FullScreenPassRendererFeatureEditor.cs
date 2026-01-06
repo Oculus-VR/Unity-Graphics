@@ -1,6 +1,9 @@
 using System.Collections.Generic;
+using UnityEditor.RenderPipelines.Core;
+using UnityEditor.ShaderGraph;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
+using static UnityEditor.Rendering.InspectorCurveEditor;
 
 namespace UnityEditor.Rendering.Universal
 {
@@ -18,6 +21,7 @@ namespace UnityEditor.Rendering.Universal
         private SerializedProperty m_BindDepthStencilAttachmentProperty;
         private SerializedProperty m_PassMaterialProperty;
         private SerializedProperty m_PassIndexProperty;
+        private bool m_ShowDuplicateColorCopyWarning;
 
         private static readonly GUIContent k_InjectionPointGuiContent = new GUIContent("Injection Point", "Specifies where in the frame this pass will be injected.");
         private static readonly GUIContent k_RequirementsGuiContent = new GUIContent("Requirements", "A mask of URP internal textures that will need to be generated and bound for sampling.\n\nNote that 'Color' here corresponds to '_CameraOpaqueTexture' so most of the time you will want to use the 'Fetch Color Buffer' option instead.");
@@ -25,6 +29,12 @@ namespace UnityEditor.Rendering.Universal
         private static readonly GUIContent k_BindDepthStencilAttachmentGuiContent = new GUIContent("Bind Depth-Stencil", "Enable this to bind the active camera's depth-stencil attachment to the framebuffer (only use this if depth-stencil ops are used by the assigned material as this could have a performance impact).");
         private static readonly GUIContent k_PassMaterialGuiContent = new GUIContent("Pass Material", "The material used to render the full screen pass.");
         private static readonly GUIContent k_PassGuiContent = new GUIContent("Pass", "The name of the shader pass to use from the assigned material.");
+
+        static readonly GUIContent k_NewFullscreenMaterialButtonText = EditorGUIUtility.TrTextContent("New", "Creates a new Fullscreen material.");
+        static readonly string k_NewBlitShaderText = "SRP Blit Shader";
+        static readonly string k_NewSGFullscreenText = "ShaderGraph Fullscreen";
+        static readonly string k_BlitShaderTemplatePath = "Packages/com.unity.render-pipelines.core/Editor/ScriptTemplates/BlitSRP.txt";
+        static readonly string k_DefaultFullscreenShaderGraphTemplatePath = "Packages/com.unity.render-pipelines.universal/Shaders/FullscreenInvertColors.shadergraph";
 
         private void OnEnable()
         {
@@ -49,8 +59,24 @@ namespace UnityEditor.Rendering.Universal
             EditorGUILayout.PropertyField(m_InjectionPointProperty, k_InjectionPointGuiContent);
             EditorGUILayout.PropertyField(m_RequirementsProperty, k_RequirementsGuiContent);
             EditorGUILayout.PropertyField(m_FetchColorBufferProperty, k_FetchColorBufferGuiContent);
+
+            if (Event.current.type == EventType.Layout)
+            {
+                bool requestedColor = (m_RequirementsProperty.GetEnumValue<ScriptableRenderPassInput>() & ScriptableRenderPassInput.Color) != ScriptableRenderPassInput.None;
+                m_ShowDuplicateColorCopyWarning = requestedColor && m_FetchColorBufferProperty.boolValue;
+            }
+
+            if (m_ShowDuplicateColorCopyWarning)
+            {
+                EditorGUILayout.HelpBox("You request two different color textures: the opaque color texture via \"Requirements: Color\", and the current camera attachment via \"Fetch Color Buffer\". While this is allowed, we recommend disabling one of these two options for optimal performance.", MessageType.Warning, true);
+            }
+
             EditorGUILayout.PropertyField(m_BindDepthStencilAttachmentProperty, k_BindDepthStencilAttachmentGuiContent);
-            EditorGUILayout.PropertyField(m_PassMaterialProperty, k_PassMaterialGuiContent);
+
+            MaterialFieldWithButton(m_PassMaterialProperty, k_PassMaterialGuiContent);
+
+            if (m_PassMaterialProperty.objectReferenceValue == null)
+                EditorGUILayout.HelpBox("The full screen feature will not execute - no material is assigned. Please make sure a material is assigned for this feature on the renderer asset.", MessageType.Warning, true);
 
             if (AdvancedProperties.BeginGroup())
             {
@@ -59,6 +85,62 @@ namespace UnityEditor.Rendering.Universal
             AdvancedProperties.EndGroup();
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        internal void MaterialFieldWithButton(SerializedProperty prop, GUIContent label)
+        {
+            const int k_NewFieldWidth = 70;
+
+            var rect = EditorGUILayout.GetControlRect();
+            rect.xMax -= k_NewFieldWidth + 2;
+
+            EditorGUI.PropertyField(rect, prop, label);
+
+            var newFieldRect = rect;
+            newFieldRect.x = rect.xMax + 2;
+            newFieldRect.width = k_NewFieldWidth;
+
+            if (!EditorGUI.DropdownButton(newFieldRect, k_NewFullscreenMaterialButtonText, FocusType.Keyboard))
+                return;
+
+            GenericMenu menu = new GenericMenu();
+            menu.AddItem(new GUIContent(k_NewSGFullscreenText), false, () => CreateFullscreenMaterialFromTemplate(target as FullScreenPassRendererFeature, k_DefaultFullscreenShaderGraphTemplatePath));
+
+            // For later introduction of SG Filtered Template Browser
+            //menu.AddItem(new GUIContent(k_NewSGFullscreenFromTemplateText), false, () => CreateFullscreenMaterialFromTemplate(target as FullScreenPassRendererFeature));
+
+            menu.AddItem(new GUIContent(k_NewBlitShaderText), false, () => CreateDefaultFullscreenMaterial(target as FullScreenPassRendererFeature));
+            menu.DropDown(newFieldRect);
+        }
+
+        internal static void CreateFullscreenMaterialFromTemplate(FullScreenPassRendererFeature obj, string templatePath = null)
+        {
+            var selection = Selection.activeObject; // holding selection
+            CreateShaderGraph.CreateGraphAndMaterialFromTemplate((material) =>
+            {
+                obj.passMaterial = material;
+                EditorUtility.SetDirty(obj);
+                Selection.activeObject = selection; //restoring selection
+            },
+            templatePath,
+            $"New {k_NewSGFullscreenText}");
+        }
+
+        internal static void CreateDefaultFullscreenMaterial(FullScreenPassRendererFeature obj)
+        {
+            string materialName = "New " + k_NewBlitShaderText;
+
+            var selection = Selection.activeObject; // holding selection
+            AssetCreationUtil.CreateShaderAndMaterial(
+                materialName,
+                (material) =>
+                {
+                    obj.passMaterial = material;
+                    EditorUtility.SetDirty(obj);
+                    Selection.activeObject = selection; //restoring selection
+                },
+                k_BlitShaderTemplatePath
+            );
         }
 
         private void DrawMaterialPassProperty(FullScreenPassRendererFeature feature)

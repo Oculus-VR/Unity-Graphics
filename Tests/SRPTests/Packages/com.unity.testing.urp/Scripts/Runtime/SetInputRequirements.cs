@@ -47,16 +47,6 @@ public class SetInputRequirements : ScriptableRendererFeature
             ConfigureInput(inputRequirement);
         }
 
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
-        {
-        }
-
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-        }
-
         internal class PassData
         {
         }

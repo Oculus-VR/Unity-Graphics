@@ -78,7 +78,7 @@ This sample includes examples on how to create a [Fullscreen Shader](create-a-fu
 The Water samples contain the following scenes you can use to learn about HDRP's [Water](water.md) features: 
 
 - Pool: Demonstrates ripples and buoyancy.
-- Glacier: Demonstrates current, water deformers, floating objects, and a simulation mask.
+- Glacier: Demonstrates current, deformation, water decals, floating objects, and a simulation mask.
 - Island: Demonstrates waves, foam, and the water excluder.
 - Rain: Demonstrates how to add pertubations to the normals using shader graph.
 - Waterline: Demonstrates how to override rendering of the waterline using a [Custom Pass](Custom-Pass.md).
@@ -100,3 +100,14 @@ The scene includes examples focusing on the following effects:
 - Atmospheric Scattering: Replaces volumetric fog for distant coloration, integrated directly into the PBR Sky.
 - Aerosol Parameters: Uses existing parameters in the PBR Sky, requiring no additional setup.
 - Ozone Light Scattering: Accounts for the ozone layer's density at the camera's altitude, improving visual fidelity.
+
+## Renderer Shader User Value samples
+
+![A bunch of different instanced soldiers looking at their king.](Images/rsuv-samples.png)
+
+This sample showcases the use of Shader User Value on multiple renderers. 
+The scenes include different possible usages and show how to customize a material using this method. This includes: 
+- Offseting UV to sample color palettes. 
+- Modifying the vertices of a mesh to alter its look.
+- Removing geometry from a mesh to have more combinations.
+- Altering a Vertex Animation Texture speed and index. 

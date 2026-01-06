@@ -64,7 +64,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         [SerializeField]
         JsonData<SubTarget> m_ActiveSubTarget;
 
-        public SubTarget activeSubTarget
+        public override SubTarget activeSubTarget
         {
             get => m_ActiveSubTarget.value;
             set => m_ActiveSubTarget = value;
@@ -91,6 +91,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         {
             // Currently there is not support for VFX decals via HDRP master node.
             typeof(DecalSubTarget),
+            typeof(TerrainLitSubTarget),
             typeof(HDCanvasSubTarget),
             typeof(HDFullscreenSubTarget),
             typeof(WaterSubTarget),
@@ -119,7 +120,17 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             bool worksWithThisSrp = srpFilter == null || srpFilter.srpTypes.Contains(typeof(HDRenderPipeline));
 
             SubTargetFilterAttribute subTargetFilter = NodeClassCache.GetAttributeOnNodeType<SubTargetFilterAttribute>(nodeType);
-            bool worksWithThisSubTarget = subTargetFilter == null || subTargetFilter.subTargetTypes.Contains(activeSubTarget.GetType());
+            var activeSubTargetType = activeSubTarget.GetType();
+            var worksWithThisSubTarget = subTargetFilter == null;
+            if (subTargetFilter != null)
+            {
+                foreach (var type in subTargetFilter.subTargetTypes)
+                {
+                    if (!type.IsAssignableFrom(activeSubTargetType)) continue;
+                    worksWithThisSubTarget = true;
+                    break;
+                }
+            }
 
             if (activeSubTarget.IsActive())
                 worksWithThisSubTarget &= activeSubTarget.IsNodeAllowedBySubTarget(nodeType);
@@ -464,9 +475,11 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
 
             dstGraphFunctions = "";
             dstGraphPixel = "";
-            adjustedUvDerivs = new bool[4];
 
-            HlslProcessor hlslProc = new HlslProcessor(4);
+            var uvCount = ShaderGeneratorNames.UVCount;
+            adjustedUvDerivs = new bool[uvCount];
+
+            HlslProcessor hlslProc = new HlslProcessor(uvCount);
 
             try
             {
@@ -614,6 +627,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord1,                                          HDStructFields.AttributesMesh.uv1),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord2,                                          HDStructFields.AttributesMesh.uv2),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord3,                                          HDStructFields.AttributesMesh.uv3),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord4,                                          HDStructFields.AttributesMesh.uv4),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord5,                                          HDStructFields.AttributesMesh.uv5),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord6,                                          HDStructFields.AttributesMesh.uv6),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord7,                                          HDStructFields.AttributesMesh.uv7),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.color,                                              HDStructFields.AttributesMesh.color),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.instanceID,                                         HDStructFields.AttributesMesh.instanceID),
         };
@@ -629,6 +646,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord1,                                          HDStructFields.VaryingsMeshToDS.texCoord1),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord2,                                          HDStructFields.VaryingsMeshToDS.texCoord2),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord3,                                          HDStructFields.VaryingsMeshToDS.texCoord3),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord4,                                          HDStructFields.VaryingsMeshToDS.texCoord4),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord5,                                          HDStructFields.VaryingsMeshToDS.texCoord5),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord6,                                          HDStructFields.VaryingsMeshToDS.texCoord6),
+            new FieldDependency(HDStructFields.VaryingsMeshToPS.texCoord7,                                          HDStructFields.VaryingsMeshToDS.texCoord7),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.color,                                              HDStructFields.VaryingsMeshToDS.color),
             new FieldDependency(HDStructFields.VaryingsMeshToPS.instanceID,                                         HDStructFields.VaryingsMeshToDS.instanceID),
 
@@ -640,6 +661,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord1,                                          HDStructFields.AttributesMesh.uv1),
             new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord2,                                          HDStructFields.AttributesMesh.uv2),
             new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord3,                                          HDStructFields.AttributesMesh.uv3),
+            new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord4,                                          HDStructFields.AttributesMesh.uv4),
+            new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord5,                                          HDStructFields.AttributesMesh.uv5),
+            new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord6,                                          HDStructFields.AttributesMesh.uv6),
+            new FieldDependency(HDStructFields.VaryingsMeshToDS.texCoord7,                                          HDStructFields.AttributesMesh.uv7),
             new FieldDependency(HDStructFields.VaryingsMeshToDS.color,                                              HDStructFields.AttributesMesh.color),
             new FieldDependency(HDStructFields.VaryingsMeshToDS.instanceID,                                         HDStructFields.AttributesMesh.instanceID),
         };
@@ -655,6 +680,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(HDStructFields.FragInputs.texCoord1,                                                HDStructFields.VaryingsMeshToPS.texCoord1),
             new FieldDependency(HDStructFields.FragInputs.texCoord2,                                                HDStructFields.VaryingsMeshToPS.texCoord2),
             new FieldDependency(HDStructFields.FragInputs.texCoord3,                                                HDStructFields.VaryingsMeshToPS.texCoord3),
+            new FieldDependency(HDStructFields.FragInputs.texCoord4,                                                HDStructFields.VaryingsMeshToPS.texCoord4),
+            new FieldDependency(HDStructFields.FragInputs.texCoord5,                                                HDStructFields.VaryingsMeshToPS.texCoord5),
+            new FieldDependency(HDStructFields.FragInputs.texCoord6,                                                HDStructFields.VaryingsMeshToPS.texCoord6),
+            new FieldDependency(HDStructFields.FragInputs.texCoord7,                                                HDStructFields.VaryingsMeshToPS.texCoord7),
             new FieldDependency(HDStructFields.FragInputs.color,                                                    HDStructFields.VaryingsMeshToPS.color),
             new FieldDependency(HDStructFields.FragInputs.instanceID,                                               HDStructFields.VaryingsMeshToPS.instanceID),
         };
@@ -702,6 +731,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(StructFields.VertexDescriptionInputs.uv1,                                           HDStructFields.AttributesMesh.uv1),
             new FieldDependency(StructFields.VertexDescriptionInputs.uv2,                                           HDStructFields.AttributesMesh.uv2),
             new FieldDependency(StructFields.VertexDescriptionInputs.uv3,                                           HDStructFields.AttributesMesh.uv3),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv4,                                           HDStructFields.AttributesMesh.uv4),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv5,                                           HDStructFields.AttributesMesh.uv5),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv6,                                           HDStructFields.AttributesMesh.uv6),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv7,                                           HDStructFields.AttributesMesh.uv7),
             new FieldDependency(StructFields.VertexDescriptionInputs.VertexColor,                                   HDStructFields.AttributesMesh.color),
 
             new FieldDependency(StructFields.VertexDescriptionInputs.BoneWeights,                                   HDStructFields.AttributesMesh.weights),
@@ -721,6 +754,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(StructFields.VertexDescriptionInputs.uv1,                                           HDStructFields.VaryingsMeshToDS.texCoord1),
             new FieldDependency(StructFields.VertexDescriptionInputs.uv2,                                           HDStructFields.VaryingsMeshToDS.texCoord2),
             new FieldDependency(StructFields.VertexDescriptionInputs.uv3,                                           HDStructFields.VaryingsMeshToDS.texCoord3),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv4,                                           HDStructFields.VaryingsMeshToDS.texCoord4),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv5,                                           HDStructFields.VaryingsMeshToDS.texCoord5),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv6,                                           HDStructFields.VaryingsMeshToDS.texCoord6),
+            new FieldDependency(StructFields.VertexDescriptionInputs.uv7,                                           HDStructFields.VaryingsMeshToDS.texCoord7),
             new FieldDependency(StructFields.VertexDescriptionInputs.VertexColor,                                   HDStructFields.VaryingsMeshToDS.color),
             new FieldDependency(StructFields.VertexDescriptionInputs.InstanceID,                                    HDStructFields.VaryingsMeshToDS.instanceID),
         };
@@ -767,6 +804,10 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             new FieldDependency(StructFields.SurfaceDescriptionInputs.uv1,                                          HDStructFields.FragInputs.texCoord1),
             new FieldDependency(StructFields.SurfaceDescriptionInputs.uv2,                                          HDStructFields.FragInputs.texCoord2),
             new FieldDependency(StructFields.SurfaceDescriptionInputs.uv3,                                          HDStructFields.FragInputs.texCoord3),
+            new FieldDependency(StructFields.SurfaceDescriptionInputs.uv4,                                          HDStructFields.FragInputs.texCoord4),
+            new FieldDependency(StructFields.SurfaceDescriptionInputs.uv5,                                          HDStructFields.FragInputs.texCoord5),
+            new FieldDependency(StructFields.SurfaceDescriptionInputs.uv6,                                          HDStructFields.FragInputs.texCoord6),
+            new FieldDependency(StructFields.SurfaceDescriptionInputs.uv7,                                          HDStructFields.FragInputs.texCoord7),
             new FieldDependency(StructFields.SurfaceDescriptionInputs.VertexColor,                                  HDStructFields.FragInputs.color),
             new FieldDependency(StructFields.SurfaceDescriptionInputs.InstanceID,                                   HDStructFields.FragInputs.instanceID),
             new FieldDependency(StructFields.SurfaceDescriptionInputs.FaceSign,                                     HDStructFields.FragInputs.IsFrontFace),
@@ -795,12 +836,20 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             HDStructFields.AttributesMesh.uv1,
             HDStructFields.AttributesMesh.uv2,
             HDStructFields.AttributesMesh.uv3,
+            HDStructFields.AttributesMesh.uv4,
+            HDStructFields.AttributesMesh.uv5,
+            HDStructFields.AttributesMesh.uv6,
+            HDStructFields.AttributesMesh.uv7,
             HDStructFields.FragInputs.positionRWS,
             HDStructFields.FragInputs.positionPredisplacementRWS,
             HDStructFields.FragInputs.texCoord0,
             HDStructFields.FragInputs.texCoord1,
             HDStructFields.FragInputs.texCoord2,
             HDStructFields.FragInputs.texCoord3,
+            HDStructFields.FragInputs.texCoord4,
+            HDStructFields.FragInputs.texCoord5,
+            HDStructFields.FragInputs.texCoord6,
+            HDStructFields.FragInputs.texCoord7,
         };
 
         public static FieldCollection Basic = new FieldCollection()
@@ -1200,6 +1249,8 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         public const string kStackLitPathtracing = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/StackLit/StackLitPathTracing.hlsl";
         public const string kHairRaytracing = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Hair/HairRaytracing.hlsl";
         public const string kHairPathtracing = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Hair/HairPathTracing.hlsl";
+        public const string kTerrainRaytracing = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/TerrainLit/TerrainLitRaytracing.hlsl";
+        public const string kTerrainPathtracing = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/TerrainLit/TerrainLitPathtracing.hlsl";
         public const string kRaytracingLightLoop = "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/RaytracingLightLoop.hlsl";
         public const string kRaytracingCommon = "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/RaytracingCommon.hlsl";
         public const string kNormalBuffer = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/NormalBuffer.hlsl";
@@ -1231,6 +1282,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         public const string kFabric = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Fabric/Fabric.hlsl";
         public const string kHair = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/Hair/Hair.hlsl";
         public const string kStackLit = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/StackLit/StackLit.hlsl";
+        public const string kTerrainLit = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/TerrainLit/TerrainLit.hlsl";
         public const string kSixWayLit = "Packages/com.unity.render-pipelines.high-definition/Runtime/Material/SixWayLit/SixWaySmokeLit.hlsl";
 
         // Public Pregraph Misc

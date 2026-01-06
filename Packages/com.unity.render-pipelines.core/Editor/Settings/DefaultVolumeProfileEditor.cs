@@ -130,6 +130,8 @@ namespace UnityEditor.Rendering
                 };
 
                 ListView listView = new ListView(filteredCategoryEditors, -1, makeItem, bindItem);
+                listView.selectionType = SelectionType.None;
+                listView.reorderable = false;
                 listView.virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight;
                 componentListElement.Add(listView);
 
@@ -236,13 +238,13 @@ namespace UnityEditor.Rendering
                 menu.AddAdvancedPropertiesBoolMenuItem(() => targetEditor.showAdditionalProperties, () => targetEditor.showAdditionalProperties ^= true);
 
             menu.AddSeparator(string.Empty);
-            menu.AddItem(VolumeProfileUtils.Styles.openInRenderingDebugger, false, DebugDisplaySettingsVolume.OpenInRenderingDebugger);
+            menu.AddItem(VolumeProfileUtils.Styles.openInRenderingDebugger, false, () => DebugDisplaySettingsVolume.OpenInRenderingDebugger(targetComponent));
 
             menu.AddSeparator(string.Empty);
             menu.AddItem(VolumeProfileUtils.Styles.copySettings, false, () => VolumeComponentCopyPaste.CopySettings(targetComponent));
 
             if (VolumeComponentCopyPaste.CanPaste(targetComponent))
-                menu.AddItem(VolumeProfileUtils.Styles.pasteSettings, false, () => VolumeComponentCopyPaste.PasteSettings(targetComponent));
+                menu.AddItem(VolumeProfileUtils.Styles.pasteSettings, false, () => VolumeComponentCopyPaste.PasteSettings(targetComponent, m_Profile));
             else
                 menu.AddDisabledItem(VolumeProfileUtils.Styles.pasteSettings);
 

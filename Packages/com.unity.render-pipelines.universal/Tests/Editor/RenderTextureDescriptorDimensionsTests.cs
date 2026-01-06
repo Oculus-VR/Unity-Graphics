@@ -57,7 +57,6 @@ namespace UnityEditor.Rendering.Universal.Tests
             HDRColorBufferPrecision requestHDRColorBufferPrecision = HDRColorBufferPrecision._64Bits;
             int msaaSamples = 1;
             bool needsAlpha = false;
-            bool requiresOpaqueTexture = false;
 
             return UniversalRenderPipeline.CreateRenderTextureDescriptor(
                 m_Camera,
@@ -65,8 +64,7 @@ namespace UnityEditor.Rendering.Universal.Tests
                 isHdrEnabled,
                 requestHDRColorBufferPrecision,
                 msaaSamples,
-                needsAlpha,
-                requiresOpaqueTexture);
+                needsAlpha);
         }
 
         public void CheckDimensions(RenderTextureDescriptor desc, RenderScaleTestCase testCase)
@@ -99,24 +97,11 @@ namespace UnityEditor.Rendering.Universal.Tests
             // Setup needed data for the test
             m_CameraData.renderScale = testCase.renderScale;
             m_Camera.targetTexture = (testCase.cameraTargetIsRenderTexture) ? m_RT : null;
+            
+            // Initialize scaledWidth and scaledHeight using the helper function
+            UniversalRenderPipeline.InitializeScaledDimensions(m_Camera, m_CameraData);
 
             var desc = CreateRenderTextureDescriptor();
-            CheckDimensions(desc, testCase);
-        }
-
-        public class TestRTDimensionNativeRenderPass : ScriptableRenderPass {}
-
-        [TestCaseSource(nameof(TestCasesTextureDimension))]
-        public void TextureDescriptor_FromNativeRenderPass(RenderScaleTestCase testCase)
-        {
-            // Setup needed data for the test
-            m_CameraData.renderScale = testCase.renderScale;
-            m_Camera.targetTexture = (testCase.cameraTargetIsRenderTexture) ? m_RT : null;
-
-            m_CameraData.cameraTargetDescriptor = CreateRenderTextureDescriptor();
-
-            var nativeRenderPass = new TestRTDimensionNativeRenderPass();
-            ScriptableRenderer.GetRenderTextureDescriptor(m_CameraData, nativeRenderPass, out var desc);
             CheckDimensions(desc, testCase);
         }
     }

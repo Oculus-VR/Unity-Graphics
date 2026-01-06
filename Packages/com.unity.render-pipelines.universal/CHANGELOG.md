@@ -10,13 +10,34 @@ uid: urp-changelog
 Version Updated
 The version number for this package has increased due to a version update of a related graphics package.
 
+## [17.4.0] - 2025-10-22
+
+This version is compatible with Unity 6000.4.0a4.
+For the release notes, refer to the [Unity download archive](https://unity.com/releases/editor/archive).
+
+## [17.3.0] - 2025-08-27
+
+This version is compatible with Unity 6000.3.0b1.
+For the release notes, refer to the [Unity download archive](https://unity.com/releases/editor/archive).
+
+## [17.2.0] - 2025-05-14
+
+This version is compatible with Unity 6000.2.0b2.
+
+### Fixed
+- Fixed HDR debug mode not working when Compatibility Mode is enabled.
+- Avoid crash when a RendererFeature tries to render into a released RenderTexture.
+- Fixed light rendering incorrectly from certain angles when using Forward+ in URP.
+- Fixed an issue where the emission property of the Lit shader did not animate correctly when `_EmissionColor` was initially set to `(0, 0, 0)`.
+- Added Prepass Layer Mask to determine which GameObjects write depth.
+
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 
 ## [17.0.3] - 2025-02-13
 
-This version is compatible with Unity 6000.2.0a17.
+This version is compatible with Unity 6000.2.0a5.
 
 ### Added
 - `SetViewAndProjectionMatrices()` helper function is available within a RasterRenderPass in RenderGraph.

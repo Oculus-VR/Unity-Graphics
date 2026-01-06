@@ -226,7 +226,7 @@ namespace UnityEngine.Rendering
         /// <param name="width">Initial reference rendering width.</param>
         /// <param name="height">Initial reference rendering height.</param>
         /// <param name="useLegacyDynamicResControl">Use legacy hardware DynamicResolution control in RTHandle system.</param>
-        [Obsolete("useLegacyDynamicResControl is deprecated. Please use SetHardwareDynamicResolutionState() instead.")]
+        [Obsolete("useLegacyDynamicResControl is deprecated. Please use SetHardwareDynamicResolutionState() instead. #from(2023.3)")]
         public void Initialize(int width, int height, bool useLegacyDynamicResControl = false)
         {
             Initialize(width, height);
@@ -860,7 +860,8 @@ namespace UnityEngine.Rendering
                 //depth stencil texture
                 colorFormat = GraphicsFormat.None;
                 depthStencilFormat = format;
-                stencilFormat = GetStencilFormat(format);
+                // If the depth stencil buffer is memoryless, you cannot read the stencil buffer as a texture (through sampling)
+                stencilFormat = (memoryless != RenderTextureMemoryless.None) ? GraphicsFormat.None : GetStencilFormat(format);
 
                 fullName = CoreUtils.GetRenderTargetAutoName(width, height, slices, format, dimension, name, mips: useMipMap, enableMSAA: enableMSAA, msaaSamples: msaaSamples, dynamicRes: useDynamicScale, dynamicResExplicit: useDynamicScaleExplicit);
             }

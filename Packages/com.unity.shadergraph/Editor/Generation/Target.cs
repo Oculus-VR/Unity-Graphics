@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEditor.ShaderGraph.Internal;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.UIElements;
@@ -15,6 +16,7 @@ namespace UnityEditor.ShaderGraph
         internal virtual bool ignoreCustomInterpolators => true;
         internal virtual int padCustomInterpolatorLimit => 4;
         internal virtual bool prefersSpritePreview => false;
+        internal virtual bool prefersUITKPreview => false;
         public abstract bool IsActive();
         public abstract void Setup(ref TargetSetupContext context);
         public abstract void GetFields(ref TargetFieldContext context);
@@ -44,11 +46,13 @@ namespace UnityEditor.ShaderGraph
         {
             dstGraphFunctions = "";
             dstGraphPixel = "";
-            adjustedUvDerivs = new bool[4];
+            adjustedUvDerivs = new bool[Enum.GetValues(typeof(UVChannel)).Length];
             return false;
         }
 
         // think this is not called by anyone anymore, leaving it to avoid changing client code
         public abstract bool WorksWithSRP(RenderPipelineAsset scriptableRenderPipeline);
+
+        virtual public SubTarget activeSubTarget { get; set; }
     }
 }

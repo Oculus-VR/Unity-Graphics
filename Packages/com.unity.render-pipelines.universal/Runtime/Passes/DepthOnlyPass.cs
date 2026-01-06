@@ -10,13 +10,10 @@ namespace UnityEngine.Rendering.Universal.Internal
     /// You can use this pass to prime a depth buffer for subsequent rendering.
     /// Use it as a z-prepass, or use it to generate a depth buffer.
     /// </summary>
-    public class DepthOnlyPass : ScriptableRenderPass
+    public partial class DepthOnlyPass : ScriptableRenderPass
     {
-        private RTHandle destination { get; set; }
-        private GraphicsFormat depthStencilFormat;
         internal ShaderTagId shaderTagId { get; set; } = k_ShaderTagId;
 
-        private PassData m_PassData;
         FilteringSettings m_FilteringSettings;
 
         // Statics
@@ -35,11 +32,9 @@ namespace UnityEngine.Rendering.Universal.Internal
         public DepthOnlyPass(RenderPassEvent evt, RenderQueueRange renderQueueRange, LayerMask layerMask)
         {
             profilingSampler = new ProfilingSampler("Draw Depth Only");
-            m_PassData = new PassData();
             m_FilteringSettings = new FilteringSettings(renderQueueRange, layerMask);
             renderPassEvent = evt;
-            useNativeRenderPass = false;
-            this.shaderTagId = k_ShaderTagId;
+            shaderTagId = k_ShaderTagId;
         }
 
         /// <summary>
@@ -54,35 +49,6 @@ namespace UnityEngine.Rendering.Universal.Internal
             RenderTextureDescriptor baseDescriptor,
             RTHandle depthAttachmentHandle)
         {
-            this.destination = depthAttachmentHandle;
-            this.depthStencilFormat = baseDescriptor.depthStencilFormat;
-        }
-
-        /// <inheritdoc />
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void OnCameraSetup(CommandBuffer cmd, ref RenderingData renderingData)
-        {
-            var desc = renderingData.cameraData.cameraTargetDescriptor;
-
-            // Disable obsolete warning for internal usage
-            #pragma warning disable CS0618
-
-            // When depth priming is in use the camera target should not be overridden so the Camera's MSAA depth attachment is used.
-            if (renderingData.cameraData.renderer.useDepthPriming && (renderingData.cameraData.renderType == CameraRenderType.Base || renderingData.cameraData.clearDepth))
-            {
-                ConfigureTarget(renderingData.cameraData.renderer.cameraDepthTargetHandle);
-                // Only clear depth here so we don't clear any bound color target. It might be unused by this pass but that doesn't mean we can just clear it. (e.g. in case of overlay cameras + depth priming)
-                ConfigureClear(ClearFlag.Depth, Color.black);
-            }
-            // When not using depth priming the camera target should be set to our non MSAA depth target.
-            else
-            {
-                useNativeRenderPass = true;
-                ConfigureTarget(destination);
-                ConfigureClear(ClearFlag.All, Color.black);
-            }
-
-            #pragma warning restore CS0618
         }
 
         private static void ExecutePass(RasterCommandBuffer cmd, RendererList rendererList)
@@ -91,21 +57,6 @@ namespace UnityEngine.Rendering.Universal.Internal
             {
                 cmd.DrawRendererList(rendererList);
             }
-        }
-
-        /// <inheritdoc/>
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            ContextContainer frameData = renderingData.frameData;
-            UniversalRenderingData universalRenderingData = frameData.Get<UniversalRenderingData>();
-            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-            UniversalLightData lightData = frameData.Get<UniversalLightData>();
-
-            var param = InitRendererListParams(universalRenderingData, cameraData, lightData);
-            RendererList rendererList = context.CreateRendererList(ref param);
-
-            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), rendererList);
         }
 
         private class PassData
@@ -122,7 +73,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             return new RendererListParams(renderingData.cullResults, drawSettings, m_FilteringSettings);
         }
 
-        internal void Render(RenderGraph renderGraph, ContextContainer frameData, ref TextureHandle cameraDepthTexture, uint batchLayerMask, bool setGlobalDepth)
+        internal void Render(RenderGraph renderGraph, ContextContainer frameData, in TextureHandle depthTexture, uint batchLayerMask, bool setGlobalDepth)
         {
             UniversalRenderingData renderingData = frameData.Get<UniversalRenderingData>();
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
@@ -135,16 +86,23 @@ namespace UnityEngine.Rendering.Universal.Internal
                 passData.rendererList = renderGraph.CreateRendererList(param);
                 builder.UseRendererList(passData.rendererList);
 
-                builder.SetRenderAttachmentDepth(cameraDepthTexture, AccessFlags.Write);
+                builder.SetRenderAttachmentDepth(depthTexture, AccessFlags.ReadWrite);
 
                 if (setGlobalDepth)
-                    builder.SetGlobalTextureAfterPass(cameraDepthTexture, s_CameraDepthTextureID);
+                    builder.SetGlobalTextureAfterPass(depthTexture, s_CameraDepthTextureID);
 
                 builder.AllowGlobalStateModification(true);
                 if (cameraData.xr.enabled)
+                {
                     builder.EnableFoveatedRasterization(cameraData.xr.supportsFoveatedRendering && cameraData.xrUniversal.canFoveateIntermediatePasses);
+                    // Apply MultiviewRenderRegionsCompatible flag only to the peripheral view in Quad Views
+                    if (cameraData.xr.multipassId == 0)
+                    {
+                        builder.SetExtendedFeatureFlags(ExtendedFeatureFlags.MultiviewRenderRegionsCompatible);
+                    }
+                }
 
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                builder.SetRenderFunc(static (PassData data, RasterGraphContext context) =>
                 {
                     ExecutePass(context.cmd, data.rendererList);
                 });

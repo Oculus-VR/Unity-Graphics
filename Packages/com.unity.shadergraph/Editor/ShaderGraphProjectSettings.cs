@@ -2,14 +2,19 @@ using UnityEngine;
 using System.Collections.Generic;
 using UnityEngine.Serialization;
 using UnityEngine.UIElements;
+using static UnityEngine.GraphicsBuffer;
 
 namespace UnityEditor.ShaderGraph
 {
     [FilePath("ProjectSettings/ShaderGraphSettings.asset", FilePathAttribute.Location.ProjectFolder)]
     internal class ShaderGraphProjectSettings : ScriptableSingleton<ShaderGraphProjectSettings>
     {
+        static internal readonly int defaultVariantLimit = 2048;
+
         [SerializeField]
-        internal int shaderVariantLimit = 2048;
+        internal int shaderVariantLimit = defaultVariantLimit;
+        [SerializeField]
+        internal bool overrideShaderVariantLimit = false;
         [SerializeField]
         internal int customInterpolatorErrorThreshold = 32;
         [SerializeField]
@@ -37,6 +42,7 @@ namespace UnityEditor.ShaderGraph
         private class Styles
         {
             public static readonly GUIContent shaderVariantLimitLabel = L10n.TextContent("Shader Variant Limit", "");
+            public static readonly GUIContent overrideShaderVariantLimitLabel = L10n.TextContent("Override Variant Limit", $"The Shader Graph internal default limit Shader Variant Limit is {ShaderGraphProjectSettings.defaultVariantLimit}.");
             public static readonly GUIContent CustomInterpLabel = L10n.TextContent("Custom Interpolator Channel Settings", "");
             public static readonly GUIContent CustomInterpWarnThresholdLabel = L10n.TextContent("Warning Threshold", $"Shader Graph displays a warning when the user creates more custom interpolators than permitted by this setting. The number of interpolators that trigger this warning must be between {kMinChannelThreshold} and the Error Threshold.");
             public static readonly GUIContent CustomInterpErrorThresholdLabel = L10n.TextContent("Error Threshold", $"Shader Graph displays an error message when the user tries to create more custom interpolators than permitted by this setting. The number of interpolators that trigger this error must be between {kMinChannelThreshold} and {kMaxChannelThreshold}.");
@@ -48,6 +54,7 @@ namespace UnityEditor.ShaderGraph
 
         SerializedObject m_SerializedObject;
         SerializedProperty m_shaderVariantLimit;
+        SerializedProperty m_overrideShaderVariantLimit;
         SerializedProperty m_customInterpWarn;
         SerializedProperty m_customInterpError;
         SerializedProperty m_HeatValues;
@@ -62,43 +69,49 @@ namespace UnityEditor.ShaderGraph
             ShaderGraphProjectSettings.instance.Save();
             m_SerializedObject = ShaderGraphProjectSettings.instance.GetSerializedObject();
             m_shaderVariantLimit = m_SerializedObject.FindProperty("shaderVariantLimit");
+            m_overrideShaderVariantLimit = m_SerializedObject.FindProperty("overrideShaderVariantLimit");
             m_customInterpWarn = m_SerializedObject.FindProperty("customInterpolatorWarningThreshold");
             m_customInterpError = m_SerializedObject.FindProperty("customInterpolatorErrorThreshold");
             m_HeatValues = m_SerializedObject.FindProperty(nameof(ShaderGraphProjectSettings.customHeatmapValues));
         }
 
-        int oldWarningThreshold;
         void OnGUIHandler(string searchContext)
         {
             m_SerializedObject.Update();
 
             EditorGUI.BeginChangeCheck();
 
-            var newVariantLimitValue = EditorGUILayout.DelayedIntField(Styles.shaderVariantLimitLabel, m_shaderVariantLimit.intValue);
-            newVariantLimitValue = Mathf.Max(0, newVariantLimitValue);
-            if (newVariantLimitValue != m_shaderVariantLimit.intValue)
+            var doOverride = EditorGUILayout.Toggle(Styles.overrideShaderVariantLimitLabel, m_overrideShaderVariantLimit.boolValue);
+            if (doOverride != m_overrideShaderVariantLimit.boolValue)
             {
-                m_shaderVariantLimit.intValue = newVariantLimitValue;
+                m_overrideShaderVariantLimit.boolValue = doOverride;
                 if (ShaderGraphPreferences.onVariantLimitChanged != null)
                     ShaderGraphPreferences.onVariantLimitChanged();
+            }
+
+            using (new EditorGUI.DisabledScope(!doOverride))
+            {
+                var newVariantLimitValue = EditorGUILayout.DelayedIntField(Styles.shaderVariantLimitLabel, m_shaderVariantLimit.intValue);
+                newVariantLimitValue = Mathf.Max(0, newVariantLimitValue);
+                if (newVariantLimitValue != m_shaderVariantLimit.intValue)
+                {
+                    m_shaderVariantLimit.intValue = newVariantLimitValue;
+                    if (ShaderGraphPreferences.onVariantLimitChanged != null)
+                        ShaderGraphPreferences.onVariantLimitChanged();
+                }
             }
 
             EditorGUILayout.LabelField(Styles.CustomInterpLabel, EditorStyles.boldLabel);
             EditorGUI.indentLevel++;
 
-            int newError = EditorGUILayout.IntField(Styles.CustomInterpErrorThresholdLabel, m_customInterpError.intValue);
-            m_customInterpError.intValue = Mathf.Clamp(newError, kMinChannelThreshold, kMaxChannelThreshold);
-
+            int oldError = m_customInterpError.intValue;
             int oldWarn = m_customInterpWarn.intValue;
-            int newWarn = EditorGUILayout.IntField(Styles.CustomInterpWarnThresholdLabel, m_customInterpWarn.intValue);
 
-            // If the user did not modify the warning field, restore their previous input and reclamp against the new error threshold.
-            if (oldWarn == newWarn)
-                newWarn = oldWarningThreshold;
-            else
-                oldWarningThreshold = newWarn;
+            int newError = EditorGUILayout.DelayedIntField(Styles.CustomInterpErrorThresholdLabel, oldError);
+            int newWarn = EditorGUILayout.DelayedIntField(Styles.CustomInterpWarnThresholdLabel, oldWarn);
 
-            m_customInterpWarn.intValue = Mathf.Clamp(newWarn, kMinChannelThreshold, m_customInterpError.intValue);
+            m_customInterpError.intValue = Mathf.Clamp(newError, oldWarn, kMaxChannelThreshold);
+            m_customInterpWarn.intValue = Mathf.Clamp(newWarn, kMinChannelThreshold, oldError);
 
             GUILayout.BeginHorizontal(EditorStyles.helpBox);
             GUILayout.Label(EditorGUIUtility.IconContent("console.infoicon"), GUILayout.ExpandWidth(true));

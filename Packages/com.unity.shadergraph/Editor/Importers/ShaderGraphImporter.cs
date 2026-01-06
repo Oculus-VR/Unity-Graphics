@@ -10,17 +10,23 @@ using UnityEditor.Graphing;
 using UnityEditor.Graphing.Util;
 using UnityEditor.ShaderGraph.Internal;
 using UnityEditor.ShaderGraph.Serialization;
-using Object = System.Object;
+using UnityEngine.Rendering.ShaderGraph;
+using UnityEngine.Rendering;
 
 namespace UnityEditor.ShaderGraph
 {
     [ExcludeFromPreset]
-    [ScriptedImporter(132, Extension, -902)]
+    [ScriptedImporter(133, Extension, -902)]
+    [CoreRPHelpURL("Shader-Graph-Asset", "com.unity.shadergraph")]
     class ShaderGraphImporter : ScriptedImporter
     {
         public const string Extension = "shadergraph";
         public const string LegacyExtension = "ShaderGraph";
         const string IconBasePath = "Packages/com.unity.shadergraph/Editor/Resources/Icons/sg_graph_icon.png";
+
+        internal static readonly string TemplateFieldName = nameof(m_Template);
+        internal static readonly string UseAsTemplateFieldName = nameof(m_UseAsTemplate);
+        internal static readonly string ExposeTemplateAsShaderFieldName = nameof(m_ExposeTemplateAsShader);
 
         public const string k_ErrorShader = @"
 Shader ""Hidden/GraphErrorShader2""
@@ -63,6 +69,33 @@ Shader ""Hidden/GraphErrorShader2""
     }
     Fallback Off
 }";
+
+        [SerializeField]
+        bool m_UseAsTemplate;
+
+        [SerializeField]
+        bool m_ExposeTemplateAsShader;
+
+        public bool UseAsTemplate
+        {
+            get => m_UseAsTemplate;
+            set => m_UseAsTemplate = value;
+        }
+
+        public bool ExposeTemplateAsShader
+        {
+            get => m_ExposeTemplateAsShader;
+            set => m_ExposeTemplateAsShader = value;
+        }
+
+        [SerializeField]
+        ShaderGraphTemplate m_Template;
+
+        public ShaderGraphTemplate Template
+        {
+            get => m_Template;
+            set => m_Template = value;
+        }
 
         public static Texture2D GetIcon() => EditorGUIUtility.IconContent(IconBasePath)?.image as Texture2D;
 
@@ -113,7 +146,7 @@ Shader ""Hidden/GraphErrorShader2""
             {
                 // this will also add Target dependencies into the asset collection
                 Generator generator;
-                generator = new Generator(graph, graph.outputNode, GenerationMode.ForReals, primaryShaderName, assetCollection: allImportAssetDependencies);
+                generator = new Generator(graph, graph.outputNode, GenerationMode.ForReals, primaryShaderName, assetCollection: allImportAssetDependencies, hidden: m_UseAsTemplate && !m_ExposeTemplateAsShader);
 
                 bool first = true;
                 foreach (var generatedShader in generator.allGeneratedShaders)
@@ -121,7 +154,7 @@ Shader ""Hidden/GraphErrorShader2""
                     var shaderString = generatedShader.codeString;
 
                     // we only care if an error was reported for a node that we actually used
-                    if (graph.messageManager.AnyError((nodeId) => NodeWasUsedByGraph(nodeId, graph)) ||
+                    if (graph.messageManager.HasSeverity((nodeId) => NodeWasUsedByGraph(nodeId, graph), Rendering.ShaderCompilerMessageSeverity.Error) ||
                         shaderString == null)
                     {
                         shaderString = k_ErrorShader.Replace("Hidden/GraphErrorShader2", generatedShader.shaderName);
@@ -136,12 +169,12 @@ Shader ""Hidden/GraphErrorShader2""
                         EditorMaterialUtility.SetShaderDefaults(
                             shader,
                             generatedShader.assignedTextures.Where(x => x.modifiable).Select(x => x.name).ToArray(),
-                            generatedShader.assignedTextures.Where(x => x.modifiable).Select(x => EditorUtility.InstanceIDToObject(x.textureId) as Texture).ToArray());
+                            generatedShader.assignedTextures.Where(x => x.modifiable).Select(x => EditorUtility.EntityIdToObject(x.textureId) as Texture).ToArray());
 
                         EditorMaterialUtility.SetShaderNonModifiableDefaults(
                             shader,
                             generatedShader.assignedTextures.Where(x => !x.modifiable).Select(x => x.name).ToArray(),
-                            generatedShader.assignedTextures.Where(x => !x.modifiable).Select(x => EditorUtility.InstanceIDToObject(x.textureId) as Texture).ToArray());
+                            generatedShader.assignedTextures.Where(x => !x.modifiable).Select(x => EditorUtility.EntityIdToObject(x.textureId) as Texture).ToArray());
                     }
                     if (first)
                     {
@@ -281,84 +314,60 @@ Shader ""Hidden/GraphErrorShader2""
                 }
             }
 
-            List<GraphInputData> inputInspectorDataList = new List<GraphInputData>();
-            foreach (AbstractShaderProperty property in graph.properties)
-            {
-                // Don't write out data for non-exposed blackboard items
-                if (!property.isExposed)
-                    continue;
-
-                // VTs are treated differently
-                if (property is VirtualTextureShaderProperty virtualTextureShaderProperty)
-                    inputInspectorDataList.Add(MinimalCategoryData.ProcessVirtualTextureProperty(virtualTextureShaderProperty));
-                else
-                    inputInspectorDataList.Add(new GraphInputData() { referenceName = property.referenceName, propertyType = property.propertyType, isKeyword = false });
-            }
-            foreach (ShaderKeyword keyword in graph.keywords)
-            {
-                // Don't write out data for non-exposed blackboard items
-                if (!keyword.isExposed)
-                    continue;
-
-                var sanitizedReferenceName = keyword.referenceName;
-                if (keyword.keywordType == KeywordType.Boolean && keyword.referenceName.Contains("_ON"))
-                    sanitizedReferenceName = sanitizedReferenceName.Replace("_ON", String.Empty);
-
-                inputInspectorDataList.Add(new GraphInputData() { referenceName = sanitizedReferenceName, keywordType = keyword.keywordType, isKeyword = true });
-            }
-
-            sgMetadata.categoryDatas = new List<MinimalCategoryData>();
+            CategoryDataCollection categoryDatas = new();
+            int propertyOrder = 0;
+            int categoryOrder = 1;
+            HashSet<ShaderInput> existsInMainGraphCategory = new();
             foreach (CategoryData categoryData in graph.categories)
             {
                 // Don't write out empty categories
                 if (categoryData.childCount == 0)
                     continue;
 
-                MinimalCategoryData mcd = new MinimalCategoryData()
-                {
-                    categoryName = categoryData.name,
-                    propertyDatas = new List<GraphInputData>()
-                };
+                propertyOrder = 0; // reset for the new category.
                 foreach (var input in categoryData.Children)
                 {
-                    GraphInputData propData;
-                    // Only write out data for exposed blackboard items
-                    if (input.isExposed == false)
-                        continue;
-
-                    // VTs are treated differently
-                    if (input is VirtualTextureShaderProperty virtualTextureShaderProperty)
+                    existsInMainGraphCategory.Add(input);
+                    if (MinimalCategoryData.TryProcessInput(input, out var data))
                     {
-                        propData = MinimalCategoryData.ProcessVirtualTextureProperty(virtualTextureShaderProperty);
-                        inputInspectorDataList.RemoveAll(inputData => inputData.referenceName == propData.referenceName);
-                        mcd.propertyDatas.Add(propData);
-                        continue;
+                        categoryDatas.Set(categoryData.name, data, propertyOrder++, categoryOrder++);
                     }
-                    else if (input is ShaderKeyword keyword)
-                    {
-                        var sanitizedReferenceName = keyword.referenceName;
-                        if (keyword.keywordType == KeywordType.Boolean && keyword.referenceName.Contains("_ON"))
-                            sanitizedReferenceName = sanitizedReferenceName.Replace("_ON", String.Empty);
-
-                        propData = new GraphInputData() { referenceName = sanitizedReferenceName, keywordType = keyword.keywordType, isKeyword = true };
-                    }
-                    else
-                    {
-                        var prop = input as AbstractShaderProperty;
-                        propData = new GraphInputData() { referenceName = input.referenceName, propertyType = prop.propertyType, isKeyword = false };
-                    }
-
-                    mcd.propertyDatas.Add(propData);
-                    inputInspectorDataList.Remove(propData);
                 }
-                sgMetadata.categoryDatas.Add(mcd);
             }
 
-            // Any uncategorized elements get tossed into an un-named category at the top as a fallback
-            if (inputInspectorDataList.Count > 0)
+            foreach (AbstractShaderProperty property in graph.properties)
             {
-                sgMetadata.categoryDatas.Insert(0, new MinimalCategoryData() { categoryName = "", propertyDatas = inputInspectorDataList });
+                if (!existsInMainGraphCategory.Contains(property) && MinimalCategoryData.TryProcessInput(property, out var data))
+                    categoryDatas.Set("", data, propertyOrder++, 0);
             }
+            foreach (ShaderKeyword keyword in graph.keywords)
+            {
+                if (!existsInMainGraphCategory.Contains(keyword) && MinimalCategoryData.TryProcessInput(keyword, out var data))
+                    categoryDatas.Set("", data, propertyOrder++, 0);
+            }
+
+            // get a property/score offset based on the asset source name so that
+            // promoted properties that share a category are not interleaved.
+            HashSet<string> sources = new();
+            foreach (var input in graph.GetPromotedInputs())
+                sources.Add(input.PromotedAssetName);
+
+            var orderedSources = new List<string>(sources);
+            orderedSources.Sort();
+
+            //// Handle Promoted Property Categories
+            foreach (var input in graph.GetPromotedInputs())
+            {
+                // big numbers just prevent subraph properties from ever coming before main graph properties.
+                int sourceOffset = (orderedSources.IndexOf(input.PromotedAssetName)+1) * 1000 + 100000;
+                propertyOrder = sourceOffset + input.promotedOrdering;
+                if (MinimalCategoryData.TryProcessInput(input, out var data))
+                {
+                    categoryDatas.Set(input.PromotedCategoryName, data, propertyOrder, input.HasPromotedCategory ? 1000 : 10000);
+                }
+            }
+
+            sgMetadata.categoryDatas = categoryDatas.GenerateMCD();
 
             ctx.AddObjectToAsset("SGInternal:Metadata", sgMetadata);
 
@@ -472,7 +481,7 @@ Shader ""Hidden/GraphErrorShader2""
                 configuredTextures = generator.configuredTextures;
 
                 // we only care if an error was reported for a node that we actually used
-                if (graph.messageManager.AnyError((nodeId) => NodeWasUsedByGraph(nodeId, graph)))
+                if (graph.messageManager.HasSeverity((nodeId) => NodeWasUsedByGraph(nodeId, graph), Rendering.ShaderCompilerMessageSeverity.Error))
                 {
                     shaderString = null;
                 }
@@ -892,7 +901,21 @@ Shader ""Hidden/GraphErrorShader2""
             var sortedProperties = graph.categories
                 .SelectMany(x => x.Children)
                 .Union(graph.properties)
-                .Where(x => x.isExposed);
+                .Where(x =>
+                    {
+                        if (!asset.generatesWithShaderGraph)
+                            return x.isExposed; //Compatibility behavior for old SG integration
+
+                        if (x is AbstractShaderProperty shaderProperty)
+                        {
+                            if (shaderProperty.isExposed)
+                                return true; //see implicit override of isPerElementVFX in https://github.cds.internal.unity3d.com/unity/unity/blob/b27af44f6be3c181e86bd3c2e30fd58738a69404/Packages/com.unity.shadergraph/Editor/Data/Graphs/GraphData.cs#L1357
+
+                            return shaderProperty.isPerElementVFX && x.isExposable;
+                        }
+
+                        return x.isExposable;
+                    });
 
             foreach (var property in sortedProperties)
             {

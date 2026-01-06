@@ -24,6 +24,8 @@ namespace UnityEditor.Rendering
             public static readonly GUIContent meshBoxCollider = EditorGUIUtility.TrTextContent("Add a Mesh Collider");
             public static readonly GUIContent addColliderFixMessage = EditorGUIUtility.TrTextContentWithIcon("Add a Collider to this GameObject to set boundaries for the local Volume.", CoreEditorStyles.iconWarn);
             public static readonly GUIContent disableColliderFixMessage = EditorGUIUtility.TrTextContentWithIcon("Global Volumes do not need a collider. Disable or remove the collider.", CoreEditorStyles.iconWarn);
+            public static readonly GUIContent physicsBackendDisabledMessage = EditorGUIUtility.TrTextContentWithIcon("Local Volumes are unavailable when the Physics GameObject SDK is set to None. Either choose a different Physics SDK in Project Settings > Physics, or set the Mode to Global.", CoreEditorStyles.iconWarn);
+            public static readonly GUIContent physicsModuleDisabledMessage = EditorGUIUtility.TrTextContentWithIcon("Local Volumes are unavailable without the Physics module. Enable the Physics module, or set the Mode to Global.", CoreEditorStyles.iconWarn);
             public static readonly GUIContent enableColliderFixMessage = EditorGUIUtility.TrTextContentWithIcon("Local Volumes need a collider enabled. Enable the collider.", CoreEditorStyles.iconWarn);
             public static readonly GUIContent newLabel = EditorGUIUtility.TrTextContent("New", "Create a new profile.");
             public static readonly GUIContent saveLabel = EditorGUIUtility.TrTextContent("Save", "Save the instantiated profile");
@@ -92,6 +94,13 @@ namespace UnityEditor.Rendering
                 }
                 else
                 {
+#if ENABLE_PHYSICS_MODULE
+                    bool physicsBackendIsNone = Physics.GetCurrentIntegrationInfo().isFallback;
+                    if (physicsBackendIsNone)
+                        EditorGUILayout.HelpBox(Styles.physicsBackendDisabledMessage);
+#else
+                    EditorGUILayout.HelpBox(Styles.physicsModuleDisabledMessage);
+#endif
                     if (hasCollider)
                     {
                         if (!collider.enabled)
@@ -266,29 +275,62 @@ namespace UnityEditor.Rendering
 
             if (profileRef != null)
             {
+                bool hasNoComponents = profileRef.components.Count == 0;
+
                 var cloneLabel = targetVolume.HasInstantiatedProfile() ? Styles.saveLabel : Styles.cloneLabel;
                 menu.AddItem(cloneLabel, false, CloneProfile);
                 menu.AddSeparator(string.Empty);
-                menu.AddItem(VolumeProfileUtils.Styles.collapseAll, false, () =>
+
+                if (hasNoComponents)
                 {
-                    VolumeProfileUtils.SetComponentEditorsExpanded(m_ComponentList.editors, false);
-                });
-                menu.AddItem(VolumeProfileUtils.Styles.expandAll, false, () =>
+                    menu.AddDisabledItem(VolumeProfileUtils.Styles.collapseAll);
+                    menu.AddDisabledItem(VolumeProfileUtils.Styles.expandAll);
+                }
+                else
                 {
-                    VolumeProfileUtils.SetComponentEditorsExpanded(m_ComponentList.editors, true);
-                });
+                    menu.AddItem(VolumeProfileUtils.Styles.collapseAll, false, () =>
+                    {
+                        VolumeProfileUtils.SetComponentEditorsExpanded(m_ComponentList.editors, false);
+                    });
+                    menu.AddItem(VolumeProfileUtils.Styles.expandAll, false, () =>
+                    {
+                        VolumeProfileUtils.SetComponentEditorsExpanded(m_ComponentList.editors, true);
+                    });
+                }
+
                 menu.AddSeparator(string.Empty);
-                menu.AddItem(Styles.enableAll, false, () => SetComponentsActive(true));
-                menu.AddItem(Styles.disableAll, false, () => SetComponentsActive(false));
-                menu.AddItem(Styles.removeAll, false, () => m_ComponentList.RemoveAllComponents());
-                menu.AddItem(VolumeProfileUtils.Styles.resetAll, false, () => m_ComponentList.ResetAllComponents());
+
+                if (hasNoComponents)
+                {
+                    menu.AddDisabledItem(Styles.enableAll);
+                    menu.AddDisabledItem(Styles.disableAll);
+                    menu.AddDisabledItem(Styles.removeAll);
+                    menu.AddDisabledItem(VolumeProfileUtils.Styles.resetAll);
+                }
+                else
+                {
+                    menu.AddItem(Styles.enableAll, false, () => SetComponentsActive(true));
+                    menu.AddItem(Styles.disableAll, false, () => SetComponentsActive(false));
+                    menu.AddItem(Styles.removeAll, false, () => m_ComponentList.RemoveAllComponents());
+                    menu.AddItem(VolumeProfileUtils.Styles.resetAll, false, () => m_ComponentList.ResetAllComponents());
+                }
+
                 menu.AddSeparator(string.Empty);
-                menu.AddItem(VolumeProfileUtils.Styles.copyAllSettings, false,
-                    () => VolumeComponentCopyPaste.CopySettings(profileRef.components));
+
+                if (hasNoComponents)
+                {
+                    menu.AddDisabledItem(VolumeProfileUtils.Styles.copyAllSettings);
+                }
+                else
+                {
+                    menu.AddItem(VolumeProfileUtils.Styles.copyAllSettings, false,
+                        () => VolumeComponentCopyPaste.CopySettings(profileRef.components));
+                }
+
                 if (VolumeComponentCopyPaste.CanPaste(profileRef.components))
                     menu.AddItem(VolumeProfileUtils.Styles.pasteSettings, false, () =>
                     {
-                        VolumeComponentCopyPaste.PasteSettings(profileRef.components);
+                        VolumeComponentCopyPaste.PasteSettings(profileRef.components, profileRef);
                         VolumeManager.instance.OnVolumeProfileChanged(profileRef);
                     });
                 else

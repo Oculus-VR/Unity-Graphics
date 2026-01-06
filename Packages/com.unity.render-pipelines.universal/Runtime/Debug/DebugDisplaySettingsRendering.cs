@@ -48,7 +48,7 @@ namespace UnityEngine.Rendering.Universal
         /// <summary>
         /// Whether debug overdraw mode is active.
         /// </summary>
-        [Obsolete("overdraw has been deprecated. Use overdrawMode instead.", true)]
+        [Obsolete("overdraw has been deprecated. Use overdrawMode instead. #from(2022.2) #breakingFrom(2023.1)", true)]
 
         public bool overdraw
         {
@@ -553,7 +553,6 @@ namespace UnityEngine.Rendering.Universal
                 {
                     displayName = "Rendering Debug",
                     flags = DebugUI.Flags.FrequentlyUsed,
-                    isHeader = true,
                     opened = true,
                     children =
                     {
@@ -575,7 +574,6 @@ namespace UnityEngine.Rendering.Universal
                 AddWidget(new DebugUI.Foldout
                 {
                     displayName = "Pixel Validation",
-                    isHeader = true,
                     opened = true,
                     children =
                     {
@@ -597,13 +595,12 @@ namespace UnityEngine.Rendering.Universal
                 AddWidget(new DebugUI.Foldout
                 {
                     displayName = "HDR Output",
-                    isHeader = true,
                     opened = true,
                     children =
                     {
                         new DebugUI.MessageBox
                         {
-                            displayName = "The values on the Rendering Debugger editor window might not be accurate. Please use the playmode debug UI (Ctrl+Backspace).",
+                            displayName = "The values in the Rendering Debugger editor window might not be accurate. Please use the Rendering Debugger Overlay instead (Ctrl+Backspace in Play mode).",
                             style = DebugUI.MessageBox.Style.Warning,
                         },
                         DebugDisplaySettingsHDROutput.CreateHDROuputDisplayTable()

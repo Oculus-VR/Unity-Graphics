@@ -69,7 +69,7 @@ namespace UnityEngine.Rendering
         public int activeMeshLod; // or -1 if this draw is not using mesh LOD
         public BatchMaterialID materialID;
         public BatchDrawCommandFlags flags;
-        public int transparentInstanceId; // non-zero for transparent instances, to ensure each instance has its own draw command (for sorting)
+        public EntityId transparentInstanceId; // non-zero for transparent instances, to ensure each instance has its own draw command (for sorting)
         public uint overridenComponents;
         public RangeKey range;
         public int lightmapIndex;
@@ -96,7 +96,7 @@ namespace UnityEngine.Rendering
             hash = (hash * 23) + (int)activeMeshLod;
             hash = (hash * 23) + (int)materialID.value;
             hash = (hash * 23) + (int)flags;
-            hash = (hash * 23) + transparentInstanceId;
+            hash = (hash * 23) + transparentInstanceId.GetHashCode();
             hash = (hash * 23) + range.GetHashCode();
             hash = (hash * 23) + (int)overridenComponents;
             hash = (hash * 23) + lightmapIndex;
@@ -403,11 +403,11 @@ namespace UnityEngine.Rendering
         private uint ComputeMeshLODLevel(int instanceIndex, int sharedInstanceIndex)
         {
             ref readonly GPUDrivenRendererMeshLodData meshLodData = ref instanceData.meshLodData.UnsafeElementAt(instanceIndex);
+            var meshLodInfo = sharedInstanceData.meshLodInfos[sharedInstanceIndex];
 
             if (meshLodData.forceLod >= 0)
-                return (uint)meshLodData.forceLod;
+                return (uint)math.clamp(meshLodData.forceLod, 0, meshLodInfo.levelCount - 1);
 
-            var levelInfo = sharedInstanceData.meshLodInfos[sharedInstanceIndex];
             ref readonly AABB worldAABB = ref instanceData.worldAABBs.UnsafeElementAt(instanceIndex);
 
             var radiusSqr = math.max(math.lengthsq(worldAABB.extents), 1e-5f);
@@ -417,13 +417,13 @@ namespace UnityEngine.Rendering
 
             var boundsDesiredPercentage = Math.Sqrt(cameraSqrHeightAtDistance / diameterSqr);
 
-            var levelIndexFlt = math.log2(boundsDesiredPercentage) * levelInfo.lodSlope + levelInfo.lodBias;
+            var levelIndexFlt = math.log2(boundsDesiredPercentage) * meshLodInfo.lodSlope + meshLodInfo.lodBias;
 
             // We apply Bias after max to enforce that a positive bias of +N we would select lodN instead of Lod0
             levelIndexFlt = math.max(levelIndexFlt, 0);
             levelIndexFlt += meshLodData.lodSelectionBias;
 
-            levelIndexFlt = math.clamp(levelIndexFlt,0, levelInfo.levelCount - 1);
+            levelIndexFlt = math.clamp(levelIndexFlt, 0, meshLodInfo.levelCount - 1);
 
             return (uint)math.floor(levelIndexFlt);
         }
@@ -591,6 +591,19 @@ namespace UnityEngine.Rendering
             return batchLodLevel == instanceLodLevel + sign;
         }
 
+        static int GetPrimitiveCount(int indexCount, MeshTopology topology, bool nativeQuads)
+        {
+            switch (topology)
+            {
+                case MeshTopology.Triangles: return indexCount / 3;
+                case MeshTopology.Quads: return nativeQuads ? (indexCount / 4) : (indexCount / 4 * 2);
+                case MeshTopology.Lines: return indexCount / 2;
+                case MeshTopology.LineStrip: return (indexCount >= 1) ? (indexCount - 1) : 0;
+                case MeshTopology.Points: return indexCount;
+                default: Debug.Assert(false, "unknown primitive type"); return 0;
+            }
+        }
+
         public void Execute(int batchIndex)
         {
             // figure out how many combinations of views/features we need to partition by
@@ -697,7 +710,12 @@ namespace UnityEngine.Rendering
 
                         int visibleCount = visibleCountPerView[viewIndex];
                         if (visibleCount > 0)
+                        {
+                            int primitiveCount = GetPrimitiveCount((int)drawBatch.procInfo.indexCount, drawBatch.procInfo.topology, false);
+
                             Interlocked.Add(ref UnsafeUtility.AsRef<int>(counterPtr + (int)InstanceCullerSplitDebugCounter.VisibleInstances), visibleCount);
+                            Interlocked.Add(ref UnsafeUtility.AsRef<int>(counterPtr + (int)InstanceCullerSplitDebugCounter.VisiblePrimitives), visibleCount * primitiveCount);
+                        }
                     }
                 }
             }
@@ -830,7 +848,7 @@ namespace UnityEngine.Rendering
                     allocInfo.drawCount = outIndirectCommandIndex;
                     allocInfo.instanceCount = outIndirectVisibleInstanceIndex;
 
-                    int drawAllocCount = allocInfo.drawCount + IndirectBufferContextStorage.kExtraDrawAllocationCount;
+                    int drawAllocCount = allocInfo.drawCount;
                     int drawAllocEnd = Interlocked.Add(ref UnsafeUtility.AsRef<int>(allocCounters + (int)IndirectAllocator.NextDrawIndex), drawAllocCount);
                     allocInfo.drawAllocIndex = drawAllocEnd - drawAllocCount;
 
@@ -1060,7 +1078,7 @@ namespace UnityEngine.Rendering
                         firstIndex = drawBatch.procInfo.firstIndex,
                         baseVertex = drawBatch.procInfo.baseVertex,
                         firstInstanceGlobalIndex = (uint)instanceInfoGlobalIndex,
-                        maxInstanceCount = (uint)visibleInstanceCount,
+                        maxInstanceCountAndTopology = ((uint)visibleInstanceCount << 3) | (uint)drawBatch.procInfo.topology,
                     };
                     output.indirectDrawCommands[drawCommandOffset] = new BatchDrawCommandIndirect
                     {
@@ -1280,7 +1298,7 @@ namespace UnityEngine.Rendering
         [ReadOnly] public NativeArray<int> drawBatchIndices;
 
         [ReadOnly] public NativeArray<bool> filteringResults;
-        [ReadOnly] public NativeArray<int> excludedRenderers;
+        [ReadOnly] public NativeArray<EntityId> excludedRenderers;
 
         [ReadOnly] public FilteringJobMode mode;
 
@@ -1305,7 +1323,7 @@ namespace UnityEngine.Rendering
 
             output.drawCommandCount = output.visibleInstanceCount; // for picking/filtering, 1 draw command per instance!
             output.drawCommands = MemoryUtilities.Malloc<BatchDrawCommand>(output.drawCommandCount, Allocator.TempJob);
-            output.drawCommandPickingInstanceIDs = MemoryUtilities.Malloc<int>(output.drawCommandCount, Allocator.TempJob);
+            output.drawCommandPickingEntityIds = MemoryUtilities.Malloc<EntityId>(output.drawCommandCount, Allocator.TempJob);
 
             int outRangeIndex = 0;
             int outCommandIndex = 0;
@@ -1354,7 +1372,7 @@ namespace UnityEngine.Rendering
                             throw new Exception("Draw command created with an invalid BatchID");
 #endif
                         output.visibleInstances[outVisibleInstanceIndex] = instanceDataBuffer.CPUInstanceToGPUInstance(instance).index;
-                        output.drawCommandPickingInstanceIDs[outCommandIndex] = rendererID;
+                        output.drawCommandPickingEntityIds[outCommandIndex] = rendererID;
                         output.drawCommands[outCommandIndex] = new BatchDrawCommand
                         {
                             flags = BatchDrawCommandFlags.None,
@@ -1442,6 +1460,7 @@ namespace UnityEngine.Rendering
     internal enum InstanceCullerSplitDebugCounter
     {
         VisibleInstances,
+        VisiblePrimitives,
         DrawCommands,
         Count,
     }
@@ -1453,7 +1472,7 @@ namespace UnityEngine.Rendering
         internal struct Info
         {
             public BatchCullingViewType viewType;
-            public int viewInstanceID;
+            public EntityId viewInstanceID;
             public int splitIndex;
         }
 
@@ -1477,7 +1496,7 @@ namespace UnityEngine.Rendering
             m_CounterSync.Dispose();
         }
 
-        public int TryAddSplits(BatchCullingViewType viewType, int viewInstanceID, int splitCount)
+        public int TryAddSplits(BatchCullingViewType viewType, EntityId viewInstanceID, int splitCount)
         {
             int baseIndex = m_Info.Length;
             if (baseIndex + splitCount > MaxSplitCount)
@@ -1520,7 +1539,10 @@ namespace UnityEngine.Rendering
                     viewType = info.viewType,
                     viewInstanceID = info.viewInstanceID,
                     splitIndex = info.splitIndex,
-                    visibleInstances = m_Counters[counterBase + (int)InstanceCullerSplitDebugCounter.VisibleInstances],
+                    visibleInstancesOnCPU = m_Counters[counterBase + (int)InstanceCullerSplitDebugCounter.VisibleInstances],
+                    visibleInstancesOnGPU = 0, // Unknown at this point, will be filled in later
+                    visiblePrimitivesOnCPU = m_Counters[counterBase + (int)InstanceCullerSplitDebugCounter.VisiblePrimitives],
+                    visiblePrimitivesOnGPU = 0, // Unknown at this point, will be filled in later
                     drawCommands = m_Counters[counterBase + (int)InstanceCullerSplitDebugCounter.DrawCommands],
                 });
             }
@@ -1538,7 +1560,7 @@ namespace UnityEngine.Rendering
 
         internal struct Info
         {
-            public int viewInstanceID;
+            public EntityId viewInstanceID;
             public InstanceOcclusionEventType eventType;
             public int occluderVersion;
             public int subviewMask;
@@ -1592,7 +1614,7 @@ namespace UnityEngine.Rendering
             m_CounterBuffer.Dispose();
         }
 
-        public int TryAdd(int viewInstanceID, InstanceOcclusionEventType eventType, int occluderVersion, int subviewMask, OcclusionTest occlusionTest)
+        public int TryAdd(EntityId viewInstanceID, InstanceOcclusionEventType eventType, int occluderVersion, int subviewMask, OcclusionTest occlusionTest)
         {
             int passIndex = m_PendingInfo.Length;
             if (passIndex + 1 > MaxPassCount)
@@ -1669,8 +1691,10 @@ namespace UnityEngine.Rendering
                     }
 
                     int counterBase = index * (int)InstanceOcclusionTestDebugCounter.Count;
-                    int occludedCounter = m_LatestCounters[counterBase + (int)InstanceOcclusionTestDebugCounter.Occluded];
-                    int notOccludedCounter = m_LatestCounters[counterBase + (int)InstanceOcclusionTestDebugCounter.NotOccluded];
+                    int instancesOccludedCounter = m_LatestCounters[counterBase + (int)InstanceOcclusionTestDebugCounter.InstancesOccluded];
+                    int instancesNotOccludedCounter = m_LatestCounters[counterBase + (int)InstanceOcclusionTestDebugCounter.InstancesNotOccluded];
+                    int primitivesOccludedCounter = m_LatestCounters[counterBase + (int)InstanceOcclusionTestDebugCounter.PrimitivesOccluded];
+                    int primitivesNotOccludedCounter = m_LatestCounters[counterBase + (int)InstanceOcclusionTestDebugCounter.PrimitivesNotOccluded];
 
                     debugStats.instanceOcclusionEventStats.Add(new InstanceOcclusionEventStats
                     {
@@ -1679,8 +1703,10 @@ namespace UnityEngine.Rendering
                         occluderVersion = occluderVersion,
                         subviewMask = info.subviewMask,
                         occlusionTest = info.occlusionTest,
-                        visibleInstances = notOccludedCounter,
-                        culledInstances = occludedCounter,
+                        visibleInstances = instancesNotOccludedCounter,
+                        culledInstances = instancesOccludedCounter,
+                        visiblePrimitives = primitivesNotOccludedCounter,
+                        culledPrimitives = primitivesOccludedCounter,
                     });
                 }
             }
@@ -1696,7 +1722,7 @@ namespace UnityEngine.Rendering
     {
         private struct AnimatedFadeData
         {
-            public int cameraID;
+            public EntityId cameraID;
             public JobHandle jobHandle;
         }
 
@@ -1732,6 +1758,7 @@ namespace UnityEngine.Rendering
             public static readonly int InstanceOcclusionCullerShaderVariables = Shader.PropertyToID("InstanceOcclusionCullerShaderVariables");
             public static readonly int _DrawInfo = Shader.PropertyToID("_DrawInfo");
             public static readonly int _InstanceInfo = Shader.PropertyToID("_InstanceInfo");
+            public static readonly int _DispatchArgs = Shader.PropertyToID("_DispatchArgs");
             public static readonly int _DrawArgs = Shader.PropertyToID("_DrawArgs");
             public static readonly int _InstanceIndices = Shader.PropertyToID("_InstanceIndices");
             public static readonly int _InstanceDataBuffer = Shader.PropertyToID("_InstanceDataBuffer");
@@ -1790,8 +1817,9 @@ namespace UnityEngine.Rendering
 
             //For main camera, animate crossfades, and store the result in the hashmap to be retrieved by other cameras
             var viewID = cc.viewID.GetInstanceID();
-
+#pragma warning disable 618 // todo @emilie.thaulow make viewID an EntityId
             hasAnimatedCrossfade = perCameraInstanceData.perCameraData.TryGetValue(viewID, out var tmpCameraInstanceData);
+#pragma warning restore 618
             if (hasAnimatedCrossfade == false)
             {
                 // For picking / filtering and outlining passes. We do not have animated crossfade data.
@@ -1808,7 +1836,9 @@ namespace UnityEngine.Rendering
                 crossFadeArray = cameraInstanceData.crossFades
             }.Schedule(perCameraInstanceData.instancesLength, AnimateCrossFadeJob.k_BatchSize);
 
+#pragma warning disable 618 // todo @emilie.thaulow make viewID an EntityId
             m_LODParamsToCameraID.TryAdd(lodHash, new AnimatedFadeData(){ cameraID = viewID, jobHandle = handle});
+#pragma warning restore 618
             return handle;
         }
 
@@ -1838,9 +1868,10 @@ namespace UnityEngine.Rendering
                 InstanceCullerBurst.SetupCullingJobInput(QualitySettings.lodBias, QualitySettings.meshLodThreshold, contextPtr, &receiverPlanes, &receiverSphereCuller,
                                                          &frustumPlaneCuller, &screenRelativeMetric, &meshLodConstant);
             }
-
+#pragma warning disable 618 // todo @emilie.thaulow make GetInstanceID return EntityId
             if (occlusionCullingCommon != null)
                 occlusionCullingCommon.UpdateSilhouettePlanes(cc.viewID.GetInstanceID(), receiverPlanes.SilhouettePlaneSubArray());
+#pragma warning restore 618
 
             var jobHandle = AnimateCrossFades(perCameraInstanceData, cc, out var cameraInstanceData, out var hasAnimatedCrossfade);
 
@@ -1981,7 +2012,9 @@ namespace UnityEngine.Rendering
                 int debugCounterBaseIndex = -1;
                 if (m_DebugStats?.enabled ?? false)
                 {
+#pragma warning disable 618 // todo @emilie.thaulow make GetInstanceID return EntityId
                     debugCounterBaseIndex = m_SplitDebugArray.TryAddSplits(cc.viewType, cc.viewID.GetInstanceID(), cc.cullingSplits.Length);
+#pragma warning restore 618
                 }
 
                 var batchCount = drawInstanceData.drawBatches.Length;
@@ -1997,11 +2030,15 @@ namespace UnityEngine.Rendering
                 var binVisibleInstanceOffsets = new NativeArray<int>(maxBinCount, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
 
                 int indirectContextIndex = -1;
+#pragma warning disable 618 //todo @emilie.thaulow make GetInstanceID return EntityId
                 bool useOcclusionCulling = (occlusionCullingCommon != null) && occlusionCullingCommon.HasOccluderContext(cc.viewID.GetInstanceID());
+#pragma warning restore 618
                 if (useOcclusionCulling)
                 {
+#pragma warning disable 618 // todo @emilie.thaulow make GetInstanceID return EntityId
                     int viewInstanceID = cc.viewID.GetInstanceID();
                     indirectContextIndex = m_IndirectStorage.TryAllocateContext(viewInstanceID);
+#pragma warning restore 618
                     cullingOutput.customCullingResult[0] = (IntPtr)viewInstanceID;
                 }
                 IndirectBufferLimits indirectBufferLimits = m_IndirectStorage.GetLimits(indirectContextIndex);
@@ -2065,7 +2102,7 @@ namespace UnityEngine.Rendering
                     cullingOutput = cullingOutput.drawCommands,
                     indirectBufferLimits = indirectBufferLimits,
                     visibleInstancesBufferHandle = m_IndirectStorage.visibleInstanceBufferHandle,
-                    indirectArgsBufferHandle = m_IndirectStorage.indirectArgsBufferHandle,
+                    indirectArgsBufferHandle = m_IndirectStorage.indirectDrawArgsBufferHandle,
                     indirectBufferAllocInfo = indirectBufferAllocInfo,
                     indirectInstanceInfoGlobalArray = m_IndirectStorage.instanceInfoGlobalArray,
                     indirectDrawInfoGlobalArray = m_IndirectStorage.drawInfoGlobalArray,
@@ -2160,7 +2197,7 @@ namespace UnityEngine.Rendering
         {
             NativeArray<bool> filteredRenderers = new NativeArray<bool>(sharedInstanceData.rendererGroupIDs.Length, Allocator.TempJob);
             EditorCameraUtils.GetRenderersFilteringResults(sharedInstanceData.rendererGroupIDs, filteredRenderers);
-            var dummyExcludedRenderers = new NativeArray<int>(0, Allocator.TempJob);
+            var dummyExcludedRenderers = new NativeArray<EntityId>(0, Allocator.TempJob);
 
             var drawOutputJob = new DrawCommandOutputFiltering
             {
@@ -2201,8 +2238,8 @@ namespace UnityEngine.Rendering
             if (PrefabStageUtility.GetCurrentPrefabStage() != null)
                 return cullingJobHandle;
 
-            var pickingIDs = HandleUtility.GetPickingIncludeExcludeList(Allocator.TempJob);
-            var excludedRenderers = pickingIDs.ExcludeRenderers.IsCreated ? pickingIDs.ExcludeRenderers : new NativeArray<int>(0, Allocator.TempJob);
+            var pickingIDs = HandleUtility.GetPickingIncludeExcludeEntityIdList(Allocator.TempJob);
+            var excludedRenderers = pickingIDs.ExcludeRenderers.IsCreated ? pickingIDs.ExcludeRenderers : new NativeArray<EntityId>(0, Allocator.TempJob);
             var dummyFilteringResults = new NativeArray<bool>(0, Allocator.TempJob);
 
             var drawOutputJob = new DrawCommandOutputFiltering
@@ -2237,7 +2274,7 @@ namespace UnityEngine.Rendering
         }
 
 #endif
-        public void InstanceOccludersUpdated(int viewInstanceID, int subviewMask, RenderersBatchersContext batchersContext)
+        public void InstanceOccludersUpdated(EntityId viewInstanceID, int subviewMask, RenderersBatchersContext batchersContext)
         {
             if (m_DebugStats?.enabled ?? false)
             {
@@ -2309,7 +2346,7 @@ namespace UnityEngine.Rendering
                 passData.bufferHandles.UseForOcclusionTest(builder);
                 passData.occluderHandles.UseForOcclusionTest(builder);
 
-                builder.SetRenderFunc((InstanceOcclusionTestPassData data, ComputeGraphContext context) =>
+                builder.SetRenderFunc(static (InstanceOcclusionTestPassData data, ComputeGraphContext context) =>
                 {
                     var batcher = GPUResidentDrawer.instance.batcher;
                     batcher.instanceCullingBatcher.culler.AddOcclusionCullingDispatch(
@@ -2323,7 +2360,7 @@ namespace UnityEngine.Rendering
             }
         }
 
-        internal void EnsureValidOcclusionTestResults(int viewInstanceID)
+        internal void EnsureValidOcclusionTestResults(EntityId viewInstanceID)
         {
             int indirectContextIndex = m_IndirectStorage.TryGetContextIndex(viewInstanceID);
             if (indirectContextIndex >= 0)
@@ -2360,7 +2397,7 @@ namespace UnityEngine.Rendering
                     int kernel = m_CopyInstancesKernel;
                     cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawInfo, m_IndirectStorage.drawInfoBuffer);
                     cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceInfo, m_IndirectStorage.instanceInfoBuffer);
-                    cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, m_IndirectStorage.argsBuffer);
+                    cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, m_IndirectStorage.drawArgsBuffer);
                     cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceIndices, m_IndirectStorage.instanceBuffer);
 
                     cmd.DispatchCompute(cs, kernel, (allocInfo.instanceCount + 63) / 64, 1, 1);
@@ -2513,10 +2550,10 @@ namespace UnityEngine.Rendering
                         if (doCopyInstances)
                         {
                             int kernel = m_CopyInstancesKernel;
-                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawInfo, m_IndirectStorage.drawInfoBuffer);
-                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceInfo, m_IndirectStorage.instanceInfoBuffer);
-                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, m_IndirectStorage.argsBuffer);
-                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceIndices, m_IndirectStorage.instanceBuffer);
+                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawInfo, bufferHandles.drawInfoBuffer);
+                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceInfo, bufferHandles.instanceInfoBuffer);
+                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, bufferHandles.drawArgsBuffer);
+                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceIndices, bufferHandles.instanceBuffer);
 
                             cmd.DispatchCompute(cs, kernel, (allocInfo.instanceCount + 63) / 64, 1, 1);
                         }
@@ -2525,7 +2562,10 @@ namespace UnityEngine.Rendering
                         {
                             int kernel = m_ResetDrawArgsKernel;
                             cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawInfo, bufferHandles.drawInfoBuffer);
-                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, bufferHandles.argsBuffer);
+                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, bufferHandles.drawArgsBuffer);
+                            if (isSecondPass)
+                                cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DispatchArgs, bufferHandles.dispatchArgsBuffer);
+
                             cmd.DispatchCompute(cs, kernel, (allocInfo.drawCount + 63) / 64, 1, 1);
                         }
 
@@ -2534,7 +2574,7 @@ namespace UnityEngine.Rendering
                             int kernel = m_CullInstancesKernel;
                             cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawInfo, bufferHandles.drawInfoBuffer);
                             cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceInfo, bufferHandles.instanceInfoBuffer);
-                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, bufferHandles.argsBuffer);
+                            cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._DrawArgs, bufferHandles.drawArgsBuffer);
                             cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceIndices, bufferHandles.instanceBuffer);
                             cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._InstanceDataBuffer, batchersContext.gpuInstanceDataBuffer);
                             cmd.SetComputeBufferParam(cs, kernel, ShaderIDs._OcclusionDebugCounters, m_OcclusionEventDebugArray.CounterBuffer);
@@ -2546,7 +2586,7 @@ namespace UnityEngine.Rendering
                                 OcclusionCullingCommon.SetDebugPyramid(cmd, m_OcclusionTestShader, kernel, occluderHandles);
 
                             if (isSecondPass)
-                                cmd.DispatchCompute(cs, kernel, bufferHandles.argsBuffer, (uint)(GraphicsBuffer.IndirectDrawIndexedArgs.size * allocInfo.GetExtraDrawInfoSlotIndex()));
+                                cmd.DispatchCompute(cs, kernel, bufferHandles.dispatchArgsBuffer, 0);
                             else
                                 cmd.DispatchCompute(cs, kernel, (allocInfo.instanceCount + 63) / 64, 1, 1);
                         }
@@ -2564,6 +2604,7 @@ namespace UnityEngine.Rendering
             {
                 m_SplitDebugArray.MoveToDebugStatsAndClear(m_DebugStats);
                 m_OcclusionEventDebugArray.MoveToDebugStatsAndClear(m_DebugStats);
+                m_DebugStats.FinalizeInstanceCullerViewStats();
             }
         }
 
@@ -2583,6 +2624,7 @@ namespace UnityEngine.Rendering
 
         public void UpdateFrame(int cameraCount)
         {
+            DisposeSceneViewHiddenBits();
             DisposeCompactVisibilityMasks();
             if (cameraCount > m_LODParamsToCameraID.Capacity)
                 m_LODParamsToCameraID.Capacity = cameraCount;

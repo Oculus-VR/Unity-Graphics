@@ -202,7 +202,8 @@ namespace UnityEditor.Rendering
             // Recreate editors for existing settings, if any
             var components = asset.components;
             for (int i = 0; i < components.Count; i++)
-                CreateEditor(components[i], m_ComponentsProperty.GetArrayElementAtIndex(i));
+                if (components[i] != null) //can happens if a component type is removed and opening old serialized data
+                    CreateEditor(components[i], m_ComponentsProperty.GetArrayElementAtIndex(i));
 
             m_CurrentHashCode = asset.GetComponentListHashCode();
 
@@ -236,11 +237,14 @@ namespace UnityEditor.Rendering
 
             // Even if the asset is not dirty, the list of component may have been changed by another inspector.
             // In this case, only the hash will tell us that we need to refresh.
-            if (asset.isDirty || asset.GetComponentListHashCode() != m_CurrentHashCode)
+            if (asset.dirtyState != VolumeProfile.DirtyState.None || asset.GetComponentListHashCode() != m_CurrentHashCode)
             {
                 RefreshEditors();
                 VolumeManager.instance.OnVolumeProfileChanged(asset);
-                asset.isDirty = false;
+
+                if ((asset.dirtyState & VolumeProfile.DirtyState.DirtyByProfileReset) != 0)
+                    UnityEditorInternal.InternalEditorUtility.RepaintAllViews();
+                asset.dirtyState = VolumeProfile.DirtyState.None;
             }
 
             if (m_IsDefaultVolumeProfile && VolumeManager.instance.isInitialized && m_EditorsByCategory.Count == 0)
@@ -365,9 +369,7 @@ namespace UnityEditor.Rendering
                     {
                         if (GUILayout.Button(EditorGUIUtility.TrTextContent("Add Override"), EditorStyles.miniButton))
                         {
-                            var r = hscope.rect;
-                            var pos = new Vector2(r.x + r.width / 2f, r.yMax + 18f);
-                            FilterWindow.Show(pos, new VolumeComponentProvider(asset, this));
+                            FilterWindow.Show(hscope.rect, new VolumeComponentProvider(asset, this));
                         }
                     }
                 }
@@ -428,7 +430,7 @@ namespace UnityEditor.Rendering
             var targetComponent = targetEditor.volumeComponent;
             var menu = new GenericMenu();
 
-            if (!m_IsDefaultVolumeProfile)
+            if (!m_IsDefaultVolumeProfile && m_Editors.Count > 1)
             {
                 menu.AddItem(EditorGUIUtility.TrTextContent("Move to Top"), false, () => MoveComponent(id, Move.Top));
                 menu.AddItem(EditorGUIUtility.TrTextContent("Move Up"), false, () => MoveComponent(id, Move.Up));
@@ -445,19 +447,20 @@ namespace UnityEditor.Rendering
             if (!m_IsDefaultVolumeProfile)
                 menu.AddItem(EditorGUIUtility.TrTextContent("Remove"), false, () => RemoveComponent(id));
 
-            menu.AddSeparator(string.Empty);
 
             if (targetEditor.hasAdditionalProperties)
+            {
+                menu.AddSeparator(string.Empty);
                 menu.AddAdvancedPropertiesBoolMenuItem(() => targetEditor.showAdditionalProperties,
                                                        () => targetEditor.showAdditionalProperties ^= true);
+            }
 
-            menu.AddSeparator(string.Empty);
             targetEditor.AddDefaultProfileContextMenuEntries(menu, VolumeManager.instance.globalDefaultProfile,
                 () => VolumeProfileUtils.CopyValuesToProfile(targetComponent, VolumeManager.instance.globalDefaultProfile));
 
             menu.AddSeparator(string.Empty);
             menu.AddItem(EditorGUIUtility.TrTextContent("Open In Rendering Debugger"), false,
-                DebugDisplaySettingsVolume.OpenInRenderingDebugger);
+                () => DebugDisplaySettingsVolume.OpenInRenderingDebugger(targetComponent));
 
             menu.AddSeparator(string.Empty);
             menu.AddItem(EditorGUIUtility.TrTextContent("Copy Settings"), false, () =>
@@ -466,7 +469,7 @@ namespace UnityEditor.Rendering
             if (VolumeComponentCopyPaste.CanPaste(targetComponent))
                 menu.AddItem(EditorGUIUtility.TrTextContent("Paste Settings"), false, () =>
                 {
-                    VolumeComponentCopyPaste.PasteSettings(targetComponent);
+                    VolumeComponentCopyPaste.PasteSettings(targetComponent, asset);
                     VolumeManager.instance.OnVolumeProfileChanged(asset);
                 });
             else

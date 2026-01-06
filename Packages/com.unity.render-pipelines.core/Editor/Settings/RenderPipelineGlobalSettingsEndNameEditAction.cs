@@ -7,14 +7,15 @@ namespace UnityEditor.Rendering
     /// <summary>
     /// <see cref="ProjectWindowCallback.EndNameEditAction"/> for <see cref="RenderPipelineGlobalSettings"/>
     /// </summary>
-    public class RenderPipelineGlobalSettingsEndNameEditAction : ProjectWindowCallback.EndNameEditAction
+    [Obsolete("RenderPipelineGlobalSettingsEndNameEditAction is no longer used and will be removed in a future release.")]
+    public class RenderPipelineGlobalSettingsEndNameEditAction : ProjectWindowCallback.AssetCreationEndAction
     {
         private Type renderPipelineType { get; set; }
         private Type renderPipelineGlobalSettingsType { get; set; }
         private RenderPipelineGlobalSettings source { get; set; }
 
         /// <inheritdoc/>
-        public override void Action(int instanceId, string pathName, string resourceFile)
+        public override void Action(EntityId instanceId, string pathName, string resourceFile)
         {
             RenderPipelineGlobalSettings assetCreated = RenderPipelineGlobalSettingsUtils.Create(renderPipelineGlobalSettingsType, pathName, source) as RenderPipelineGlobalSettings;
 
@@ -44,7 +45,7 @@ namespace UnityEditor.Rendering
         internal static void StartEndNameEditAction(RenderPipelineGlobalSettingsEndNameEditAction action, string pathName)
         {
             ProjectWindowUtil.StartNameEditingIfProjectWindowExists(
-                action.GetInstanceID(),
+                action.GetEntityId(),
                 action,
                 pathName,
                 CoreEditorStyles.globalSettingsIcon,

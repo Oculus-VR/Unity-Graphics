@@ -39,7 +39,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                 loadReason = loadReason,
                 storeReason = storeReason,
                 storeMsaaReason = storeMsaaReason,
-                attachment = attachment
+                attachment = new RenderGraph.DebugData.SerializableNativePassAttachment(attachment)
             };
         }
 
@@ -55,7 +55,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             return msg;
         }
 
-        internal static string MakePassMergeMessage(CompilerContextData ctx, in PassData pass, in PassData prevPass, PassBreakAudit mergeResult)
+        internal static string MakePassMergeMessage(CompilerContextData ctx, in PassData pass, in PassData prevPass, in PassBreakAudit mergeResult)
         {
             string message = mergeResult.reason == PassBreakReason.Merged ?
                 "The passes are <b>compatible</b> to be merged.\n\n" :
@@ -76,7 +76,10 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                                $"- {passName}: {pass.fragmentInfoWidth}x{pass.fragmentInfoHeight}, {pass.fragmentInfoSamples} sample(s).";
                     break;
                 case PassBreakReason.NextPassReadsTexture:
-                    message += "The next pass reads one of the outputs as a regular texture, the pass needs to break.";
+                    message += $"{prevPassName} output is sampled by {passName} as a regular texture, the pass needs to break.";
+                    break;
+                case PassBreakReason.NextPassTargetsTexture:
+                    message += $"{prevPassName} reads a texture that {passName} targets to, the pass needs to break.";
                     break;
                 case PassBreakReason.NonRasterPass:
                     message += $"{prevPassName} is type {prevPass.type}. Only Raster passes can be merged.";
@@ -98,6 +101,9 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                     break;
                 case PassBreakReason.DifferentShadingRateStates:
                     message += $"{prevPassName} uses different shading rate states than {passName}.";
+                    break;
+                case PassBreakReason.MultisampledShaderResolveMustBeLastPass:
+                    message += $"{prevPassName} uses multisampled shader resolve and so can't have any more passes merged into it.";
                     break;
                 case PassBreakReason.PassMergingDisabled:
                     message += "The pass merging is disabled.";
@@ -129,8 +135,6 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         internal void GenerateNativeCompilerDebugData(ref RenderGraph.DebugData debugData)
         {
             ref var ctx = ref contextData;
-
-            debugData.isNRPCompiler = true;
 
             // Resolve read/write lists per resource
             Dictionary<(RenderGraphResourceType, int), List<int>> resourceReadLists = new Dictionary<(RenderGraphResourceType, int), List<int>>();
@@ -263,13 +267,15 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                 debugPass.async = passData.asyncCompute;
                 debugPass.nativeSubPassIndex = passData.nativeSubPassIndex;
                 debugPass.generateDebugData = graphPass.generateDebugData;
-                debugPass.resourceReadLists = new List<int>[(int)RenderGraphResourceType.Count];
-                debugPass.resourceWriteLists = new List<int>[(int)RenderGraphResourceType.Count];
+                debugPass.resourceReadLists = new RenderGraph.DebugData.PassData.ResourceIdLists();
+                debugPass.resourceWriteLists = new RenderGraph.DebugData.PassData.ResourceIdLists();
 
-                RenderGraph.DebugData.s_PassScriptMetadata.TryGetValue(graphPass, out debugPass.scriptInfo);
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+                debugPass.scriptInfo = graphPass.debugScriptInfo;
+#endif
 
-                debugPass.syncFromPassIndex = -1; // TODO async compute support
-                debugPass.syncToPassIndex = -1; // TODO async compute support
+                debugPass.syncFromPassIndex = passData.awaitingMyGraphicsFencePassId;
+                debugPass.syncToPassIndex = passData.waitOnGraphicsFencePassId;
 
                 debugPass.nrpInfo = new RenderGraph.DebugData.PassData.NRPInfo();
 
@@ -321,7 +327,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                     nativePassInfo.attachmentInfos = new ();
                     for (int a = 0; a < nativePassData.attachments.size; a++)
                         nativePassInfo.attachmentInfos.Add(MakeAttachmentInfo(ctx, in nativePassData, a));
-                    nativePassInfo.passCompatibility = new Dictionary<int, RenderGraph.DebugData.PassData.NRPInfo.NativeRenderPassInfo.PassCompatibilityInfo>();
+                    nativePassInfo.passCompatibility = new ();
                     nativePassInfo.mergedPassIds = mergedPassIds;
 
                     for (int i = 0; i < mergedPassIds.Count; ++i)

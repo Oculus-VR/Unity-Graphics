@@ -3,9 +3,7 @@
 // So in the meantime we use a Dictionary with a perf hit...
 //#define USE_UNSAFE
 
-#if UNITY_2020_1_OR_NEWER
 #define UNITY_USE_RECORDER
-#endif
 
 using System;
 using System.Linq;
@@ -360,7 +358,7 @@ namespace UnityEngine.Rendering
     /// <summary>
     /// Profiling Sampler class.
     /// </summary>
-    [System.Obsolete("Please use ProfilingScope")]
+    [System.Obsolete("Please use ProfilingScope. #from(2021.1)")]
     [IgnoredByDeepProfiler]
     public struct ProfilingSample : IDisposable
     {

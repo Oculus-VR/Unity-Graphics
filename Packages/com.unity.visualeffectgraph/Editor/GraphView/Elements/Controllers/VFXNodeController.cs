@@ -86,6 +86,7 @@ namespace UnityEditor.VFX.UI
             foreach (var anchorController in m_InputPorts.Except(newAnchors))
             {
                 anchorController.OnDisable();
+                changed = true;
             }
             m_InputPorts = newAnchors;
 
@@ -96,13 +97,17 @@ namespace UnityEditor.VFX.UI
             foreach (var anchorController in m_OutputPorts.Except(newAnchors))
             {
                 anchorController.OnDisable();
+                changed = true;
             }
             m_OutputPorts = newAnchors;
             m_SyncingSlots = false;
 
             // Call after base.ModelChanged which ensure the ui has been refreshed before we try to create potiential new edges.
             if (changed)
+            {
                 viewController.DataEdgesMightHaveChanged();
+                VFXSlotContainerEditor.SceneViewVFXSlotContainerOverlay.ClearGizmos();
+            }
 
             NotifyChange(AnyThing);
         }
@@ -216,6 +221,28 @@ namespace UnityEditor.VFX.UI
 
         public virtual void WillCreateLink(ref VFXSlot myInput, ref VFXSlot otherOutput, bool revertTypeConstraint = false)
         {
+            CheckWillCreateCycle(myInput, otherOutput);
+        }
+
+        private void CheckWillCreateCycle(VFXSlot input, VFXSlot output)
+        {
+            // Break cycles only for GPU events
+            VFXBasicGPUEvent gpuEvent = null;
+            VFXBlock triggerBlock = null;
+            if (output.owner is VFXBasicGPUEvent)
+            {
+                gpuEvent = input.owner as VFXBasicGPUEvent;
+                triggerBlock = input.owner as VFXBlock;
+            }
+            else if (input.owner is VFXBasicGPUEvent)
+            {
+                gpuEvent = input.owner as VFXBasicGPUEvent;
+                triggerBlock = output.owner as VFXBlock;
+            }
+            if (gpuEvent != null && triggerBlock != null)
+            {
+                VFXContext.BreakCyclesHorizontal(triggerBlock.GetParent(), gpuEvent, true); // always notify
+            }
         }
 
         protected virtual bool UpdateSlots(List<VFXDataAnchorController> newAnchors, IEnumerable<VFXSlot> slotList, bool expanded, bool input)

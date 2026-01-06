@@ -160,6 +160,7 @@ namespace UnityEditor.VFX
             });
             return new VFXGPUBufferDesc()
             {
+                debugName = "VFXAttributeBuffer",
                 target = GraphicsBuffer.Target.Raw,
                 size = GetBufferSize(capacity),
                 stride = 4,
@@ -262,7 +263,7 @@ namespace UnityEditor.VFX
         public BoundsSettingMode boundsMode = BoundsSettingMode.Recorded;
 
         public bool hasStrip => dataType == DataType.ParticleStrip;
-        public bool hasAttachedStrip => IsAttributeStored(VFXAttribute.StripAlive);
+        public bool needsAttachedStripAliveTracking => IsAttributeStored(VFXAttribute.StripAlive);
         public VFXDataParticle attachedStripData => (VFXDataParticle)dependenciesOut.FirstOrDefault(d => ((VFXDataParticle)d).hasStrip); // TODO Handle several strip attached
 
         public override void OnSettingModified(VFXSetting setting)
@@ -344,7 +345,7 @@ namespace UnityEditor.VFX
                     yield return "#define STRIP_COUNT " + stripCapacity + "u";
                     yield return "#define PARTICLE_PER_STRIP_COUNT " + particlePerStripCount + "u";
                 }
-                if (hasAttachedStrip)
+                if (attachedStripData != null)
                 {
                     var stripData = attachedStripData;
                     yield return "#define ATTACHED_STRIP_COUNT " + stripData.stripCapacity + "u";
@@ -724,7 +725,7 @@ namespace UnityEditor.VFX
                 uint sharedDecimationFactor = outputsSharingAABB[0].GetRaytracingDecimationFactor();
                 uint aabbBufferCount = (capacity + sharedDecimationFactor - 1) / sharedDecimationFactor;
                 sharedAabbBufferIndex = outBufferDescs.Count;
-                outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = 0u, stride = 24 });
+                outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXAabbBuffer", target = GraphicsBuffer.Target.Structured, size = 0u, stride = 24 });
                 systemBufferMappings.Add(new VFXMapping("aabbBuffer", sharedAabbBufferIndex));
                 sharedAabbCount = aabbBufferCount;
             }
@@ -736,7 +737,7 @@ namespace UnityEditor.VFX
                 int bufferIndex = outBufferDescs.Count;
                 outputsOwningAABB.Add(output, bufferIndex);
                 outputAabbSize.Add(output, aabbBufferCount);
-                outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = 0u, stride = 24 });
+                outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXAabbBuffer" + outputId, target = GraphicsBuffer.Target.Structured, size = 0u, stride = 24 });
                 systemBufferMappings.Add(new VFXMapping("aabbBuffer" + outputId++, bufferIndex));
             }
         }
@@ -792,6 +793,25 @@ namespace UnityEditor.VFX
             return needsStripData;
         }
 
+        private void CheckCapacity(VFXDataParticle parentData, IVFXErrorReporter reporter)
+        {
+            if (parentData != null && hasStrip)
+            {
+                uint parentCapacity = (uint)parentData.GetSetting("capacity").value;
+
+                if (parentCapacity > stripCapacity)
+                {
+                    reporter?.RegisterError("NotMatchingParentAndChildStripCapacity", VFXErrorType.Warning,
+                        $"Strip Capacity ({stripCapacity}) does not match parent capacity ({parentCapacity}). Some parent particles will not be able to have an attached strip.", m_Owners[0]);
+                }
+                else if (stripCapacity > parentCapacity)
+                {
+                    reporter?.RegisterError("NotMatchingParentAndChildStripCapacity", VFXErrorType.Warning,
+                        $"Strip Capacity ({stripCapacity}) does not match parent capacity ({parentCapacity}). Strip system is holding more memory than required.", m_Owners[0]);
+                }
+            }
+        }
+
         public override void FillDescs(
             IVFXErrorReporter reporter,
             VFXCompilationMode compilationMode,
@@ -836,6 +856,8 @@ namespace UnityEditor.VFX
                 eventGPUFrom = dependentBuffers.eventBuffers[this];
 
                 systemValueMappings.Add(new VFXMapping("parentSystemIndex", (int)dataToSystemIndex[dependency]));
+
+                CheckCapacity(dependency as VFXDataParticle, reporter);
             }
             var systemFlag = VFXSystemFlag.SystemDefault;
             if (attributeBufferIndex != -1)
@@ -872,7 +894,7 @@ namespace UnityEditor.VFX
                 if (!hasStrip) // No dead list for strips
                 {
                     deadListBufferIndex = outBufferDescs.Count;
-                    outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = capacity + 2, stride = 4 }); //capacity + 2 for the two counters
+                    outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXDeadList", target = GraphicsBuffer.Target.Structured, size = capacity + 2, stride = 4 }); //capacity + 2 for the two counters
                     systemBufferMappings.Add(new VFXMapping("deadList", deadListBufferIndex));
                 }
             }
@@ -1007,7 +1029,7 @@ namespace UnityEditor.VFX
                 {
                     globalIndirectBufferIndex = outBufferDescs.Count;
                     systemBufferMappings.Add(new VFXMapping("indirectBuffer0", outBufferDescs.Count));
-                    outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 4 });
+                    outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXIndirectBuffer0", target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 4 });
                 }
             }
 
@@ -1107,7 +1129,10 @@ namespace UnityEditor.VFX
 
                             outBufferDescs.Add(new VFXGPUBufferDesc
                             {
-                                target = bufferDescriptor.bufferTarget, size = size, stride = bufferDescriptor.stride
+                                debugName = bufferName,
+                                target = bufferDescriptor.bufferTarget,
+                                size = size,
+                                stride = bufferDescriptor.stride
                             });
                         }
                     }
@@ -1155,10 +1180,10 @@ namespace UnityEditor.VFX
                 sortBufferAIndex = outBufferDescs.Count;
                 sortBufferBIndex = sortBufferAIndex + 1;
 
-                outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 8 });
+                outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXSortBufferA", target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 8 });
                 systemBufferMappings.Add(new VFXMapping("sortBufferA", sortBufferAIndex));
 
-                outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 8 });
+                outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXSortBufferB", target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 8 });
                 systemBufferMappings.Add(new VFXMapping("sortBufferB", sortBufferBIndex));
             }
 
@@ -1176,7 +1201,7 @@ namespace UnityEditor.VFX
                     // add previous frame index
                     sizePerElement += 4U;
                     int currentElementToVFXBufferMotionVector = outTemporaryBufferDescs.Count;
-                    outTemporaryBufferDescs.Add(new VFXTemporaryGPUBufferDesc() { frameCount = 2u, desc = new VFXGPUBufferDesc { target = GraphicsBuffer.Target.Raw, size = capacity * sizePerElement, stride = 4 } });
+                    outTemporaryBufferDescs.Add(new VFXTemporaryGPUBufferDesc() { frameCount = 2u, desc = new VFXGPUBufferDesc { debugName = "VFXMovecsBuffer", target = GraphicsBuffer.Target.Raw, size = capacity * sizePerElement, stride = 4 } });
                     elementToVFXBufferMotionVector.Add(context.output, currentElementToVFXBufferMotionVector);
                 }
             }
@@ -1306,7 +1331,7 @@ namespace UnityEditor.VFX
                     }
                 }
 
-                if (hasAttachedStrip)
+                if (needsAttachedStripAliveTracking)
                 {
                     bufferMappings.Add(new VFXMapping("attachedStripDataBuffer", dependentBuffers.stripBuffers[attachedStripData]));
                 }
@@ -1450,7 +1475,8 @@ namespace UnityEditor.VFX
                         {
                             VFXEditorTaskDesc sortTaskDesc = new VFXEditorTaskDesc();
                             sortTaskDesc.type = UnityEngine.VFX.VFXTaskType.PerOutputSort;
-                            sortTaskDesc.externalProcessor = null;
+                            sortTaskDesc.processor = null;
+                            sortTaskDesc.shaderSourceIndex = -1;
                             sortTaskDesc.model = context;
 
                             sortTaskDesc.buffers = new VFXMapping[3];
@@ -1458,7 +1484,7 @@ namespace UnityEditor.VFX
                             if (capacity > 4096) // Add scratch buffer
                             {
                                 sortTaskDesc.buffers[1] = new VFXMapping("scratchBuffer", outBufferDescs.Count);
-                                outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 8 });
+                                outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXScratchSortBuffer", target = GraphicsBuffer.Target.Structured, size = capacity + 1, stride = 8 });
                             }
                             else
                                 sortTaskDesc.buffers[1] = new VFXMapping("scratchBuffer", -1); // No scratchBuffer needed
@@ -1474,11 +1500,11 @@ namespace UnityEditor.VFX
                 }
             }
 
-            outBufferDescs[instancingIndirectAndActiveIndirectBufferIndex] = new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = 1u + (uint)instanceSplitDescs.Count() , stride = 4, mode = ComputeBufferMode.Dynamic };
+            outBufferDescs[instancingIndirectAndActiveIndirectBufferIndex] = new VFXGPUBufferDesc() { debugName = "VFXInstancesIndirectionBuffer", target = GraphicsBuffer.Target.Structured, size = 1u + (uint)instanceSplitDescs.Count() , stride = 4, mode = ComputeBufferMode.Dynamic };
 
             if (instancesPrefixSumBufferIndex != -1 && eventGPUFrom == -1) // only if we have a prefix sum and we are not reusing the GPU event buffer
             {
-                outBufferDescs[instancesPrefixSumBufferIndex] = new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = (uint)instanceSplitDescs.Count() + 1u, stride = 4, mode = ComputeBufferMode.Dynamic };
+                outBufferDescs[instancesPrefixSumBufferIndex] = new VFXGPUBufferDesc() { debugName = "VFXInstancesPrefixSumBuffer", target = GraphicsBuffer.Target.Structured, size = (uint)instanceSplitDescs.Count() + 1u, stride = 4, mode = ComputeBufferMode.Dynamic };
             }
 
             if (hasStrip && hasKill)
@@ -1551,7 +1577,11 @@ namespace UnityEditor.VFX
             graphValuesIndex = outBufferDescs.Count;
             outBufferDescs.Add(new VFXGPUBufferDesc()
             {
-                target = GraphicsBuffer.Target.Raw, size = graphValuesSize, stride = 4u, mode = ComputeBufferMode.Dynamic
+                debugName = "VFXGraphValuesBuffer",
+                target = GraphicsBuffer.Target.Raw,
+                size = graphValuesSize,
+                stride = 4u,
+                mode = ComputeBufferMode.Dynamic
             });
             systemBufferMappings.Add(new VFXMapping("graphValuesBuffer", graphValuesIndex));
         }
@@ -1561,12 +1591,12 @@ namespace UnityEditor.VFX
             out int spawnBufferIndex)
         {
             instancesPrefixSumBufferIndex = outBufferDescs.Count;
-            outBufferDescs.Add(new VFXGPUBufferDesc());  // description will be filled at the end when knowning split descs size.
+            outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXInstancingPrefixSumBuffer" });  // description will be filled at the end when knowning split descs size.
             systemBufferMappings.Add(new VFXMapping("instancingPrefixSum", instancesPrefixSumBufferIndex));
 
             spawnBufferIndex = outBufferDescs.Count;
             uint spawnCountSize = Math.Max(staticSourceCount, 1u);
-            outBufferDescs.Add(new VFXGPUBufferDesc() { target = GraphicsBuffer.Target.Structured, size = spawnCountSize + 1u, stride = 4,  mode = ComputeBufferMode.Dynamic });
+            outBufferDescs.Add(new VFXGPUBufferDesc() { debugName = "VFXSpawnEventBuffer", target = GraphicsBuffer.Target.Structured, size = spawnCountSize + 1u, stride = 4,  mode = ComputeBufferMode.Dynamic });
             systemBufferMappings.Add(new VFXMapping("spawnBuffer", spawnBufferIndex));
         }
 

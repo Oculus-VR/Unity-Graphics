@@ -41,6 +41,13 @@ namespace UnityEditor.Rendering.Universal
         private SerializedProperty m_FalseBool;
         [SerializeField] private bool falseBool = false;
         List<Editor> m_Editors = new List<Editor>();
+        
+        // Computed on first access on this editor frame, and cleaned at the end of OnInspectorGUI
+        /// <summary>
+        /// Compute if this ScriptableRenderer is contained by an URPAsset that has IntermediateTextureMode == Never.
+        /// </summary>
+        [Obsolete("This method is not used. #from(6000.3)", false)]
+        protected bool isIntermediateTextureForbidden => false;
 
         private void OnEnable()
         {
@@ -95,9 +102,7 @@ namespace UnityEditor.Rendering.Universal
             {
                 if (GUILayout.Button("Add Renderer Feature", EditorStyles.miniButton))
                 {
-                    var r = hscope.rect;
-                    var pos = new Vector2(r.x + r.width / 2f, r.yMax + 18f);
-                    FilterWindow.Show(pos, new ScriptableRendererFeatureProvider(this));
+                    FilterWindow.Show(hscope.rect, new ScriptableRendererFeatureProvider(this));
                 }
             }
         }
@@ -112,6 +117,15 @@ namespace UnityEditor.Rendering.Universal
             }
             title = null;
             return false;
+        }
+
+        /// <summary>
+        /// Draws a warning when IntermediateTextureMode is set to Never.
+        /// Should be called at the top of the Inspector.
+        /// </summary>
+        [Obsolete("This method is not used. #from(6000.3)", false)]
+        protected void DisplayIntermediateTextureWarnings()
+        {
         }
 
         private bool GetTooltip(Type type, out string tooltip)
@@ -202,7 +216,15 @@ namespace UnityEditor.Rendering.Universal
                 if (GUILayout.Button("Attempt Fix", EditorStyles.miniButton))
                 {
                     ScriptableRendererData data = target as ScriptableRendererData;
-                    data.ValidateRendererFeatures();
+                    if (!data.ValidateRendererFeatures())
+                    {
+                        if (EditorUtility.DisplayDialog("Remove Missing Renderer Feature",
+                                "This renderer feature script is missing (likely deleted or failed to compile). Do you want to remove it from the list and delete the associated sub-asset?",
+                                "Yes", "No"))
+                        {
+                            data.RemoveMissingRendererFeatures();
+                        }
+                    }
                 }
             }
         }

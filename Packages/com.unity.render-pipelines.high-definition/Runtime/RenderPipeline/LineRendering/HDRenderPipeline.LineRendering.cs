@@ -8,6 +8,10 @@ namespace UnityEngine.Rendering.HighDefinition
     public partial class HDRenderPipeline
     {
         // Internal targets.
+        private RTHandle m_LineColorBufferRT;
+        private RTHandle m_LineDepthBufferRT;
+        private RTHandle m_LineMVBufferRT;
+
         private TextureHandle m_LineColorBuffer;
         private TextureHandle m_LineDepthBuffer;
         private TextureHandle m_LineMVBuffer;
@@ -60,24 +64,12 @@ namespace UnityEngine.Rendering.HighDefinition
                 gpuPrefixSum = m_PrefixSum
             });
 
-            TextureHandle CreateInternalTarget(GraphicsFormat format, Color clearValue, string name)
-            {
-                TextureDesc td = new TextureDesc(Vector2.one, true, true);
-                {
-                    td.format = format;
-                    td.useMipMap = false;
-                    td.clearBuffer = true;
-                    td.clearColor = clearValue;
-                    td.autoGenerateMips = false;
-                    td.name = name;
-                    td.enableRandomWrite = true;
-                }
-                return m_RenderGraph.CreateSharedTexture(td);
-            }
-
-            m_LineColorBuffer = CreateInternalTarget(GraphicsFormat.R32G32B32A32_SFloat, Color.black, "LineColorBuffer");
-            m_LineDepthBuffer = CreateInternalTarget(GraphicsFormat.R32_SFloat,          Color.black, "LineDepthBuffer");
-            m_LineMVBuffer    = CreateInternalTarget(Builtin.GetMotionVectorFormat(),    Color.clear, "LineMVBuffer");
+            m_LineColorBufferRT = RTHandles.Alloc(Vector2.one, format:GraphicsFormat.R32G32B32A32_SFloat, slices: TextureXR.slices, dimension: TextureXR.dimension,
+                useMipMap: false, autoGenerateMips: false, enableRandomWrite: true, useDynamicScale: true, name: "LineColorBuffer");
+            m_LineDepthBufferRT = RTHandles.Alloc(Vector2.one, format: GraphicsFormat.R32_SFloat, slices: TextureXR.slices, dimension: TextureXR.dimension,
+                useMipMap: false, autoGenerateMips: false, enableRandomWrite: true, useDynamicScale: true, name: "LineDepthBuffer");
+            m_LineMVBufferRT = RTHandles.Alloc(Vector2.one,  format: Builtin.GetMotionVectorFormat(), slices: TextureXR.slices, dimension: TextureXR.dimension,
+                useMipMap: false, autoGenerateMips: false, enableRandomWrite: true, useDynamicScale: true, name: "LineMVBuffer");
         }
 
         void CleanupLineRendering()
@@ -87,11 +79,27 @@ namespace UnityEngine.Rendering.HighDefinition
 
             CoreUtils.Destroy(m_LineCompositePass);
 
-            m_RenderGraph.ReleaseSharedTexture(m_LineColorBuffer);
-            m_RenderGraph.ReleaseSharedTexture(m_LineDepthBuffer);
-            m_RenderGraph.ReleaseSharedTexture(m_LineMVBuffer);
+            m_LineColorBufferRT?.Release();
+            m_LineDepthBufferRT?.Release();
+            m_LineMVBufferRT?.Release();
+
+            m_LineColorBuffer = TextureHandle.nullHandle;
+            m_LineDepthBuffer = TextureHandle.nullHandle;
+            m_LineMVBuffer = TextureHandle.nullHandle;
 
             LineRendering.Instance.Cleanup();
+        }
+
+        void ImportLineRenderingTargetsToRenderGraphIfNeeded()
+        {
+            if (!m_LineColorBuffer.IsValid())
+                m_LineColorBuffer = m_RenderGraph.ImportTexture(m_LineColorBufferRT);
+
+            if (!m_LineDepthBuffer.IsValid())
+                m_LineDepthBuffer = m_RenderGraph.ImportTexture(m_LineDepthBufferRT);
+
+            if (!m_LineMVBuffer.IsValid())
+                m_LineMVBuffer = m_RenderGraph.ImportTexture(m_LineMVBufferRT);
         }
 
         class LineRendererSetupData
@@ -118,6 +126,9 @@ namespace UnityEngine.Rendering.HighDefinition
             public TextureHandle lineTargetMV;
 
             public float writeDepthAndMovecAlphaTreshold;
+            public int lineCompositePassColorIndex;
+            public int lineCompositePassDepthMovecIndex;
+            public int lineCompositePassAllIndex;
         }
 
         internal static bool LineRenderingIsEnabled(HDCamera hdCamera, out HighQualityLineRenderingVolumeComponent settings)
@@ -143,42 +154,52 @@ namespace UnityEngine.Rendering.HighDefinition
             return true;
         }
 
-        void RenderLines(RenderGraph renderGraph, TextureHandle depthPrepassTexture, HDCamera hdCamera, BuildGPULightListOutput lightLists)
+        void RenderLines(RenderGraph renderGraph, in TextureHandle depthPrepassTexture, HDCamera hdCamera, BuildGPULightListOutput lightLists)
         {
             if (!LineRenderingIsEnabled(hdCamera, out var settings))
                 return;
 
+            ImportLineRenderingTargetsToRenderGraphIfNeeded();
+
             // Here we need to bind some SRP-specific buffers and clear the internal targets.
-            using (var builder = renderGraph.AddRenderPass<LineRendererSetupData>("Setup Line Rendering", out var passData, ProfilingSampler.Get(HDProfileId.LineRenderingSetup)))
+            using (var builder = renderGraph.AddUnsafePass<LineRendererSetupData>("Setup Line Rendering", out var passData, ProfilingSampler.Get(HDProfileId.LineRenderingSetup)))
             {
-                passData.lightListCluster    = builder.ReadBuffer(lightLists.perVoxelLightLists);
-                passData.perVoxelOffset      = builder.ReadBuffer(lightLists.perVoxelOffset);
-                passData.perTileLogBaseTweak = builder.ReadBuffer(lightLists.perTileLogBaseTweak);
+                passData.lightListCluster    = lightLists.perVoxelLightLists;
+                builder.UseBuffer(passData.lightListCluster, AccessFlags.Read);
+                passData.perVoxelOffset      = lightLists.perVoxelOffset;
+                builder.UseBuffer(passData.perVoxelOffset, AccessFlags.Read);
+                passData.perTileLogBaseTweak = lightLists.perTileLogBaseTweak;
+                builder.UseBuffer(passData.perTileLogBaseTweak, AccessFlags.Read);
 
-                passData.targetColor = builder.WriteTexture(m_LineColorBuffer);
-                passData.targetDepth = builder.WriteTexture(m_LineDepthBuffer);
-                passData.targetMV    = builder.WriteTexture(m_LineMVBuffer);
+                passData.targetColor = m_LineColorBuffer;
+                builder.UseTexture(passData.targetColor, AccessFlags.Write);
+                passData.targetDepth = m_LineDepthBuffer;
+                builder.UseTexture(passData.targetDepth, AccessFlags.Write);
+                passData.targetMV    = m_LineMVBuffer;
+                builder.UseTexture(passData.targetMV, AccessFlags.Write);
 
-                builder.SetRenderFunc((LineRendererSetupData data, RenderGraphContext context) =>
+                builder.SetRenderFunc(static (LineRendererSetupData data, UnsafeGraphContext ctx) =>
                 {
+                    var natCmd = CommandBufferHelpers.GetNativeCommandBuffer(ctx.cmd);
+
                     // Bind the light lists (required for the light loop to work with offscreen shading).
                     {
-                        context.cmd.SetGlobalBuffer(HDShaderIDs.g_vLightListCluster, data.lightListCluster);
+                        natCmd.SetGlobalBuffer(HDShaderIDs.g_vLightListCluster, data.lightListCluster);
 
                         // Next two are only for cluster rendering. PerTileLogBaseTweak is only when using depth buffer so can be invalid as well.
                         if (data.perVoxelOffset.IsValid())
-                            context.cmd.SetGlobalBuffer(HDShaderIDs.g_vLayeredOffsetsBuffer, data.perVoxelOffset);
+                            natCmd.SetGlobalBuffer(HDShaderIDs.g_vLayeredOffsetsBuffer, data.perVoxelOffset);
                         if (data.perTileLogBaseTweak.IsValid())
-                            context.cmd.SetGlobalBuffer(HDShaderIDs.g_logBaseBuffer, data.perTileLogBaseTweak);
+                            natCmd.SetGlobalBuffer(HDShaderIDs.g_logBaseBuffer, data.perTileLogBaseTweak);
 
-                        CoreUtils.SetKeyword(context.cmd, "USE_FPTL_LIGHTLIST", false);
-                        CoreUtils.SetKeyword(context.cmd, "USE_CLUSTERED_LIGHTLIST", true);
+                        CoreUtils.SetKeyword(natCmd, "USE_FPTL_LIGHTLIST", false);
+                        CoreUtils.SetKeyword(natCmd, "USE_CLUSTERED_LIGHTLIST", true);
                     }
 
                     // Clear the internal targets.
-                    CoreUtils.SetRenderTarget(context.cmd, data.targetColor, ClearFlag.Color, Color.black);
-                    CoreUtils.SetRenderTarget(context.cmd, data.targetDepth, ClearFlag.Color, Color.black);
-                    CoreUtils.SetRenderTarget(context.cmd, data.targetMV,    ClearFlag.Color, Color.clear);
+                    CoreUtils.SetRenderTarget(natCmd, data.targetColor, ClearFlag.Color, Color.black);
+                    CoreUtils.SetRenderTarget(natCmd, data.targetDepth, ClearFlag.Color, Color.black);
+                    CoreUtils.SetRenderTarget(natCmd, data.targetMV,    ClearFlag.Color, Color.clear);
                 });
             }
 
@@ -220,7 +241,7 @@ namespace UnityEngine.Rendering.HighDefinition
             PushFullScreenDebugTexture(renderGraph, m_LineColorBuffer, FullScreenDebugMode.HighQualityLines);
         }
 
-        void ComposeLines(RenderGraph renderGraph, HDCamera hdCamera, TextureHandle colorBuffer, TextureHandle depthBuffer, TextureHandle motionVectorBuffer, int compositionMode)
+        void ComposeLines(RenderGraph renderGraph, HDCamera hdCamera, in TextureHandle colorBuffer, in TextureHandle depthBuffer, in TextureHandle motionVectorBuffer, int compositionMode)
         {
             if (!LineRenderingIsEnabled(hdCamera, out var settings))
                 return;
@@ -228,42 +249,53 @@ namespace UnityEngine.Rendering.HighDefinition
             if (compositionMode != -1 && compositionMode != (int)settings.compositionMode.value)
                 return;
 
-            using (var builder = renderGraph.AddRenderPass<LineRendererCompositeData>("Composite Hair", out var passData, ProfilingSampler.Get(HDProfileId.LineRenderingComposite)))
+            ImportLineRenderingTargetsToRenderGraphIfNeeded();
+
+            using (var builder = renderGraph.AddUnsafePass<LineRendererCompositeData>("Composite Hair", out var passData, ProfilingSampler.Get(HDProfileId.LineRenderingComposite)))
             {
                 passData.compositePass   = m_LineCompositePass;
 
-                passData.mainTargetColor = builder.UseColorBuffer(colorBuffer, 0);
-                passData.mainTargetDepth = builder.UseDepthBuffer(depthBuffer, DepthAccess.ReadWrite);
+                passData.mainTargetColor = colorBuffer;
+                builder.SetRenderAttachment(colorBuffer, 0);
+                passData.mainTargetDepth = depthBuffer;
+                builder.SetRenderAttachmentDepth(depthBuffer, AccessFlags.ReadWrite);
 
                 if (motionVectorBuffer.IsValid() && hdCamera.frameSettings.IsEnabled(FrameSettingsField.MotionVectors))
                 {
                     // The motion vectors may be invalid in case of material debug view. So don't bind it in that case.
-                    passData.mainTargetMV = builder.UseColorBuffer(motionVectorBuffer, 1);
+                    passData.mainTargetMV = motionVectorBuffer;
+                    builder.SetRenderAttachment(motionVectorBuffer, 1);
                 }
                 else
                     passData.mainTargetMV = TextureHandle.nullHandle;
 
-                passData.lineTargetColor = builder.ReadTexture(m_LineColorBuffer);
-                passData.lineTargetDepth = builder.ReadTexture(m_LineDepthBuffer);
-                passData.lineTargetMV    = builder.ReadTexture(m_LineMVBuffer);
+                passData.lineTargetColor = m_LineColorBuffer;
+                builder.UseTexture(passData.lineTargetColor, AccessFlags.Read);
+                passData.lineTargetDepth = m_LineDepthBuffer;
+                builder.UseTexture(passData.lineTargetDepth, AccessFlags.Read);
+                passData.lineTargetMV    = m_LineMVBuffer;
+                builder.UseTexture(passData.lineTargetMV, AccessFlags.Read);
                 passData.writeDepthAndMovecAlphaTreshold = settings.writeDepthAlphaThreshold.value;
+                passData.lineCompositePassColorIndex = m_LineCompositePassColorIndex;
+                passData.lineCompositePassDepthMovecIndex = m_LineCompositePassDepthMovecIndex;
+                passData.lineCompositePassAllIndex = m_LineCompositePassAllIndex;
 
-                builder.SetRenderFunc((LineRendererCompositeData passData, RenderGraphContext context) =>
+                builder.SetRenderFunc(static (LineRendererCompositeData passData, UnsafeGraphContext ctx) =>
                 {
+                    var natCmd = CommandBufferHelpers.GetNativeCommandBuffer(ctx.cmd);
                     passData.compositePass.SetTexture(HDShaderIDs._LineColorTexture,  passData.lineTargetColor);
                     passData.compositePass.SetTexture(HDShaderIDs._LineDepthTexture,  passData.lineTargetDepth);
                     passData.compositePass.SetTexture(HDShaderIDs._LineMotionTexture, passData.lineTargetMV);
                     passData.compositePass.SetFloat(HDShaderIDs._LineAlphaDepthWriteThreshold, passData.writeDepthAndMovecAlphaTreshold );
                     if (passData.writeDepthAndMovecAlphaTreshold > 0)
                     {
-                        HDUtils.DrawFullScreen(context.cmd, passData.compositePass, new RenderTargetIdentifier[] { passData.mainTargetColor}, passData.mainTargetDepth, null, m_LineCompositePassColorIndex); //color composite
-                        HDUtils.DrawFullScreen(context.cmd, passData.compositePass, new RenderTargetIdentifier[] { passData.mainTargetMV }, passData.mainTargetDepth, null, m_LineCompositePassDepthMovecIndex); //depth & movec composite
+                        HDUtils.DrawFullScreen(natCmd, passData.compositePass, new RenderTargetIdentifier[] { passData.mainTargetColor}, passData.mainTargetDepth, null, passData.lineCompositePassColorIndex); //color composite
+                        HDUtils.DrawFullScreen(natCmd, passData.compositePass, new RenderTargetIdentifier[] { passData.mainTargetMV }, passData.mainTargetDepth, null, passData.lineCompositePassDepthMovecIndex); //depth & movec composite
                     }
                     else
                     {
-                        HDUtils.DrawFullScreen(context.cmd, passData.compositePass, new RenderTargetIdentifier[] { passData.mainTargetColor, passData.mainTargetMV }, passData.mainTargetDepth, null, m_LineCompositePassAllIndex); //composite all
+                        HDUtils.DrawFullScreen(natCmd, passData.compositePass, new RenderTargetIdentifier[] { passData.mainTargetColor, passData.mainTargetMV }, passData.mainTargetDepth, null, passData.lineCompositePassAllIndex); //composite all
                     }
-
                 });
             }
         }

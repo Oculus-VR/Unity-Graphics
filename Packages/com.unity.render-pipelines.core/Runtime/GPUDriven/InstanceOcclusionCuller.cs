@@ -74,8 +74,10 @@ namespace UnityEngine.Rendering
     [GenerateHLSL(needAccessors = false)]
     internal enum InstanceOcclusionTestDebugCounter
     {
-        Occluded,
-        NotOccluded,
+        InstancesOccluded,
+        InstancesNotOccluded,
+        PrimitivesOccluded,
+        PrimitivesNotOccluded,
         Count,
     }
 
@@ -93,7 +95,7 @@ namespace UnityEngine.Rendering
         public uint firstIndex;
         public uint baseVertex;
         public uint firstInstanceGlobalIndex;
-        public uint maxInstanceCount;
+        public uint maxInstanceCountAndTopology; // [31:3]=max_instance_count, [2:0]=topology
     }
 
     internal struct IndirectBufferAllocInfo
@@ -280,7 +282,7 @@ namespace UnityEngine.Rendering
                 occluderDepthPyramid = RTHandles.Alloc(
                     occluderDepthPyramidSize.x, occluderDepthPyramidSize.y,
                     format: GraphicsFormat.R32_SFloat,
-                    dimension: TextureDimension.Tex2D,                    
+                    dimension: TextureDimension.Tex2D,
                     filterMode: FilterMode.Point,
                     wrapMode: TextureWrapMode.Clamp,
                     enableRandomWrite: true,
@@ -558,14 +560,16 @@ namespace UnityEngine.Rendering
     {
         public BufferHandle instanceBuffer;
         public BufferHandle instanceInfoBuffer;
-        public BufferHandle argsBuffer;
+        public BufferHandle dispatchArgsBuffer;
+        public BufferHandle drawArgsBuffer;
         public BufferHandle drawInfoBuffer;
 
         public void UseForOcclusionTest(IBaseRenderGraphBuilder builder)
         {
             instanceBuffer = builder.UseBuffer(instanceBuffer, AccessFlags.ReadWrite);
             instanceInfoBuffer = builder.UseBuffer(instanceInfoBuffer, AccessFlags.Read);
-            argsBuffer = builder.UseBuffer(argsBuffer, AccessFlags.ReadWrite);
+            dispatchArgsBuffer = builder.UseBuffer(dispatchArgsBuffer, AccessFlags.ReadWrite);
+            drawArgsBuffer = builder.UseBuffer(drawArgsBuffer, AccessFlags.ReadWrite);
             drawInfoBuffer = builder.UseBuffer(drawInfoBuffer, AccessFlags.Read);
         }
     }
@@ -573,7 +577,6 @@ namespace UnityEngine.Rendering
     internal struct IndirectBufferContextStorage : IDisposable
     {
         private const int kAllocatorCount = (int)IndirectAllocator.Count;
-        internal const int kExtraDrawAllocationCount = 1;           // over-allocate by one for indirect args scratch space GPU-side
         internal const int kInstanceInfoGpuOffsetMultiplier = 2;    // GPU side allocates storage for extra copy of instance list
 
         private IndirectBufferLimits m_BufferLimits;
@@ -582,23 +585,25 @@ namespace UnityEngine.Rendering
         private GraphicsBuffer m_InstanceInfoBuffer;
         private NativeArray<IndirectInstanceInfo> m_InstanceInfoStaging;
 
-        private GraphicsBuffer m_ArgsBuffer;
+        private GraphicsBuffer m_DispatchArgsBuffer;
+        private GraphicsBuffer m_DrawArgsBuffer;
         private GraphicsBuffer m_DrawInfoBuffer;
         private NativeArray<IndirectDrawInfo> m_DrawInfoStaging;
 
         private int m_ContextAllocCounter;
-        private NativeHashMap<int, int> m_ContextIndexFromViewID;
+        private NativeHashMap<EntityId, int> m_ContextIndexFromViewID;
         private NativeList<IndirectBufferContext> m_Contexts;
         private NativeArray<IndirectBufferAllocInfo> m_ContextAllocInfo;
         private NativeArray<int> m_AllocationCounters;
 
         public GraphicsBuffer instanceBuffer { get { return m_InstanceBuffer; } }
         public GraphicsBuffer instanceInfoBuffer { get { return m_InstanceInfoBuffer; } }
-        public GraphicsBuffer argsBuffer { get { return m_ArgsBuffer; } }
+        public GraphicsBuffer dispatchArgsBuffer { get { return m_DispatchArgsBuffer; } }
+        public GraphicsBuffer drawArgsBuffer { get { return m_DrawArgsBuffer; } }
         public GraphicsBuffer drawInfoBuffer { get { return m_DrawInfoBuffer; } }
 
         public GraphicsBufferHandle visibleInstanceBufferHandle { get { return m_InstanceBuffer.bufferHandle; } }
-        public GraphicsBufferHandle indirectArgsBufferHandle { get { return m_ArgsBuffer.bufferHandle; } }
+        public GraphicsBufferHandle indirectDrawArgsBufferHandle { get { return m_DrawArgsBuffer.bufferHandle; } }
 
         public IndirectBufferContextHandles ImportBuffers(RenderGraph renderGraph)
         {
@@ -606,7 +611,8 @@ namespace UnityEngine.Rendering
             {
                 instanceBuffer = renderGraph.ImportBuffer(m_InstanceBuffer),
                 instanceInfoBuffer = renderGraph.ImportBuffer(m_InstanceInfoBuffer),
-                argsBuffer = renderGraph.ImportBuffer(m_ArgsBuffer),
+                dispatchArgsBuffer = renderGraph.ImportBuffer(m_DispatchArgsBuffer),
+                drawArgsBuffer = renderGraph.ImportBuffer(m_DrawArgsBuffer),
                 drawInfoBuffer = renderGraph.ImportBuffer(m_DrawInfoBuffer),
             };
         }
@@ -624,7 +630,7 @@ namespace UnityEngine.Rendering
             AllocateInstanceBuffers(initialInstanceCount);
             AllocateDrawBuffers(initialDrawCount);
 
-            m_ContextIndexFromViewID = new NativeHashMap<int, int>(initialContextCount, Allocator.Persistent);
+            m_ContextIndexFromViewID = new NativeHashMap<EntityId, int>(initialContextCount, Allocator.Persistent);
             m_Contexts = new NativeList<IndirectBufferContext>(initialContextCount, Allocator.Persistent);
             m_ContextAllocInfo = new NativeArray<IndirectBufferAllocInfo>(initialContextCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
 
@@ -651,7 +657,9 @@ namespace UnityEngine.Rendering
 
         void AllocateDrawBuffers(int maxDrawCount)
         {
-            m_ArgsBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured | GraphicsBuffer.Target.IndirectArguments, (maxDrawCount + kExtraDrawAllocationCount) * (GraphicsBuffer.IndirectDrawIndexedArgs.size / sizeof(int)), sizeof(int));
+            // Compute dispatch arguments are number of thread groups in X,Y and Z dimensions, hence 3 integers for the size.
+            m_DispatchArgsBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured | GraphicsBuffer.Target.IndirectArguments, 3, sizeof(int));
+            m_DrawArgsBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured | GraphicsBuffer.Target.IndirectArguments, maxDrawCount * (GraphicsBuffer.IndirectDrawIndexedArgs.size / sizeof(int)), sizeof(int));
             m_DrawInfoBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, maxDrawCount, System.Runtime.InteropServices.Marshal.SizeOf<IndirectDrawInfo>());
             m_DrawInfoStaging = new NativeArray<IndirectDrawInfo>(maxDrawCount, Allocator.Persistent, NativeArrayOptions.UninitializedMemory);
             m_BufferLimits.maxDrawCount = maxDrawCount;
@@ -659,7 +667,8 @@ namespace UnityEngine.Rendering
 
         void FreeDrawBuffers()
         {
-            m_ArgsBuffer.Release();
+            m_DispatchArgsBuffer.Release();
+            m_DrawArgsBuffer.Release();
             m_DrawInfoBuffer.Release();
             m_DrawInfoStaging.Dispose();
             m_BufferLimits.maxDrawCount = 0;
@@ -731,7 +740,7 @@ namespace UnityEngine.Rendering
             ResetAllocators();
         }
 
-        public int TryAllocateContext(int viewID)
+        public int TryAllocateContext(EntityId viewID)
         {
             // Disallow using the same viewID multiple times for a frame, since it is used as a UID to update indirect args
             // This will prevent multiple context being created for example if a custom pass is being used
@@ -749,7 +758,7 @@ namespace UnityEngine.Rendering
             return contextIndex;
         }
 
-        public int TryGetContextIndex(int viewID)
+        public int TryGetContextIndex(EntityId viewID)
         {
             if (!m_ContextIndexFromViewID.TryGetValue(viewID, out var contextIndex))
                 contextIndex = -1;

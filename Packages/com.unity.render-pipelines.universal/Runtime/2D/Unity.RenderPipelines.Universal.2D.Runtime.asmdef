@@ -8,7 +8,9 @@
         "GUID:ab67fb10353d84448ac887a7367cbda8",
         "GUID:41524c21c95e5fe4dbc5b48bd21995a4",
         "GUID:caccfbdb442cdc64fa722b4c5585521f",
-        "GUID:2665a8d13d1b3f18800f46e256720795"
+        "GUID:2665a8d13d1b3f18800f46e256720795",
+        "GUID:c3352a8bbbe14fb4ab52ae7bfff927ea",
+        "RenderAs2DModule"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
@@ -37,6 +39,21 @@
             "name": "com.unity.visualeffectgraph",
             "expression": "0.0.1",
             "define": "VISUAL_EFFECT_GRAPH_0_0_1_OR_NEWER"
+        },
+        {
+            "name": "com.unity.2d.animation",
+            "expression": "13.0.1",
+            "define": "USING_2DANIMATION_13_0_1_OR_ABOVE"
+        },
+        {
+            "name": "com.unity.modules.xr",
+            "expression": "1.0.0",
+            "define": "ENABLE_XR_MODULE"
+        },
+        {
+          "name": "com.unity.2d.common",
+          "expression": "13.0.0",
+          "define": "USING_2DCOMMON"
         }
     ],
     "noEngineReferences": false

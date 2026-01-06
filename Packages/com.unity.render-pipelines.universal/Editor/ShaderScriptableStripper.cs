@@ -27,9 +27,11 @@ namespace UnityEditor.Rendering.Universal
             public bool stripDebugDisplayShaders { get; set; }
             public bool stripScreenCoordOverrideVariants { get; set; }
             public bool stripBicubicLightmapSamplingVariants { get; set; }
+            public bool stripReflectionProbeRotationVariants { get; set; }
             public bool stripUnusedVariants { get; set; }
             public bool stripUnusedPostProcessingVariants { get; set; }
             public bool stripUnusedXRVariants { get; set; }
+            public bool usesDynamicLightmaps { get; set; }
 
             public Shader shader { get; set; }
             public ShaderType shaderType { get; set; }
@@ -41,7 +43,6 @@ namespace UnityEditor.Rendering.Universal
 
             public bool IsHDRDisplaySupportEnabled { get; set; }
             public bool IsHDRShaderVariantValid { get; set; }
-            public bool IsRenderCompatibilityMode { get; set; }
 
             public bool IsShaderFeatureEnabled(ShaderFeatures feature);
 
@@ -65,9 +66,11 @@ namespace UnityEditor.Rendering.Universal
             public bool stripDebugDisplayShaders { get; set; }
             public bool stripScreenCoordOverrideVariants { get; set; }
             public bool stripBicubicLightmapSamplingVariants { get; set; }
+            public bool stripReflectionProbeRotationVariants { get; set; }
             public bool stripUnusedVariants { get; set; }
             public bool stripUnusedPostProcessingVariants { get; set; }
             public bool stripUnusedXRVariants { get; set; }
+            public bool usesDynamicLightmaps { get; set; }
 
             public Shader shader { get; set; }
             public ShaderType shaderType { get => passData.shaderType; set{} }
@@ -78,7 +81,6 @@ namespace UnityEditor.Rendering.Universal
             public PassIdentifier passIdentifier { get => passData.pass; set {} }
             public bool IsHDRDisplaySupportEnabled { get; set; }
             public bool IsHDRShaderVariantValid { get => HDROutputUtils.IsShaderVariantValid(variantData.shaderKeywordSet, PlayerSettings.allowHDRDisplaySupport); set { } }
-            public bool IsRenderCompatibilityMode { get; set; }
 
             public bool IsKeywordEnabled(LocalKeyword keyword)
             {
@@ -111,8 +113,8 @@ namespace UnityEditor.Rendering.Universal
         Shader m_PaniniProjection = Shader.Find("Hidden/Universal Render Pipeline/PaniniProjection");
         Shader m_Bloom = Shader.Find("Hidden/Universal Render Pipeline/Bloom");
         Shader m_TerrainLit = Shader.Find("Universal Render Pipeline/Terrain/Lit");
-        Shader m_TerrainLitAddPass = Shader.Find("Universal Render Pipeline/Terrain/Lit (Add Pass)");
-        Shader m_TerrainLitBasePass = Shader.Find("Universal Render Pipeline/Terrain/Lit (Base Pass)");
+        Shader m_TerrainLitAddPass = Shader.Find("Hidden/Universal Render Pipeline/Terrain/Lit (Add Pass)");
+        Shader m_TerrainLitBasePass = Shader.Find("Hidden/Universal Render Pipeline/Terrain/Lit (Base Pass)");
         Shader m_StencilDeferred = Shader.Find("Hidden/Universal Render Pipeline/StencilDeferred");
         Shader m_ClusterDeferred = Shader.Find("Hidden/Universal Render Pipeline/ClusterDeferred");
         Shader m_UberPostShader = Shader.Find("Hidden/Universal Render Pipeline/UberPost");
@@ -129,6 +131,8 @@ namespace UnityEditor.Rendering.Universal
         public static readonly string kPassNameForwardLit = "ForwardLit";
         public static readonly string kPassNameDepthNormals = "DepthNormals";
         public static readonly string kPassNameXRMotionVectors = "XRMotionVectors";
+        public static readonly string kPassNameXRUberPost = "UberPostXR";
+        public static readonly string kPassNameXRFinalPost = "FinalPostXR";
 
         // Keywords
         LocalKeyword m_MainLightShadows;
@@ -140,6 +144,7 @@ namespace UnityEditor.Rendering.Universal
         LocalKeyword m_ReflectionProbeBlending;
         LocalKeyword m_ReflectionProbeBoxProjection;
         LocalKeyword m_ReflectionProbeAtlas;
+        LocalKeyword m_ReflectionProbeRotation;
         LocalKeyword m_CastingPunctualLightShadow;
         LocalKeyword m_SoftShadows;
         LocalKeyword m_SoftShadowsLow;
@@ -154,6 +159,7 @@ namespace UnityEditor.Rendering.Universal
         LocalKeyword m_AlphaTestOn;
         LocalKeyword m_GbufferNormalsOct;
         LocalKeyword m_ScreenSpaceOcclusion;
+        LocalKeyword m_ScreenSpaceIrradiance;
         LocalKeyword m_UseFastSRGBLinearConversion;
         LocalKeyword m_LightLayers;
         LocalKeyword m_DecalLayers;
@@ -209,6 +215,7 @@ namespace UnityEditor.Rendering.Universal
             m_ReflectionProbeBlending = TryGetLocalKeyword(shader, ShaderKeywordStrings.ReflectionProbeBlending);
             m_ReflectionProbeBoxProjection = TryGetLocalKeyword(shader, ShaderKeywordStrings.ReflectionProbeBoxProjection);
             m_ReflectionProbeAtlas = TryGetLocalKeyword(shader, ShaderKeywordStrings.ReflectionProbeAtlas);
+            m_ReflectionProbeRotation = TryGetLocalKeyword(shader, ShaderKeywordStrings.ReflectionProbeRotation);
             m_CastingPunctualLightShadow = TryGetLocalKeyword(shader, ShaderKeywordStrings.CastingPunctualLightShadow);
             m_SoftShadows = TryGetLocalKeyword(shader, ShaderKeywordStrings.SoftShadows);
             m_SoftShadowsLow = TryGetLocalKeyword(shader, ShaderKeywordStrings.SoftShadowsLow);
@@ -223,6 +230,7 @@ namespace UnityEditor.Rendering.Universal
             m_AlphaTestOn = TryGetLocalKeyword(shader, ShaderKeywordStrings._ALPHATEST_ON);
             m_GbufferNormalsOct = TryGetLocalKeyword(shader, ShaderKeywordStrings._GBUFFER_NORMALS_OCT);
             m_ScreenSpaceOcclusion = TryGetLocalKeyword(shader, ShaderKeywordStrings.ScreenSpaceOcclusion);
+            m_ScreenSpaceIrradiance = TryGetLocalKeyword(shader, ShaderKeywordStrings.ScreenSpaceIrradiance);
             m_UseFastSRGBLinearConversion = TryGetLocalKeyword(shader, ShaderKeywordStrings.UseFastSRGBLinearConversion);
             m_LightLayers = TryGetLocalKeyword(shader, ShaderKeywordStrings.LightLayers);
             m_DecalLayers = TryGetLocalKeyword(shader, ShaderKeywordStrings.DecalLayers);
@@ -392,6 +400,20 @@ namespace UnityEditor.Rendering.Universal
             return strippingData.stripScreenCoordOverrideVariants && strippingData.IsKeywordEnabled(m_ScreenCoordOverride);
         }
 
+        internal bool StripUnusedFeatures_ScreenSpaceIrradiance(ref IShaderScriptableStrippingData strippingData)
+        {
+#if SURFACE_CACHE
+            if (strippingData.PassHasKeyword(m_ScreenSpaceIrradiance))
+            {
+                bool useScreenSpaceIrradiance = strippingData.IsShaderFeatureEnabled(ShaderFeatures.SurfaceCache);
+                return !strippingData.IsShaderFeatureEnabled(ShaderFeatures.SurfaceCache) && strippingData.IsKeywordEnabled(m_ScreenSpaceIrradiance);
+            }
+            return false;
+#else
+            return strippingData.IsKeywordEnabled(m_ScreenSpaceIrradiance);
+#endif
+        }
+
         internal bool StripUnusedFeatures_BicubicLightmapSampling(ref IShaderScriptableStrippingData strippingData)
         {
             if (strippingData.PassHasKeyword(m_LightmapBicubicSampling))
@@ -400,6 +422,16 @@ namespace UnityEditor.Rendering.Universal
                 return useBicubic != strippingData.IsKeywordEnabled(m_LightmapBicubicSampling);
             }
 
+            return false;
+        }
+
+        internal bool StripUnusedFeatures_ReflectionProbeRotation(ref IShaderScriptableStrippingData strippingData)
+        {
+            if (strippingData.PassHasKeyword(m_ReflectionProbeRotation))
+            {
+                bool useRotation = !strippingData.stripReflectionProbeRotationVariants;
+                return useRotation != strippingData.IsKeywordEnabled(m_ReflectionProbeRotation);
+            }
             return false;
         }
 
@@ -781,16 +813,12 @@ namespace UnityEditor.Rendering.Universal
                 if (strippingData.IsKeywordEnabled(m_Instancing) || strippingData.IsKeywordEnabled(m_DotsInstancing)|| strippingData.IsKeywordEnabled(m_ProceduralInstancing))
                     return false; // Currently we don't support stencil-based fade with GPU instancing.
 
-                // native render pass is not supported for now.
-                if (strippingData.IsRenderCompatibilityMode)
-                    return false;
-
                 // We can't strip the variations of the passes which may not have stencils.
                 // Stencil's availability in motion vector pass depends on platforms + graphics API.
-                return (strippingData.passType != PassType.ShadowCaster) && (strippingData.passType != PassType.MotionVectors);
+                return strippingData.passType != PassType.ShadowCaster && strippingData.passType != PassType.MotionVectors;
             }
-            else
-                return !strippingData.IsShaderFeatureEnabled(ShaderFeatures.LODCrossFade);
+
+            return !strippingData.IsShaderFeatureEnabled(ShaderFeatures.LODCrossFade);
         }
 
         internal bool StripUnusedFeatures(ref IShaderScriptableStrippingData strippingData)
@@ -801,7 +829,13 @@ namespace UnityEditor.Rendering.Universal
             if (StripUnusedFeatures_ScreenCoordOverride(ref strippingData))
                 return true;
 
+            if (StripUnusedFeatures_ScreenSpaceIrradiance(ref strippingData))
+                return true;
+
             if (StripUnusedFeatures_BicubicLightmapSampling(ref strippingData))
+                return true;
+
+            if (StripUnusedFeatures_ReflectionProbeRotation(ref strippingData))
                 return true;
 
             if (StripUnusedFeatures_MixedLighting(ref strippingData))
@@ -1024,11 +1058,17 @@ namespace UnityEditor.Rendering.Universal
 
         internal bool StripUnusedPass_Meta(ref IShaderScriptableStrippingData strippingData)
         {
-            // Meta pass is needed in the player for Enlighten Precomputed Realtime GI albedo and emission.
+            bool isEnlightenSupported = SupportedRenderingFeatures.active.enlighten && ((int)SupportedRenderingFeatures.active.lightmapBakeTypes | (int)LightmapBakeType.Realtime) != 0;
+
+            // Meta pass is needed in the player for Enlighten Precomputed Realtime GI albedo and emission, as well as Surface Cache Global Illumination.
             if (strippingData.passType == PassType.Meta)
             {
-                if (SupportedRenderingFeatures.active.enlighten == false
-                    || ((int)SupportedRenderingFeatures.active.lightmapBakeTypes | (int)LightmapBakeType.Realtime) == 0)
+                if ((!isEnlightenSupported || !strippingData.usesDynamicLightmaps)
+
+#if SURFACE_CACHE
+                    && !strippingData.IsShaderFeatureEnabled(ShaderFeatures.SurfaceCache)
+#endif
+                )
                     return true;
             }
             return false;
@@ -1080,6 +1120,22 @@ namespace UnityEditor.Rendering.Universal
             return false;
         }
 
+        internal bool StripUnusedPass_XRUberPost(ref IShaderScriptableStrippingData strippingData)
+        {
+            // Strip XR UberPost Passes if there is no XR
+            if (strippingData.passName == kPassNameXRUberPost && strippingData.stripUnusedXRVariants)
+                return true;
+            return false;
+        }
+
+        internal bool StripUnusedPass_XRFinalPost(ref IShaderScriptableStrippingData strippingData)
+        {
+            // Strip XR FinalPost Passes if there is no XR
+            if (strippingData.passName == kPassNameXRFinalPost && strippingData.stripUnusedXRVariants)
+                return true;
+            return false;
+        }
+
         internal bool StripUnusedPass(ref IShaderScriptableStrippingData strippingData)
         {
             if (StripUnusedPass_2D(ref strippingData))
@@ -1097,6 +1153,11 @@ namespace UnityEditor.Rendering.Universal
             if (StripUnusedPass_XRMotionVectors(ref strippingData))
                 return true;
 
+            if (StripUnusedPass_XRUberPost(ref strippingData))
+                return true;
+
+            if (StripUnusedPass_XRFinalPost(ref strippingData))
+                return true;
             return false;
         }
 
@@ -1169,11 +1230,12 @@ namespace UnityEditor.Rendering.Universal
                 stripDebugDisplayShaders = ShaderBuildPreprocessor.s_StripDebugDisplayShaders,
                 stripScreenCoordOverrideVariants = ShaderBuildPreprocessor.s_StripScreenCoordOverrideVariants,
                 stripBicubicLightmapSamplingVariants = ShaderBuildPreprocessor.s_StripBicubicLightmapSamplingVariants,
+                stripReflectionProbeRotationVariants = ShaderBuildPreprocessor.s_StripReflectionProbeRotationVariants,
                 stripUnusedVariants = ShaderBuildPreprocessor.s_StripUnusedVariants,
                 stripUnusedPostProcessingVariants = ShaderBuildPreprocessor.s_StripUnusedPostProcessingVariants,
                 stripUnusedXRVariants = ShaderBuildPreprocessor.s_StripXRVariants,
+                usesDynamicLightmaps = ShaderBuildPreprocessor.s_UsesDynamicLightmaps,
                 IsHDRDisplaySupportEnabled = PlayerSettings.allowHDRDisplaySupport,
-                IsRenderCompatibilityMode = GraphicsSettings.TryGetRenderPipelineSettings<RenderGraphSettings>(out var renderGraphSettings) && renderGraphSettings.enableRenderCompatibilityMode,
                 shader = shader,
                 passData = passData,
                 variantData = variantData

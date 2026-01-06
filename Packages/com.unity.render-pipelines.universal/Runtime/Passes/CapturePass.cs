@@ -12,29 +12,10 @@ namespace UnityEngine.Rendering.Universal
     /// </summary>
     internal class CapturePass : ScriptableRenderPass
     {
-        RTHandle m_CameraColorHandle;
-
         public CapturePass(RenderPassEvent evt)
         {
-            base.profilingSampler = new ProfilingSampler("Capture Camera output");
+            profilingSampler = new ProfilingSampler("Capture Camera output");
             renderPassEvent = evt;
-        }
-
-        /// <inheritdoc/>
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            CommandBuffer cmdBuf = renderingData.commandBuffer;
-
-            m_CameraColorHandle = renderingData.cameraData.renderer.GetCameraColorBackBuffer(cmdBuf);
-
-            using (new ProfilingScope(cmdBuf, profilingSampler))
-            {
-                var colorAttachmentIdentifier = m_CameraColorHandle.nameID;
-                var captureActions = renderingData.cameraData.captureActions;
-                for (captureActions.Reset(); captureActions.MoveNext();)
-                    captureActions.Current(colorAttachmentIdentifier, renderingData.commandBuffer);
-            }
         }
 
         private class UnsafePassData
@@ -61,7 +42,7 @@ namespace UnityEngine.Rendering.Universal
                 // Setup up the builder
                 builder.AllowPassCulling(false);
                 builder.UseTexture(resourceData.cameraColor);
-                builder.SetRenderFunc((UnsafePassData data, UnsafeGraphContext unsafeContext) =>
+                builder.SetRenderFunc(static (UnsafePassData data, UnsafeGraphContext unsafeContext) =>
                 {
                     var nativeCommandBuffer = CommandBufferHelpers.GetNativeCommandBuffer(unsafeContext.cmd);
                     var captureActions = data.captureActions;

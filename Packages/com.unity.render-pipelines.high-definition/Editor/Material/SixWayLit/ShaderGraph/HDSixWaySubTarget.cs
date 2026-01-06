@@ -12,7 +12,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
     {
         public HDSixWaySubTarget() => displayName = "Six-way Smoke Lit";
 
-        static readonly GUID kSubTargetSourceCodeGuid = new GUID("b20b7afb3a1f43afafc0ac6ea3f2cb26");  // HDSixWaySubTarget.cs
+        static readonly UnityEngine.GUID kSubTargetSourceCodeGuid = new UnityEngine.GUID("b20b7afb3a1f43afafc0ac6ea3f2cb26");  // HDSixWaySubTarget.cs
 
         static string[] passTemplateMaterialDirectories = new string[]
         {
@@ -27,7 +27,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         protected override FieldDescriptor subShaderField => new FieldDescriptor(kSubShader, "Six-way Lit Subshader", "");
         protected override string subShaderInclude => CoreIncludes.kSixWayLit;
         protected override ShaderID shaderID => ShaderID.SG_SixWay;
-        protected override GUID subTargetAssetGuid => kSubTargetSourceCodeGuid;
+        protected override UnityEngine.GUID subTargetAssetGuid => kSubTargetSourceCodeGuid;
 
         protected override bool supportLighting => true;
 
@@ -60,7 +60,6 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
                 FieldCollection requiredFields = new FieldCollection();
                 requiredFields.Add(CoreRequiredFields.BasicLighting);
                 requiredFields.Add(SixWayStructs.RequiredFields);
-
 
                 DefineCollection defines = HDShaderPasses.GenerateDefines(CoreDefines.Forward, useVFX, useTessellation);
 
@@ -151,6 +150,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
 
             public static FieldCollection RequiredFields = new FieldCollection()
             {
+                StructFields.SurfaceDescriptionInputs.FaceSign,
                 SixWayVaryings.diffuseGIData0,
                 SixWayVaryings.diffuseGIData1,
                 SixWayVaryings.diffuseGIData2,
@@ -187,7 +187,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
                 "VARYINGS_NEED_SIX_WAY_DIFFUSE_GI_DATA", ShaderValueType.Float4, subscriptOptions: StructFieldOptions.Optional);
 
             public static FieldDescriptor[] AllFragInputs = new FieldDescriptor[]
-                { diffuseGIData0, diffuseGIData1, diffuseGIData2 };
+                { StructFields.Varyings.cullFace, diffuseGIData0, diffuseGIData1, diffuseGIData2 };
         }
 
 

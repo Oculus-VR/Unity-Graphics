@@ -22,8 +22,6 @@ namespace UnityEditor.ShaderGraph.Internal
         public string name;
         public Texture texture;
         public TextureDimension dimension;
-
-        public int instanceID => texture != null ? texture.GetInstanceID() : 0;
     }
 
     public sealed class ShaderGraphVfxAsset : ScriptableObject, ISerializationCallbackReceiver
@@ -97,7 +95,7 @@ namespace UnityEditor.ShaderGraph.Internal
 
         internal void SetTextureInfos(IList<PropertyCollector.TextureInfo> textures)
         {
-            m_TextureInfos = textures.Select(t => new TextureInfo(t.name, EditorUtility.InstanceIDToObject(t.textureId) as Texture, t.dimension)).ToArray();
+            m_TextureInfos = textures.Where(t => t.generatePropertyBlock).Select(t => new TextureInfo(t.name, EditorUtility.EntityIdToObject(t.textureId) as Texture, t.dimension)).ToArray();
         }
 
         internal void SetOutputs(OutputMetadata[] outputs)
@@ -147,10 +145,16 @@ namespace UnityEditor.ShaderGraph.Internal
             }
         }
 
+        internal ShaderStageCapability GetPropertyStage(int index)
+        {
+            return m_PropertiesStages[index];
+        }
+
         public List<AbstractShaderProperty> fragmentProperties
         {
             get
             {
+                //This getter is only used for old SG integration, kept for compatibility
                 EnsureProperties();
                 var allProperties = m_Data.m_Properties.SelectValue().ToList();
                 var fragProperties = new List<AbstractShaderProperty>();
@@ -161,23 +165,6 @@ namespace UnityEditor.ShaderGraph.Internal
                         fragProperties.Add(property);
                 }
                 return fragProperties;
-            }
-        }
-
-        public List<AbstractShaderProperty> vertexProperties
-        {
-            get
-            {
-                EnsureProperties();
-                var allProperties = m_Data.m_Properties.SelectValue().ToList();
-                var vertexProperties = new List<AbstractShaderProperty>();
-                for (var i = 0; i < allProperties.Count(); i++)
-                {
-                    if (allProperties[i] is AbstractShaderProperty property
-                        && (m_PropertiesStages[i] & ShaderStageCapability.Vertex) != 0)
-                        vertexProperties.Add(property);
-                }
-                return vertexProperties;
             }
         }
 

@@ -65,16 +65,6 @@ namespace UnityEngine.Rendering.Universal
             set => this.SetValueAndNotify(ref m_GeometryUnshadowShader, value, nameof(m_GeometryUnshadowShader));
         }
 
-        [SerializeField, ResourcePath("Runtime/2D/Data/Textures/FalloffLookupTexture.png")]
-        [HideInInspector]
-        private Texture2D m_FallOffLookup;
-
-        internal Texture2D fallOffLookup
-        {
-            get => m_FallOffLookup;
-            set => this.SetValueAndNotify(ref m_FallOffLookup, value, nameof(m_FallOffLookup));
-        }
-
         [SerializeField,ResourcePath("Shaders/Utils/CopyDepth.shader")]
         private Shader m_CopyDepthPS;
 
@@ -110,6 +100,16 @@ namespace UnityEngine.Rendering.Universal
         {
             get => m_DefaultMaskMaterial;
             set => this.SetValueAndNotify(ref m_DefaultMaskMaterial, value, nameof(m_DefaultMaskMaterial));
+        }
+
+
+
+        [SerializeField, ResourcePath("Runtime/Materials/Mesh2D-Lit-Default.mat")]
+        Material m_DefaultMesh2DLitMaterial = null;
+        internal Material defaultMesh2DLitMaterial
+        {
+            get => m_DefaultMesh2DLitMaterial;
+            set => this.SetValueAndNotify(ref m_DefaultMesh2DLitMaterial, value, nameof(m_DefaultMesh2DLitMaterial));
         }
 #endif
     }

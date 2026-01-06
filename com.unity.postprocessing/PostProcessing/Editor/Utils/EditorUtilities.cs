@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.Assertions;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.PostProcessing;
 
 #if XR_MANAGEMENT_4_0_1_OR_NEWER
@@ -37,6 +38,9 @@ namespace UnityEditor.Rendering.PostProcessing
 #if UNITY_GAMECORE
                     || t == BuildTarget.GameCoreXboxSeries
                     || t == BuildTarget.GameCoreXboxOne
+#endif
+#if UNITY_SWITCH2
+                    || t == BuildTarget.Switch2
 #endif
                     || t == BuildTarget.Switch;
             }
@@ -73,6 +77,31 @@ namespace UnityEditor.Rendering.PostProcessing
             {
                 var t = EditorUserBuildSettings.activeBuildTarget;
                 return t == BuildTarget.Android;
+            }
+        }
+
+        /// <summary>
+        /// Returns <c>true</c> if the current build targets OpenGLES, <c>false</c> otherwise.
+        /// </summary>
+        public static bool isTargetingOpenGLES
+        {
+            get
+            {
+                var buildTargetAPIs = PlayerSettings.GetGraphicsAPIs(EditorUserBuildSettings.activeBuildTarget);
+
+                foreach (var api in buildTargetAPIs)
+                {
+                    if (api == GraphicsDeviceType.OpenGLES3
+#if !UNITY_2023_1_OR_NEWER
+                        || api == GraphicsDeviceType.OpenGLES2
+#endif
+                        )
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
             }
         }
 

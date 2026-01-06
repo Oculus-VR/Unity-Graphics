@@ -571,8 +571,8 @@ namespace UnityEngine.Rendering.Universal
         }
 
         /// <summary>
-        /// Returns the camera stack. Only valid for Base cameras.
-        /// Will return null if it is not a Base camera.
+        /// Returns the stacked Overlay cameras.
+        /// Only Base cameras can have such a stack, it will return null otherwise.
         /// <see cref="CameraRenderType"/>.
         /// </summary>
         public List<Camera> cameraStack
@@ -671,8 +671,9 @@ namespace UnityEngine.Rendering.Universal
                 if (!UniversalRenderPipeline.asset.ValidateRendererData(m_RendererIndex))
                 {
                     int defaultIndex = UniversalRenderPipeline.asset.m_DefaultRendererIndex;
+                    var defaultRendererData = UniversalRenderPipeline.asset.m_RendererDataList[defaultIndex];
                     Debug.LogWarning(
-                        $"Renderer at <b>index {m_RendererIndex.ToString()}</b> is missing for camera <b>{camera.name}</b>, falling back to Default Renderer. <b>{UniversalRenderPipeline.asset.m_RendererDataList[defaultIndex].name}</b>",
+                        $"Renderer at <b>index {m_RendererIndex.ToString()}</b> is missing for camera <b>{camera.name}</b>, falling back to Default Renderer. <b>{defaultRendererData?.name}</b>",
                         UniversalRenderPipeline.asset);
                     return UniversalRenderPipeline.asset.GetRenderer(defaultIndex);
                 }

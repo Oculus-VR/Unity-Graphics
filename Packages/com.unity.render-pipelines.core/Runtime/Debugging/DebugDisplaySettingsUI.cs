@@ -32,6 +32,10 @@ namespace UnityEngine.Rendering
         /// <param name="settings"><see cref="IDebugDisplaySettings"/> to be registered</param>
         public void RegisterDebug(IDebugDisplaySettings settings)
         {
+#if UNITY_EDITOR
+            if (UnityEditor.BuildPipeline.isBuildingPlayer)
+                return;
+#endif
             DebugManager debugManager = DebugManager.instance;
             List<IDebugDisplaySettingsPanelDisposable> panels = new List<IDebugDisplaySettingsPanelDisposable>();
 
@@ -53,7 +57,9 @@ namespace UnityEngine.Rendering
                     createIfNull: true,
                     groupIndex: (disposableSettingsPanel is DebugDisplaySettingsPanel debugDisplaySettingsPanel) ? debugDisplaySettingsPanel.Order : 0);
 #if UNITY_EDITOR
-                panel.documentationUrl = disposableSettingsPanel.GetType().GetCustomAttribute<HelpURLAttribute>()?.URL;
+
+                if (DocumentationUtils.TryGetHelpURL(disposableSettingsPanel.GetType(), out var documentationUrl))
+                    panel.documentationUrl = documentationUrl;
 #endif
 
                 ObservableList<DebugUI.Widget> panelChildren = panel.children;

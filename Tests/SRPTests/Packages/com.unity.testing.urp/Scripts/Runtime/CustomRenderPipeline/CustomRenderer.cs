@@ -35,34 +35,6 @@ namespace UnityEngine.Rendering.Universal
             base.Dispose(disposing);
         }
 
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Setup(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            ConfigureCameraTarget(k_CameraTarget, k_CameraTarget);
-
-            foreach (var feature in rendererFeatures)
-            {
-                feature.AddRenderPasses(this, ref renderingData);
-                feature.SetupRenderPasses(this, in renderingData);
-            }
-            EnqueuePass(m_RenderOpaqueForwardPass);
-
-            bool mainLightShadows = m_MainLightShadowCasterPass.Setup(ref renderingData);
-            bool additionalLightShadows = m_AdditionalLightsShadowCasterPass.Setup(ref renderingData);
-
-            if (mainLightShadows)
-                EnqueuePass(m_MainLightShadowCasterPass);
-            if (additionalLightShadows)
-                EnqueuePass(m_AdditionalLightsShadowCasterPass);
-        }
-
-
-        static ProfilingSampler s_SetupLights = new ProfilingSampler("Setup URP lights.");
-        private class SetupLightPassData
-        {
-            internal RenderingData renderingData;
-            internal ForwardLights forwardLights;
-        };
         private void SetupRenderGraphLights(RenderGraph renderGraph)
         {
             UniversalRenderingData renderingData = frameData.Get<UniversalRenderingData>();
@@ -101,8 +73,6 @@ namespace UnityEngine.Rendering.Universal
                 mainShadowsTexture = m_MainLightShadowCasterPass.Render(renderGraph, frameData);
             if (m_AdditionalLightsShadowCasterPass.Setup(renderingData, cameraData, lightData, shadowData))
                 additionalShadowsTexture = m_AdditionalLightsShadowCasterPass.Render(renderGraph, frameData);
-
-            SetupRenderGraphCameraProperties(renderGraph, cameraData.camera.targetTexture == null);
 
             RenderTargetIdentifier targetColorId = cameraData.targetTexture != null ? new RenderTargetIdentifier(cameraData.targetTexture) : BuiltinRenderTextureType.CameraTarget;
             RenderTargetIdentifier targetDepthId = cameraData.targetTexture != null ? new RenderTargetIdentifier(cameraData.targetTexture) : BuiltinRenderTextureType.Depth;
@@ -163,25 +133,9 @@ namespace UnityEngine.Rendering.Universal
             var targetHandle = renderGraph.ImportTexture(m_TargetColorHandle, importInfo, importBackbufferParams);
             var depthHandle = renderGraph.ImportTexture(m_TargetDepthHandle, importInfoDepth, importBackbufferParams);
 
-
-            if (!renderGraph.nativeRenderPassesEnabled)
-            {
-                ClearTargetsPass.Render(renderGraph, targetHandle, depthHandle, cameraData);
-            }
+            SetupRenderGraphCameraProperties(renderGraph, targetHandle.IsValid() ? targetHandle : depthHandle);
 
             m_RenderOpaqueForwardPass.Render(renderGraph, frameData, targetHandle, depthHandle, mainShadowsTexture, additionalShadowsTexture);
         }
-
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void SetupLights(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            UniversalRenderingData universalRenderingData = frameData.Get<UniversalRenderingData>();
-            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-            UniversalLightData lightData = frameData.Get<UniversalLightData>();
-
-            m_ForwardLights.SetupLights(CommandBufferHelpers.GetUnsafeCommandBuffer(universalRenderingData.commandBuffer), universalRenderingData, cameraData, lightData);
-        }
-
-        internal override bool supportsNativeRenderPassRendergraphCompiler => true;
     }
 }

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace UnityEngine.Rendering.Universal
 {
-    internal struct LayerBatch
+    internal class LayerBatch
     {
 #if UNITY_EDITOR
         public int startIndex;
@@ -14,8 +14,6 @@ namespace UnityEngine.Rendering.Universal
         public SortingLayerRange layerRange;
         public LightStats lightStats;
         public bool useNormals;
-        private unsafe fixed int renderTargetIds[4];
-        private unsafe fixed bool renderTargetUsed[4];
 
         public List<Light2D> lights;
         public List<int> shadowIndices;
@@ -25,58 +23,21 @@ namespace UnityEngine.Rendering.Universal
 
         public void InitRTIds(int index)
         {
-            for (var i = 0; i < 4; i++)
-            {
-                unsafe
-                {
-                    renderTargetUsed[i] = false;
-                    renderTargetIds[i] = Shader.PropertyToID($"_LightTexture_{index}_{i}");
-                }
-            }
-
             lights = new List<Light2D>();
             shadowIndices = new List<int>();
             shadowCasters = new List<ShadowCasterGroup2D>();
         }
 
-        public RenderTargetIdentifier GetRTId(CommandBuffer cmd, RenderTextureDescriptor desc, int index)
+        // This range check uses SortingLayer.value.
+       internal bool IsValueWithinLayerRange(int value)
         {
-            unsafe
-            {
-                if (!renderTargetUsed[index])
-                {
-                    cmd.GetTemporaryRT(renderTargetIds[index], desc, FilterMode.Bilinear);
-                    renderTargetUsed[index] = true;
-                }
-                return new RenderTargetIdentifier(renderTargetIds[index]);
-            }
-        }
-
-        public void ReleaseRT(CommandBuffer cmd)
-        {
-            for (var i = 0; i < 4; i++)
-            {
-                unsafe
-                {
-                    if (!renderTargetUsed[i])
-                        continue;
-
-                    cmd.ReleaseTemporaryRT(renderTargetIds[i]);
-                    renderTargetUsed[i] = false;
-                }
-            }
+            return value >= layerRange.lowerBound && value <= layerRange.upperBound;
         }
     }
 
     internal static class LayerUtility
     {
         private static LayerBatch[] s_LayerBatches;
-        public static uint maxTextureCount { get; private set; }
-
-        public static void InitializeBudget(uint maxTextureCount)
-        {
-            LayerUtility.maxTextureCount = math.max(4, maxTextureCount);
-        }
 
         private static bool CanBatchLightsInLayer(int layerIndex1, int layerIndex2, SortingLayer[] sortingLayers, ILight2DCullResult lightCullResult)
         {
@@ -107,7 +68,7 @@ namespace UnityEngine.Rendering.Universal
         {
             if (rendererData.useCameraSortingLayerTexture)
             {
-                var cameraSortingLayerBoundsIndex = Render2DLightingPass.GetCameraSortingLayerBoundsIndex(rendererData);
+                var cameraSortingLayerBoundsIndex = rendererData.GetCameraSortingLayerBoundsIndex();
                 return sortingLayers[startLayerIndex].value == cameraSortingLayerBoundsIndex;
             }
 
@@ -149,12 +110,13 @@ namespace UnityEngine.Rendering.Universal
                 needInit = true;
             }
 #endif
+
             if (needInit)
             {
                 for (var i = 0; i < s_LayerBatches.Length; i++)
                 {
-                    ref var layerBatch = ref s_LayerBatches[i];
-                    layerBatch.InitRTIds(i);
+                    s_LayerBatches[i] = new LayerBatch();
+                    s_LayerBatches[i].InitRTIds(i);
                 }
             }
         }
@@ -169,7 +131,7 @@ namespace UnityEngine.Rendering.Universal
             for (var i = 0; i < cachedSortingLayers.Length;)
             {
                 var layerToRender = cachedSortingLayers[i].id;
-                ref var layerBatch = ref s_LayerBatches[batchCount++];
+                var layerBatch = s_LayerBatches[batchCount++];
                 var lightStats = rendererData.lightCullResult.GetLightStatsByLayer(layerToRender, ref layerBatch);
 
                 // Find the highest layer that share the same set of lights and shadows as this layer.
@@ -203,7 +165,7 @@ namespace UnityEngine.Rendering.Universal
             // Account for Sprite Mask and normal map usage as there might be masks on a different layer that need to mask out the normals
             for (var i = 0; i < batchCount; ++i)
             {
-                ref var layerBatch = ref s_LayerBatches[i];
+                var layerBatch = s_LayerBatches[i];
                 var hasSpriteMask = SpriteMaskUtility.HasSpriteMaskInLayerRange(layerBatch.layerRange);
                 layerBatch.useNormals = layerBatch.lightStats.useNormalMap || (anyNormals && hasSpriteMask);
             }
@@ -213,7 +175,7 @@ namespace UnityEngine.Rendering.Universal
             return s_LayerBatches;
         }
 
-        public static void GetFilterSettings(Renderer2DData rendererData, ref LayerBatch layerBatch, out FilteringSettings filterSettings)
+        public static void GetFilterSettings(Renderer2DData rendererData, LayerBatch layerBatch, out FilteringSettings filterSettings)
         {
             filterSettings = FilteringSettings.defaultValue;
             filterSettings.renderQueueRange = RenderQueueRange.all;

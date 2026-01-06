@@ -10,7 +10,7 @@ namespace UnityEngine.Rendering
     /// The volume settings
     /// </summary>
     /// <typeparam name="T">A <see cref="MonoBehaviour"/> with <see cref="IAdditionalData"/></typeparam>
-    [Obsolete("This is not longer supported Please use DebugDisplaySettingsVolume. #from(6000.2)", false)]
+    [Obsolete("This is not longer supported Please use DebugDisplaySettingsVolume. #from(6000.2)")]
     public abstract partial class VolumeDebugSettings<T> : IVolumeDebugSettings
         where T : MonoBehaviour, IAdditionalData
     {
@@ -112,7 +112,7 @@ namespace UnityEngine.Rendering
         /// <summary>
         /// Specifies the render pipeline for this volume settings
         /// </summary>
-        [Obsolete("This property is obsolete and kept only for not breaking user code. VolumeDebugSettings will use current pipeline when it needs to gather volume component types and paths. #from(23.2)", false)]
+        [Obsolete("This property is obsolete and kept only for not breaking user code. VolumeDebugSettings will use current pipeline when it needs to gather volume component types and paths. #from(2023.2)")]
         public virtual Type targetRenderPipeline { get; }
 
         internal VolumeParameter GetParameter(VolumeComponent component, FieldInfo field)
@@ -152,7 +152,8 @@ namespace UnityEngine.Rendering
             float weight = Mathf.Clamp01(volume.weight);
             if (!volume.isGlobal)
             {
-                var colliders = volume.GetComponents<Collider>();
+#if ENABLE_PHYSICS_MODULE
+                var colliders = volume.colliders;
 
                 // Find closest distance to volume, 0 means it's inside it
                 float closestDistanceSqr = float.PositiveInfinity;
@@ -172,6 +173,7 @@ namespace UnityEngine.Rendering
                     weight = 0f;
                 else if (blendDistSqr > 0f)
                     weight *= 1f - (closestDistanceSqr / blendDistSqr);
+#endif
             }
             return weight;
         }

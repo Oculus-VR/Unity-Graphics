@@ -26,9 +26,11 @@ namespace ShaderStrippingAndPrefiltering
             public bool stripDebugDisplayShaders { get; set; }
             public bool stripScreenCoordOverrideVariants { get; set; }
             public bool stripBicubicLightmapSamplingVariants { get; set; }
+            public bool stripReflectionProbeRotationVariants { get; set; }
             public bool stripUnusedVariants { get; set; }
             public bool stripUnusedPostProcessingVariants { get; set; }
             public bool stripUnusedXRVariants { get; set; }
+            public bool usesDynamicLightmaps { get; set; }
 
             public Shader shader { get; set; }
             public ShaderType shaderType { get; set; }

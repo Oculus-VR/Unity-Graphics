@@ -11,6 +11,7 @@ using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Assertions;
 using UnityEngine.Rendering;
+using static UnityEngine.Rendering.DebugUI;
 
 namespace UnityEditor.Rendering
 {
@@ -30,7 +31,7 @@ namespace UnityEditor.Rendering
             get => Mathf.Max(0, DebugManager.instance.PanelIndex(selectedPanelDisplayName));
             set
             {
-                var displayName = DebugManager.instance.PanelDiplayName(value);
+                var displayName = DebugManager.instance.PanelDisplayName(value);
                 if (!string.IsNullOrEmpty(displayName))
                     selectedPanelDisplayName = displayName;
             }
@@ -132,6 +133,7 @@ namespace UnityEditor.Rendering
         {
             var window = GetWindow<DebugWindow>();
             window.titleContent = Styles.windowTitle;
+            window.minSize = new Vector2(800f, 300f);
         }
 
         [MenuItem("Window/Analysis/Rendering Debugger", validate = true)]
@@ -262,7 +264,7 @@ namespace UnityEditor.Rendering
                 UpdateWidgetStates(panel);
         }
 
-        DebugState GetOrCreateDebugStateForValueField(DebugUI.Widget widget)
+        internal DebugState GetOrCreateDebugStateForValueField(DebugUI.Widget widget)
         {
             // Skip runtime & readonly only items
             if (widget.isInactiveInEditor)
@@ -283,6 +285,12 @@ namespace UnityEditor.Rendering
                     state.SetValue(valueField.GetValue(), valueField);
                     m_WidgetStates[queryPath] = state;
                 }
+            }
+
+            if (valueField is ISyncUIState sync && sync.syncState)
+            {
+                state.SetValue(valueField.GetValue(), valueField);
+                sync.syncState = false;
             }
 
             return state;
@@ -409,16 +417,6 @@ namespace UnityEditor.Rendering
                 return;
             }
 
-            // Background color
-            var wrect = position;
-            wrect.x = 0;
-            wrect.y = 0;
-            var oldColor = GUI.color;
-            GUI.color = s_Styles.skinBackgroundColor;
-            GUI.DrawTexture(wrect, EditorGUIUtility.whiteTexture);
-            GUI.color = oldColor;
-
-
             GUILayout.BeginHorizontal(EditorStyles.toolbar);
             GUILayout.FlexibleSpace();
             if (GUILayout.Button(Styles.resetButtonContent, EditorStyles.toolbarButton))
@@ -513,8 +511,14 @@ namespace UnityEditor.Rendering
 
                         using (var scrollScope = new EditorGUILayout.ScrollViewScope(m_ContentScroll))
                         {
+                            const float scrollViewTopMargin = 4f;
+                            GUILayout.Space(scrollViewTopMargin);
+                            
                             TraverseContainerGUI(selectedPanel);
                             m_ContentScroll = scrollScope.scrollPosition;
+                            
+                            const float scrollViewBottomMargin = 10f;
+                            GUILayout.Space(scrollViewBottomMargin);
                         }
                     }
 
@@ -540,7 +544,7 @@ namespace UnityEditor.Rendering
                             if (dragging)
                             {
                                 splitterPos += Event.current.delta.x;
-                                splitterPos = Mathf.Clamp(splitterPos, minSideBarWidth, Screen.width - minContentWidth);
+                                splitterPos = Mathf.Clamp(splitterPos, minSideBarWidth, position.width - minContentWidth);
                                 Repaint();
                             }
                             break;
@@ -566,8 +570,6 @@ namespace UnityEditor.Rendering
                 Debug.LogError($"Widget {widget.GetType()} query path is null");
                 return;
             }
-
-            GUILayout.Space(4);
 
             if (!s_WidgetDrawerMap.TryGetValue(widget.GetType(), out DebugUIDrawer drawer))
             {
@@ -635,8 +637,6 @@ namespace UnityEditor.Rendering
             public readonly GUIStyle sectionScrollView = "PreferencesSectionBox";
             public readonly GUIStyle sectionElement = new GUIStyle("PreferencesSection");
             public readonly GUIStyle selected = "OL SelectedRow";
-            public readonly GUIStyle sectionHeader = new GUIStyle(EditorStyles.largeLabel);
-            public readonly Color skinBackgroundColor;
 
             public static GUIStyle centeredLeft = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft };
             public static GUIStyle centeredLeftAlternate = new GUIStyle(EditorStyles.label) { alignment = TextAnchor.MiddleLeft };
@@ -646,15 +646,10 @@ namespace UnityEditor.Rendering
 
             public Styles()
             {
-                Color textColorDarkSkin = new Color32(210, 210, 210, 255);
-                Color textColorLightSkin = new Color32(102, 102, 102, 255);
-                Color backgroundColorDarkSkin = new Color32(38, 38, 38, 128);
-                Color backgroundColorLightSkin = new Color32(128, 128, 128, 96);
-
                 centeredLeftAlternate.normal.background = CoreEditorUtils.CreateColoredTexture2D(
                     EditorGUIUtility.isProSkin
                         ? new Color(63 / 255.0f, 63 / 255.0f, 63 / 255.0f, 255 / 255.0f)
-                        : new Color(202 / 255.0f, 202 / 255.0f, 202 / 255.0f, 255 / 255.0f),
+                        : new Color(211 / 255.0f, 211 / 255.0f, 211 / 255.0f, 211 / 255.0f),
                     "centeredLeftAlternate Background");
 
                 sectionScrollView = new GUIStyle(sectionScrollView);
@@ -662,19 +657,12 @@ namespace UnityEditor.Rendering
 
                 sectionElement.alignment = TextAnchor.MiddleLeft;
 
-                sectionHeader.fontStyle = FontStyle.Bold;
-                sectionHeader.fontSize = 18;
-                sectionHeader.margin.top = 10;
-                sectionHeader.margin.left += 1;
-                sectionHeader.normal.textColor = EditorGUIUtility.isProSkin ? textColorDarkSkin : textColorLightSkin;
-                skinBackgroundColor = EditorGUIUtility.isProSkin ? backgroundColorDarkSkin : backgroundColorLightSkin;
-
                 labelWithZeroValueStyle.normal.textColor = Color.gray;
 
                 // Make sure that textures are unloaded on domain reloads.
                 void OnBeforeAssemblyReload()
                 {
-                    UnityEngine.Object.DestroyImmediate(centeredLeftAlternate.normal.background);
+                    DestroyImmediate(centeredLeftAlternate.normal.background);
                     AssemblyReloadEvents.beforeAssemblyReload -= OnBeforeAssemblyReload;
                 }
 

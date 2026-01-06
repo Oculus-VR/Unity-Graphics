@@ -1,17 +1,29 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor.EditorTools;
-using UnityEditor.Rendering.Universal.Path2D;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
+#if USING_2DCOMMON
+using UnityEditor.U2D.Common.Path;
+#endif
 
 namespace UnityEditor.Rendering.Universal
 {
+
+
     [CustomEditor(typeof(Light2D))]
     [CanEditMultipleObjects]
-    internal class Light2DEditor : PathComponentEditor<ScriptablePath>
+    internal class Light2DEditor
+#if USING_2DCOMMON
+        : PathComponentEditor<ScriptablePath>
+#else
+        : Editor
+#endif
     {
+
+#if USING_2DCOMMON
+
         [EditorTool("Edit Freeform Shape", typeof(Light2D))]
         class FreeformShapeTool : PathEditorTool<ScriptablePath>
         {
@@ -47,7 +59,9 @@ namespace UnityEditor.Rendering.Universal
                 // This is untracked right now...
                 serializedObject.ApplyModifiedProperties();
             }
-        }
+    }
+
+#endif
 
         private static class Styles
         {
@@ -113,6 +127,9 @@ namespace UnityEditor.Rendering.Universal
             public static string deprecatedParametricLightDialogTitle = "Parametric Light Upgrader";
             public static string deprecatedParametricLightDialogProceed = "Proceed";
             public static string deprecatedParametricLightDialogCancel = "Cancel";
+
+            public static readonly GUIContent buttonText = EditorGUIUtility.TrTextContent("Install 2D Common Package");
+            public static readonly GUIContent helpBox = EditorGUIUtility.TrTextContent("2D Common Package is required to edit Light 2D Shape. Please install it by clicking button above");
         }
 
         const float k_GlobalLightGizmoSize = 1.2f;
@@ -196,7 +213,10 @@ namespace UnityEditor.Rendering.Universal
             labelRect.xMin += 16f;
             labelRect.xMax -= 20f;
 
-            bool newToggleState = GUI.Toggle(labelRect, toggleState.boolValue, " ");  // Needs a space because the checkbox won't have a proper outline if we don't make a space here
+            var labelRect_toggle = labelRect;
+            labelRect_toggle.width = labelRect.height;
+
+            bool newToggleState = GUI.Toggle(labelRect_toggle, toggleState.boolValue, " ");  // Needs a space because the checkbox won't have a proper outline if we don't make a space here
             bool newFoldoutState = CoreEditorUtils.DrawHeaderFoldout("", foldoutState.value);
 
             if (newToggleState != toggleState.boolValue)
@@ -296,7 +316,7 @@ namespace UnityEditor.Rendering.Universal
 
         internal void SendModifiedAnalytics(Analytics.Renderer2DAnalytics analytics, Light2D light)
         {
-            Analytics.LightDataAnalytic lightData = new Analytics.LightDataAnalytic(light.GetInstanceID(), false, light.lightType);
+            Analytics.LightDataAnalytic lightData = new Analytics.LightDataAnalytic(light.GetEntityId(), false, light.lightType);
             Analytics.Renderer2DAnalytics.instance.SendData(lightData);
         }
 
@@ -599,9 +619,16 @@ namespace UnityEditor.Rendering.Universal
 
             if (m_LightType.intValue == (int)Light2D.LightType.Freeform)
             {
+#if USING_2DCOMMON
                 DoEditButton<FreeformShapeTool>(PathEditorToolContents.icon, "Edit Shape");
                 DoPathInspector<FreeformShapeTool>();
-                DoSnappingInspector<FreeformShapeTool>();
+#else
+                var clicked = GUILayout.Button(Styles.buttonText);
+                if (clicked)
+                    URP2DConverterUtility.InstallPackage("com.unity.2d.common");
+                else
+                    EditorGUILayout.HelpBox(Styles.helpBox.text, MessageType.Info);
+#endif
             }
 
             DrawFoldouts();
@@ -886,4 +913,5 @@ namespace UnityEditor.Rendering.Universal
                 light.MarkForUpdate();
         }
     }
+
 }

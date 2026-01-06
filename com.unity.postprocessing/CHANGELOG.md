@@ -4,13 +4,28 @@ All notable changes to this package will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- 
+## [3.5.2] - 2025-12-17
 
 ### Fixed
-- 
+- Fixed obsolete ProjectWindow usage in Unity 6.4 or newer
+- Replaced deprecated Mono API with CoreCLR-compatible API
+- Documentation updates
+
+## [3.5.1] - 2025-09-19
+
+### Added
+- Package signed
+
+## [3.5.0] - 2025-06-18
+
+### Added
+- Added Switch2 platform support
+
+### Fixed
+- Remove support for PVRTC format in Unity 6.1 or newer
+- Fixed compute based effects not supported on OpenGLES
+- Fixed issue with FastSign on WebGL/Safari (IN-71005)
+- Documentation updates
 
 ## [3.4.0] - 2023-12-11
 

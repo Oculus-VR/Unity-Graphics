@@ -153,7 +153,7 @@ namespace UnityEditor.VFX.UI
 
         public float GetPreferredLabelWidth()
         {
-            if (hasLabel && this.Q<Label>() is { } label && (label.resolvedStyle.unityFontDefinition.fontAsset != null || label.resolvedStyle.unityFontDefinition.font != null))
+            if (panel != null && hasLabel && this.Q<Label>() is { } label && (label.resolvedStyle.unityFontDefinition.fontAsset != null || label.resolvedStyle.unityFontDefinition.font != null))
             {
                 return label.MeasureTextSize(label.text, -1, MeasureMode.Undefined, 11, MeasureMode.Exactly).x
                        + m_Provider.depth * depthOffset
@@ -355,7 +355,7 @@ namespace UnityEditor.VFX.UI
             {typeof(string), typeof(StringPropertyRM)}
         };
 
-        static Type GetPropertyType(IPropertyRMProvider controller)
+        protected static Type GetPropertyType(IPropertyRMProvider controller)
         {
             Type propertyType = null;
             Type type = controller.portType;
@@ -434,24 +434,6 @@ namespace UnityEditor.VFX.UI
 
         void OnExpand(EventBase evt)
         {
-            // Allow expand/collapse on when clicking over the arrow icon (which can be embedded in the label's background)
-            if (evt is PointerUpEvent pointerUpEvent)
-            {
-                var label = this.Q<Label>();
-                if (label != null)
-                {
-                    if (provider.depth > 0)
-                    {
-                        if (pointerUpEvent.localPosition.x > label.layout.x + 20)
-                            return;
-                    }
-                    else if (pointerUpEvent.localPosition.x > 20)
-                    {
-                        return;
-                    }
-                }
-            }
-
             if (m_Provider.expanded)
             {
                 m_Provider.RetractPath();
@@ -624,7 +606,7 @@ namespace UnityEditor.VFX.UI
                     if (m_Field is IVFXNotifyValueChanged<U> vfxNotifyValueChanged)
                         vfxNotifyValueChanged.SetValueWithoutNotify(value, force);
                     else
-                        m_Field.SetValueWithoutNotify(value);
+                        m_Field.value = value;
                 }
                 catch (System.Exception ex)
                 {

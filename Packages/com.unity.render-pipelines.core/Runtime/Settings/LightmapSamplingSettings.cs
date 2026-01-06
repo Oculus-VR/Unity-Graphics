@@ -7,13 +7,15 @@ namespace UnityEngine.Rendering
     /// </summary>
     [Serializable]
     [SupportedOnRenderPipeline()]
-    [Categorization.CategoryInfo(Name = "Lightmap Sampling Settings", Order = 20)]
+    [Categorization.CategoryInfo(Name = "Lighting", Order = 20)]
     public class LightmapSamplingSettings : IRenderPipelineGraphicsSettings
     {
         [SerializeField, HideInInspector]
         int m_Version = 1;
 
         int IRenderPipelineGraphicsSettings.version { get => m_Version; }
+
+        bool IRenderPipelineGraphicsSettings.isAvailableInPlayerBuild => true;
 
         [SerializeField, Tooltip("Use Bicubic Lightmap Sampling. Enabling this will improve the appearance of lightmaps, but may worsen performance on lower end platforms.")]
         bool m_UseBicubicLightmapSampling;

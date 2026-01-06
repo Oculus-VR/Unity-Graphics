@@ -233,9 +233,9 @@ namespace UnityEditor.Rendering.HighDefinition
             }
         }
 
-        class DoCreateNewAsset<TAssetType> : ProjectWindowCallback.EndNameEditAction where TAssetType : ScriptableObject
+        class DoCreateNewAsset<TAssetType> : ProjectWindowCallback.AssetCreationEndAction where TAssetType : ScriptableObject
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var newAsset = CreateInstance<TAssetType>();
                 newAsset.name = Path.GetFileName(pathName);
@@ -259,8 +259,8 @@ namespace UnityEditor.Rendering.HighDefinition
         [MenuItem("Assets/Create/Rendering/HDRP Diffusion Profile", priority = CoreUtils.Sections.section4 + CoreUtils.Priorities.assetsCreateRenderingMenuPriority)]
         static void MenuCreateDiffusionProfile()
         {
-            var icon = EditorGUIUtility.FindTexture("ScriptableObject Icon");
-            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, ScriptableObject.CreateInstance<DoCreateNewAssetDiffusionProfileSettings>(), "New Diffusion Profile.asset", icon, null);
+            var icon = CoreUtils.GetIconForType<DiffusionProfileSettings>();
+            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, ScriptableObject.CreateInstance<DoCreateNewAssetDiffusionProfileSettings>(), "New Diffusion Profile.asset", icon, null);
         }
 
         [MenuItem("Assets/Create/Shader/HDRP Custom FullScreen Pass")]

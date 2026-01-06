@@ -15,7 +15,7 @@ namespace UnityEngine.Rendering.Universal.Internal
     /// <summary>
     /// Computes and submits lighting data to the GPU.
     /// </summary>
-    public class ForwardLights
+    public partial class ForwardLights
     {
         static class LightConstantBuffer
         {
@@ -186,6 +186,8 @@ namespace UnityEngine.Rendering.Universal.Internal
         /// but also in unit testing.
         /// </summary>
         internal static JobHandle ScheduleClusteringJobs(
+            bool hasMainLight,
+            bool supportsAdditionalLights,
             NativeArray<VisibleLight> lights,
             NativeArray<VisibleReflectionProbe> probes,
             NativeArray<uint> zBins,
@@ -207,7 +209,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             out int wordsPerTile
         )
         {
-            localLightCount = lights.Length;
+            localLightCount = supportsAdditionalLights ? lights.Length: 0;
             // The lights array first has directional lights, and then local lights. We traverse the list to find the
             // index of the first local light.
             var firstLocalLightIdx = 0;
@@ -217,12 +219,29 @@ namespace UnityEngine.Rendering.Universal.Internal
             }
             localLightCount -= firstLocalLightIdx;
 
-            // If there's 1 or more directional lights, one of them must be the main light
-            directionalLightCount = firstLocalLightIdx > 0 ? firstLocalLightIdx - 1 : 0;
+            // If there's 1 or more directional lights, one of them could be the main light
+            if (firstLocalLightIdx > 0)
+            {
+
+                directionalLightCount = firstLocalLightIdx;
+                if (hasMainLight)
+                    directionalLightCount -= 1;
+            }
+            else
+            {
+                directionalLightCount = 0;
+            }
 
             var localLights = lights.GetSubArray(firstLocalLightIdx, localLightCount);
 
             var reflectionProbeCount = math.min(probes.Length, UniversalRenderPipeline.maxVisibleReflectionProbes);
+            // Ensure reflection probes without textures aren't used.
+            for (var i = 0; i < probes.Length; i++)
+            {
+                if (!probes[i].texture)
+                    reflectionProbeCount--;
+            }
+
             var itemsPerTile = localLights.Length + reflectionProbeCount;
             wordsPerTile = (itemsPerTile + 31) / 32;
 
@@ -255,11 +274,12 @@ namespace UnityEngine.Rendering.Universal.Internal
             // Should probe come after otherProbe?
             static bool IsProbeGreater(VisibleReflectionProbe probe, VisibleReflectionProbe otherProbe)
             {
-                return probe.importance < otherProbe.importance ||
-                    (probe.importance == otherProbe.importance && probe.bounds.extents.sqrMagnitude > otherProbe.bounds.extents.sqrMagnitude);
+                return otherProbe.texture != null && (probe.texture == null || probe.importance < otherProbe.importance ||
+                    (probe.importance == otherProbe.importance && probe.bounds.extents.sqrMagnitude > otherProbe.bounds.extents.sqrMagnitude));
             }
 
-            for (var i = 1; i < reflectionProbeCount; i++)
+            // Used probes.Length to check that we use the most relevant probes.
+            for (var i = 1; i < probes.Length; i++)
             {
                 var probe = probes[i];
                 var j = i - 1;
@@ -283,10 +303,13 @@ namespace UnityEngine.Rendering.Universal.Internal
             // Innerloop batch count of 32 is not special, just a handwavy amount to not have too much scheduling overhead nor too little parallelism.
             var lightMinMaxZHandle = lightMinMaxZJob.ScheduleParallel(localLightCount * viewCount, 32, new JobHandle());
 
+            var reflectionProbeRotation = GraphicsSettings.TryGetRenderPipelineSettings<URPReflectionProbeSettings>(out var reflectionProbeSettings) ? reflectionProbeSettings.UseReflectionProbeRotation : true;
+
             var reflectionProbeMinMaxZJob = new ReflectionProbeMinMaxZJob
             {
                 worldToViews = worldToViews,
                 reflectionProbes = probes,
+                reflectionProbeRotation = reflectionProbeRotation,
                 minMaxZs = minMaxZs.GetSubArray(localLightCount * viewCount, reflectionProbeCount * viewCount)
             };
             var reflectionProbeMinMaxZHandle = reflectionProbeMinMaxZJob.ScheduleParallel(reflectionProbeCount * viewCount, 32, lightMinMaxZHandle);
@@ -321,6 +344,7 @@ namespace UnityEngine.Rendering.Universal.Internal
             {
                 lights = localLights,
                 reflectionProbes = probes,
+                reflectionProbeRotation = reflectionProbeRotation,
                 tileRanges = tileRanges,
                 itemsPerTile = itemsPerTile,
                 rangesPerItem = rangesPerItem,
@@ -392,6 +416,8 @@ namespace UnityEngine.Rendering.Universal.Internal
                 var viewToClips = new Fixed2<float4x4>(cameraData.GetProjectionMatrix(0), cameraData.GetProjectionMatrix(math.min(1, viewCount - 1)));
 
                 m_CullingHandle = ScheduleClusteringJobs(
+                    lightData.mainLightIndex != -1,
+                    lightData.supportsAdditionalLights,
                     lightData.visibleLights,
                     renderingData.cullResults.visibleReflectionProbes,
                     m_ZBins,
@@ -417,21 +443,6 @@ namespace UnityEngine.Rendering.Universal.Internal
             }
         }
 
-        /// <summary>
-        /// Sets up the keywords and data for forward lighting.
-        /// </summary>
-        /// <param name="context"></param>
-        /// <param name="renderingData"></param>
-        public void Setup(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            ContextContainer frameData = renderingData.frameData;
-            UniversalRenderingData universalRenderingData = frameData.Get<UniversalRenderingData>();
-            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
-            UniversalLightData lightData = frameData.Get<UniversalLightData>();
-
-            SetupLights(CommandBufferHelpers.GetUnsafeCommandBuffer(renderingData.commandBuffer), universalRenderingData, cameraData, lightData);
-        }
-
         static ProfilingSampler s_SetupForwardLights = new ProfilingSampler("Setup Forward Lights");
         private class SetupLightPassData
         {
@@ -455,7 +466,7 @@ namespace UnityEngine.Rendering.Universal.Internal
 
                 builder.AllowPassCulling(false);
 
-                builder.SetRenderFunc((SetupLightPassData data, UnsafeGraphContext rgContext) =>
+                builder.SetRenderFunc(static (SetupLightPassData data, UnsafeGraphContext rgContext) =>
                 {
                     data.forwardLights.SetupLights(rgContext.cmd, data.renderingData, data.cameraData, data.lightData);
                 });
@@ -507,17 +518,20 @@ namespace UnityEngine.Rendering.Universal.Internal
                 cmd.SetKeyword(ShaderGlobalKeywords.LightmapShadowMixing, isSubtractive || isShadowMaskAlways);
                 cmd.SetKeyword(ShaderGlobalKeywords.ShadowsShadowMask, isShadowMask);
                 cmd.SetKeyword(ShaderGlobalKeywords.MixedLightingSubtractive, isSubtractive); // Backward compatibility
-
                 cmd.SetKeyword(ShaderGlobalKeywords.ReflectionProbeBlending, lightData.reflectionProbeBlending);
                 cmd.SetKeyword(ShaderGlobalKeywords.ReflectionProbeBoxProjection, lightData.reflectionProbeBoxProjection);
-                cmd.SetKeyword(ShaderGlobalKeywords.ReflectionProbeAtlas, lightData.reflectionProbeAtlas);
+                cmd.SetKeyword(ShaderGlobalKeywords.ReflectionProbeAtlas, lightData.reflectionProbeAtlas && m_UseForwardPlus && lightData.reflectionProbeBlending); // Needs to match shader stripping
 
                 var asset = UniversalRenderPipeline.asset;
-                #if UNITY_WEBGL && !UNITY_EDITOR
-                bool apvIsEnabled = false; // APV not supported on WebGL, don't try to enable it.
-                #else
+#if UNITY_META_QUEST
+                if (asset != null)
+                    cmd.SetKeyword(ShaderGlobalKeywords.META_QUEST_LIGHTUNROLL, asset.maxAdditionalLightsCount == 1 && asset.additionalLightsRenderingMode != LightRenderingMode.Disabled);
+#endif
                 bool apvIsEnabled = asset != null && asset.lightProbeSystem == LightProbeSystem.ProbeVolumes;
+                #if UNITY_WEBGL && !UNITY_EDITOR
+                apvIsEnabled &= SystemInfo.graphicsDeviceType == GraphicsDeviceType.WebGPU; // APV not supported on WebGL, don't try to enable it. WebGPU is fine, though.
                 #endif
+
                 ProbeVolumeSHBands probeVolumeSHBands = asset.probeVolumeSHBands;
 
                 cmd.SetKeyword(ShaderGlobalKeywords.ProbeVolumeL1, apvIsEnabled && probeVolumeSHBands == ProbeVolumeSHBands.SphericalHarmonicsL1);
@@ -551,6 +565,11 @@ namespace UnityEngine.Rendering.Universal.Internal
                     cmd.SetKeyword(ShaderGlobalKeywords.LIGHTMAP_BICUBIC_SAMPLING, lightmapSamplingSettings.useBicubicLightmapSampling);
                 else
                     cmd.SetKeyword(ShaderGlobalKeywords.LIGHTMAP_BICUBIC_SAMPLING, false);
+
+                if (GraphicsSettings.TryGetRenderPipelineSettings<URPReflectionProbeSettings>(out var reflectionProbeSettings))
+                    cmd.SetKeyword(ShaderGlobalKeywords.ReflectionProbeRotation, reflectionProbeSettings.UseReflectionProbeRotation);
+                else
+                    cmd.SetKeyword(ShaderGlobalKeywords.ReflectionProbeRotation, false);
             }
         }
 
@@ -647,12 +666,13 @@ namespace UnityEngine.Rendering.Universal.Internal
             int additionalLightsCount = SetupPerObjectLightIndices(cullResults, lightData);
             if (additionalLightsCount > 0)
             {
+                int mainLight = lightData.mainLightIndex;
                 if (m_UseStructuredBuffer)
                 {
                     NativeArray<ShaderInput.LightData> additionalLightsData = new NativeArray<ShaderInput.LightData>(additionalLightsCount, Allocator.Temp);
                     for (int i = 0, lightIter = 0; i < lights.Length && lightIter < maxAdditionalLightsCount; ++i)
                     {
-                        if (lightData.mainLightIndex != i)
+                        if (mainLight != i)
                         {
                             ShaderInput.LightData data;
                             InitializeLightConstants(lights, i, supportsLightLayers,
@@ -679,7 +699,7 @@ namespace UnityEngine.Rendering.Universal.Internal
                 {
                     for (int i = 0, lightIter = 0; i < lights.Length && lightIter < maxAdditionalLightsCount; ++i)
                     {
-                        if (lightData.mainLightIndex != i)
+                        if (mainLight != i)
                         {
                             InitializeLightConstants(
                                 lights,

@@ -12,7 +12,6 @@
     "com.unity.render-pipelines.universal": "file:../../../../../Packages/com.unity.render-pipelines.universal",
     "com.unity.render-pipelines.universal-config": "file:../../../../../Packages/com.unity.render-pipelines.universal-config",
     "com.unity.shadergraph": "file:../../../../../Packages/com.unity.shadergraph",
-    "com.unity.rendering.light-transport": "file:../../../../../Packages/com.unity.rendering.light-transport",
     "com.unity.test-framework": "file:../../../../../Packages/com.unity.test-framework",
     "com.unity.testframework.graphics": "file:../../../Packages/com.unity.test-framework.graphics",
     "com.unity.testing.urp": "file:../../../Packages/com.unity.testing.urp",
@@ -47,7 +46,6 @@
     "com.unity.modules.unitywebrequestwww": "1.0.0",
     "com.unity.modules.vehicles": "1.0.0",
     "com.unity.modules.video": "1.0.0",
-    "com.unity.modules.vr": "1.0.0",
     "com.unity.modules.wind": "1.0.0",
     "com.unity.modules.xr": "1.0.0"
   },

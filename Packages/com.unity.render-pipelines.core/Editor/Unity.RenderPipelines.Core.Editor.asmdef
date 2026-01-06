@@ -7,7 +7,10 @@
         "GUID:d8b63aba1907145bea998dd612889d6b",
         "GUID:4fd6538c1c56b409fb53fdf0183170ec",
         "GUID:214c0945bb158c940aada223f3223ee8",
-        "GUID:e0cd26848372d4e5c891c569017e11f1"
+        "GUID:e0cd26848372d4e5c891c569017e11f1",
+        "GUID:c49c619b6af2be941af9bcbca2641964",
+        "GUID:9149a3cbb036049f68e4e5b6388b9c85",
+        "GUID:716365d8000d25e4c8621aa2d34a92fa"
     ],
     "includePlatforms": [
         "Editor"
@@ -23,6 +26,11 @@
             "name": "com.unity.burst",
             "expression": "1.5.0",
             "define": "HAS_BURST"
+        },
+        {
+            "name": "com.unity.modules.physics",
+            "expression": "1.0.0",
+            "define": "ENABLE_PHYSICS_MODULE"
         }
     ],
     "noEngineReferences": false

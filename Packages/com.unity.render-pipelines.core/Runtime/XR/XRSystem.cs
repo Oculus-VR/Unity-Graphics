@@ -254,15 +254,15 @@ namespace UnityEngine.Experimental.Rendering
 
 
         /// <summary>
-        /// Used by the render pipeline to retrieve the renderViewportScale value from the XR display.
+        /// Used by the render pipeline to retrieve the applied renderViewportScale value from the XR display.
         /// One use case for retriving this value is that render pipeline can properly sync some SRP owned textures to scale accordingly
         /// </summary>
-        /// <returns> Returns current scaleOfAllViewports value from the XRDisplaySubsystem. </returns>
+        /// <returns> Returns current appliedViewportScale value from the XRDisplaySubsystem. </returns>
         public static float GetRenderViewportScale()
         {
 #if ENABLE_VR && ENABLE_XR_MODULE
 
-            return s_Display.scaleOfAllViewports;
+            return s_Display.appliedViewportScale;
 #else
             return 1.0f;
 #endif
@@ -438,7 +438,7 @@ namespace UnityEngine.Experimental.Rendering
                 int renderParameterCount = renderPass.GetRenderParameterCount();
                 if (CanUseSinglePass(camera, renderPass))
                 {
-                    var createInfo = BuildPass(renderPass, cullingParams, layout);
+                    var createInfo = BuildPass(renderPass, cullingParams, layout, renderPassIndex == s_Display.GetRenderPassCount() - 1);
                     var xrPass = s_PassAllocator(createInfo);
 
                     for (int renderParamIndex = 0; renderParamIndex < renderParameterCount; ++renderParamIndex)
@@ -452,7 +452,7 @@ namespace UnityEngine.Experimental.Rendering
                 {
                     for (int renderParamIndex = 0; renderParamIndex < renderParameterCount; ++renderParamIndex)
                     {
-                        var createInfo = BuildPass(renderPass, cullingParams, layout);
+                        var createInfo = BuildPass(renderPass, cullingParams, layout, renderPassIndex == s_Display.GetRenderPassCount() - 1);
                         var xrPass = s_PassAllocator(createInfo);
                         AddViewToPass(xrPass, renderPass, renderParamIndex);
                         layout.AddPass(camera, xrPass);
@@ -542,7 +542,7 @@ namespace UnityEngine.Experimental.Rendering
             return rtDesc;
         }
 
-        static XRPassCreateInfo BuildPass(XRDisplaySubsystem.XRRenderPass xrRenderPass, ScriptableCullingParameters cullingParameters, XRLayout layout)
+        static XRPassCreateInfo BuildPass(XRDisplaySubsystem.XRRenderPass xrRenderPass, ScriptableCullingParameters cullingParameters, XRLayout layout, bool isLastPass)
         {    
             XRPassCreateInfo passInfo = new XRPassCreateInfo
             {
@@ -560,7 +560,9 @@ namespace UnityEngine.Experimental.Rendering
                 multipassId             = layout.GetActivePasses().Count,
                 cullingPassId           = xrRenderPass.cullingPassIndex,
                 copyDepth               = xrRenderPass.shouldFillOutDepth,
-                xrSdkRenderPass         = xrRenderPass
+                spaceWarpRightHandedNDC = xrRenderPass.spaceWarpRightHandedNDC,
+                xrSdkRenderPass         = xrRenderPass,
+                isLastCameraPass        = isLastPass
             };
 
             return passInfo;

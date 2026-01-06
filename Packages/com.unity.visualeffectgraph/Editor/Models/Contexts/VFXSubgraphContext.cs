@@ -39,12 +39,12 @@ namespace UnityEditor.VFX
         {
         }
 
-        public override void GetImportDependentAssets(HashSet<int> dependencies)
+        public override void GetImportDependentAssets(HashSet<EntityId> dependencies)
         {
             base.GetImportDependentAssets(dependencies);
             if (!object.ReferenceEquals(m_Subgraph, null))
             {
-                dependencies.Add(m_Subgraph.GetInstanceID());
+                dependencies.Add(m_Subgraph.GetEntityId());
             }
         }
 
@@ -63,7 +63,7 @@ namespace UnityEditor.VFX
         {
             if (m_Subgraph == null && !object.ReferenceEquals(m_Subgraph, null))
             {
-                string assetPath = AssetDatabase.GetAssetPath(m_Subgraph.GetInstanceID());
+                string assetPath = AssetDatabase.GetAssetPath(m_Subgraph.GetEntityId());
 
                 var newSubgraph = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(assetPath);
                 if (newSubgraph != null)

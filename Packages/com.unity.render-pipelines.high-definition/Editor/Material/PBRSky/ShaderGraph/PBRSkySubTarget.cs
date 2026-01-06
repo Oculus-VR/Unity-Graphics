@@ -285,9 +285,9 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
         }
 
 
-        class DoCreatePBRSkyShaderGraph : ProjectWindowCallback.EndNameEditAction
+        class DoCreatePBRSkyShaderGraph : ProjectWindowCallback.AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var material = GraphicsSettings.GetRenderPipelineSettings<HDRenderPipelineRuntimeMaterials>().pbrSkyMaterial;
                 AssetDatabase.CopyAsset(AssetDatabase.GetAssetPath(material), pathName);
@@ -311,7 +311,7 @@ namespace UnityEditor.Rendering.HighDefinition.ShaderGraph
             */
 
             // Copy the default graph from the package
-            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, ScriptableObject.CreateInstance<DoCreatePBRSkyShaderGraph>(), "PBR Sky Shader Graph.shadergraph", null, null);
+            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, ScriptableObject.CreateInstance<DoCreatePBRSkyShaderGraph>(), "PBR Sky Shader Graph.shadergraph", ShaderGraphImporter.GetIcon(), null);
         }
     }
 }

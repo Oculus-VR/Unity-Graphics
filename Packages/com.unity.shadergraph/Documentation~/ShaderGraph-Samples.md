@@ -6,13 +6,15 @@ The Shader Graph package offers sample Assets, which you can download through **
 
 ## Add samples
 
-To add samples to your Project, go to **Window** > **Package Manager**. Locate **Shader Graph** in the list of available packages, and select it. Under the package description, there is list of available samples. Click the **Import into Project** button next to the sample you wish to add.
+To add samples to your project:
 
-![](images/PatternSamples_01.png)
+1. In the main menu, go to **Window** > **Package Management** > **Package Manager**.
 
-Unity places imported samples in your Project's Asset folder under **Assets** > **Samples** > **Shader Graph** > **[version number]** > **[sample name]**. The example below shows the samples for **Procedural Patterns**.
+1. Select **Shader Graph** from the list of packages.
 
-![](images/PatternSamples_02.png)
+1. In the **Samples** section, select **Import** next to a sample.
+
+1. Open the sample assets from the `Assets/Samples/Shader Graph/<your version>/` folder.
 
 ## Available samples
 
@@ -44,3 +46,17 @@ The following samples are currently available for Shader Graph.
 |![](images/UIToolsSample.png) |
 | The Shader Graph UGUI Shaders sample is a collection of Shader Graph subgraphs that you can use to build user interface elements. They speed up the process of building widgets, buttons, and backgrounds for the user interface of your project.  With these tools, you can build dynamic, procedural UI elements that don’t require any texture memory and scale correctly for any resolution screen. In addition to the subgraphs, the sample also includes example buttons, indicators, and backgrounds built with the subgraphs.  The examples show how the subgraphs function in context and help you learn how to use them.
 
+| Custom Material Property Drawers |
+|:--------------------|
+|![](images/CustomMaterialPropertySample.png) |
+| This sample contains an example of a Custom Material Property Drawer that allows using a Min/Max Slider to control a Vector2 x and y values, often used for range remapping. It comes with a documented Shader Graph example. |
+
+| [Custom Lighting](Shader-Graph-Sample-Custom-Lighting.md) |
+|:--------------------|
+|![](images/CustomLightingSample.png) |
+| The Shader Graph Custom Lighting sample shows how you can create your own custom lighting model in Shader Graph and provides dozens of example templates, shaders, and subgraphs to help you get started with your own custom lighting.
+
+| [Terrain Shaders](Shader-Graph-Sample-Terrain-Shaders.md) |
+|:--------------------|
+|![](images/TerrainSample.png) |
+| The Shader Graph Terrain Sample provides example shaders to learn from and subgraphs that you can use to build your own terrain shaders. Custom terrain shaders can use more advanced features like hexagon tile break-up, parallax occlusion mapping, or triplanar projection. Or you can use techniques like array texture sampling or alternate texture packing methods to make the shader cheaper to render than the default one. Whether you're making faster or more advanced terrain shaders, this sample will help you get the results you're looking for. |

@@ -232,17 +232,17 @@ namespace UnityEditor.Rendering.HighDefinition
                     var materialIcon = AssetPreview.GetMiniTypeThumbnail(typeof(Material));
                     var action = ScriptableObject.CreateInstance<DoCreatePBRSkyDefaultMaterial>();
                     action.physicallyBasedSky = target as PhysicallyBasedSky;
-                    ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, action, materialName, materialIcon, null);
+                    ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, action, materialName, materialIcon, null);
                 }
             }
         }
     }
 
-    class DoCreatePBRSkyDefaultMaterial : ProjectWindowCallback.EndNameEditAction
+    class DoCreatePBRSkyDefaultMaterial : ProjectWindowCallback.AssetCreationEndAction
     {
         public PhysicallyBasedSky physicallyBasedSky;
         public Material material = null;
-        public override void Action(int instanceId, string pathName, string resourceFile)
+        public override void Action(EntityId entityId, string pathName, string resourceFile)
         {
             var shader = GraphicsSettings.GetRenderPipelineSettings<HDRenderPipelineRuntimeMaterials>().pbrSkyMaterial;
             material = new Material(shader);

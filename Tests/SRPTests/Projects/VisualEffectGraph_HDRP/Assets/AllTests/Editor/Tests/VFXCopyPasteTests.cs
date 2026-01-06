@@ -398,7 +398,7 @@ namespace UnityEditor.VFX.Test
             VFXView view = window.graphView;
             view.controller = m_ViewController;
 
-            view.CreateTemplateSystem(VFXTestCommon.simpleParticleSystemPath, Vector2.zero, null);
+            view.CreateTemplateSystem(VFXTestCommon.simpleParticleSystemPath, Vector2.zero, null, false);
         }
 
         [Test]
@@ -632,6 +632,30 @@ namespace UnityEditor.VFX.Test
             Assert.AreEqual(4, m_ViewController.dataEdges.Count);
         }
 
+        [UnityTest, Description("UUM-122054")]
+        public IEnumerator CopyPasteParameter_Check_Order()
+        {
+            var window = EditorWindow.GetWindow<VFXViewWindow>();
+            var view = window.graphView;
+            view.controller = m_ViewController;
+
+            var parameter = m_ViewController.AddVFXParameter(Vector2.zero, VFXLibrary.GetParameters().First(x => x.modelType == typeof(float)).variant);
+            m_ViewController.LightApplyChanges();
+            view.blackboard.Update(true);
+            yield return null;
+
+            var parameterOrder = m_ViewController.GetParameterController(parameter).order;
+            var treeView = view.blackboard.Q<TreeView>();
+            treeView.selectedIndex = 1;
+            yield return null;
+
+            view.DuplicateSelectionCallback();
+            yield return null;
+
+            var copySelectedPropertyItem = treeView.selectedItem as PropertyItem;
+            Assert.NotNull(copySelectedPropertyItem);
+            Assert.AreEqual(parameterOrder + 1, copySelectedPropertyItem.controller.order);
+        }
     }
 }
 #endif

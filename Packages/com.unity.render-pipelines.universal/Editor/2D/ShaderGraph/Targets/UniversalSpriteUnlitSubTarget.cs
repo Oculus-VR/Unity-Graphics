@@ -8,7 +8,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
 {
     sealed class UniversalSpriteUnlitSubTarget : UniversalSubTarget, ILegacyTarget
     {
-        static readonly GUID kSourceCodeGuid = new GUID("ed7c0aacec26e9646b45c96fb318e5a3"); // UniversalSpriteUnlitSubTarget.cs
+        static readonly UnityEngine.GUID kSourceCodeGuid = new UnityEngine.GUID("ed7c0aacec26e9646b45c96fb318e5a3"); // UniversalSpriteUnlitSubTarget.cs
 
         public UniversalSpriteUnlitSubTarget()
         {
@@ -70,6 +70,12 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
             return true;
         }
 
+        public override void CollectShaderProperties(PropertyCollector collector, GenerationMode generationMode)
+        {
+            base.CollectShaderProperties(collector, generationMode);
+            SpriteSubTargetUtility.AddSRPIncompatibility(collector);
+        }
+
         #region SubShader
         static class SubShaders
         {
@@ -125,11 +131,11 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                     fieldDependencies = CoreFieldDependencies.Default,
 
                     // Conditional State
-                    renderStates = SpriteSubTargetUtility.GetDefaultRenderState(target),
+                    renderStates = target.sort3DAs2DCompatible ? Universal2DSubTargetDescriptors.RenderStateCollections.Sort3DAs2DCompatible : SpriteSubTargetUtility.GetDefaultRenderState(target),
                     pragmas = CorePragmas._2DDefault,
                     defines = new DefineCollection(),
                     keywords = SpriteUnlitKeywords.Unlit,
-                    includes = SpriteUnlitIncludes.Unlit,
+                    includes = target.sort3DAs2DCompatible ? MeshUnlitIncludes.Unlit : SpriteUnlitIncludes.Unlit,
 
                     // Custom Interpolator Support
                     customInterpolators = CoreCustomInterpDescriptors.Common
@@ -208,6 +214,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 StructFields.Varyings.positionWS,
                 StructFields.Varyings.color,
                 StructFields.Varyings.texCoord0,
+                StructFields.Varyings.normalWS,
             };
         }
         #endregion

@@ -15,7 +15,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
             Cookie cookie;
             LightmapperUtils.Extract(light, out cookie);
-            lightDataGI.cookieID = cookie.instanceID;
+            lightDataGI.cookieTextureEntityId = cookie.entityId;
             lightDataGI.cookieScale = cookie.scale;
 
             Color cct = new Color(1.0f, 1.0f, 1.0f);
@@ -34,7 +34,7 @@ namespace UnityEngine.Rendering.HighDefinition
             if (lightMode == LightMode.Realtime || lightMode == LightMode.Mixed)
                 lightDimmer = add.lightDimmer;
 
-            lightDataGI.instanceID = light.GetInstanceID();
+            lightDataGI.entityId = light.GetEntityId();
             LinearColor directColor, indirectColor;
             directColor = add.affectDiffuse ? LinearColor.Convert(light.color, light.intensity) : LinearColor.Black();
             directColor.red *= cct.r;
@@ -95,8 +95,6 @@ namespace UnityEngine.Rendering.HighDefinition
                     lightDataGI.orientation = light.transform.rotation;
                     lightDataGI.position = light.transform.position;
                     lightDataGI.range = 0.0f;
-                    lightDataGI.coneAngle = add.shapeWidth;
-                    lightDataGI.innerConeAngle = add.shapeHeight;
 #if UNITY_EDITOR
                     lightDataGI.shape0 = light.shadows != LightShadows.None ? (Mathf.Deg2Rad * light.shadowAngle) : 0.0f;
 #else
@@ -105,18 +103,18 @@ namespace UnityEngine.Rendering.HighDefinition
                     lightDataGI.shape1 = 0.0f;
                     lightDataGI.type = UnityEngine.Experimental.GlobalIllumination.LightType.Directional;
                     lightDataGI.falloff = FalloffType.Undefined;
-                    lightDataGI.coneAngle = add.shapeWidth;
-                    lightDataGI.innerConeAngle = add.shapeHeight;
+                    lightDataGI.coneAngle = light.cookieSize2D.x;
+                    lightDataGI.innerConeAngle = light.cookieSize2D.y;
                     break;
 
                 case LightType.Spot:
                 {
                     SpotLight spot;
-                    spot.instanceID = light.GetInstanceID();
+                    spot.entityId = light.GetEntityId();
                     spot.shadow = light.shadows != LightShadows.None;
                     spot.mode = lightMode;
 #if UNITY_EDITOR
-                    spot.sphereRadius = light.shadows != LightShadows.None ? light.shadowRadius : 0.0f;
+                    spot.sphereRadius = light.shadows != LightShadows.None ? light.shapeRadius : 0.0f;
 #else
                     spot.sphereRadius = 0.0f;
 #endif
@@ -126,24 +124,24 @@ namespace UnityEngine.Rendering.HighDefinition
                     spot.indirectColor = indirectColor;
                     spot.range = light.range;
                     spot.coneAngle = light.spotAngle * Mathf.Deg2Rad;
-                    spot.innerConeAngle = light.spotAngle * Mathf.Deg2Rad * add.innerSpotPercent01;
+                    spot.innerConeAngle = Mathf.Deg2Rad * light.innerSpotAngle;
                     spot.falloff = add.applyRangeAttenuation ? FalloffType.InverseSquared : FalloffType.InverseSquaredNoRangeAttenuation;
                     spot.angularFalloff = AngularFalloffType.AnalyticAndInnerAngle;
                     lightDataGI.Init(ref spot, ref cookie);
                     lightDataGI.shape1 = (float)AngularFalloffType.AnalyticAndInnerAngle;
                     if (light.cookie != null)
-                        lightDataGI.cookieID = light.cookie.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = light.cookie.GetEntityId();
                     else if (add.IESSpot != null)
-                        lightDataGI.cookieID = add.IESSpot.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = add.IESSpot.GetEntityId();
                     else
-                        lightDataGI.cookieID = 0;
+                        lightDataGI.cookieTextureEntityId = EntityId.None;
                 }
                 break;
 
                 case LightType.Pyramid:
                 {
                     SpotLightPyramidShape pyramid;
-                    pyramid.instanceID = light.GetInstanceID();
+                    pyramid.entityId = light.GetEntityId();
                     pyramid.shadow = light.shadows != LightShadows.None;
                     pyramid.mode = lightMode;
                     pyramid.position = light.transform.position;
@@ -152,22 +150,22 @@ namespace UnityEngine.Rendering.HighDefinition
                     pyramid.indirectColor = indirectColor;
                     pyramid.range = light.range;
                     pyramid.angle = light.spotAngle * Mathf.Deg2Rad;
-                    pyramid.aspectRatio = add.aspectRatio;
+                    pyramid.aspectRatio = Mathf.Tan(light.innerSpotAngle * Mathf.PI / 360f) / Mathf.Tan(light.spotAngle * Mathf.PI / 360f);
                     pyramid.falloff = add.applyRangeAttenuation ? FalloffType.InverseSquared : FalloffType.InverseSquaredNoRangeAttenuation;
                     lightDataGI.Init(ref pyramid, ref cookie);
                     if (light.cookie != null)
-                        lightDataGI.cookieID = light.cookie.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = light.cookie.GetEntityId();
                     else if (add.IESSpot != null)
-                        lightDataGI.cookieID = add.IESSpot.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = add.IESSpot.GetEntityId();
                     else
-                        lightDataGI.cookieID = 0;
+                        lightDataGI.cookieTextureEntityId = EntityId.None;
                 }
                 break;
 
                 case LightType.Box:
                 {
                     SpotLightBoxShape box;
-                    box.instanceID = light.GetInstanceID();
+                    box.entityId = light.GetEntityId();
                     box.shadow = light.shadows != LightShadows.None;
                     box.mode = lightMode;
                     box.position = light.transform.position;
@@ -175,15 +173,15 @@ namespace UnityEngine.Rendering.HighDefinition
                     box.color = directColor;
                     box.indirectColor = indirectColor;
                     box.range = light.range;
-                    box.width = add.shapeWidth;
-                    box.height = add.shapeHeight;
+                    box.width = light.areaSize.x;
+                    box.height = light.areaSize.y;
                     lightDataGI.Init(ref box, ref cookie);
                     if (light.cookie != null)
-                        lightDataGI.cookieID = light.cookie.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = light.cookie.GetEntityId();
                     else if (add.IESSpot != null)
-                        lightDataGI.cookieID = add.IESSpot.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = add.IESSpot.GetEntityId();
                     else
-                        lightDataGI.cookieID = 0;
+                        lightDataGI.cookieTextureEntityId = EntityId.None;
                 }
                 break;
 
@@ -196,7 +194,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     lightDataGI.innerConeAngle = 0.0f;
 
 #if UNITY_EDITOR
-                    lightDataGI.shape0 = light.shadows != LightShadows.None ? light.shadowRadius : 0.0f;
+                    lightDataGI.shape0 = light.shadows != LightShadows.None ? light.shapeRadius : 0.0f;
 #else
                     lightDataGI.shape0 = 0.0f;
 #endif
@@ -215,24 +213,24 @@ namespace UnityEngine.Rendering.HighDefinition
                     lightDataGI.range = light.range;
                     lightDataGI.coneAngle = 0.0f;
                     lightDataGI.innerConeAngle = 0.0f;
-                    lightDataGI.shape0 = add.shapeWidth;
-                    lightDataGI.shape1 = add.shapeHeight;
+                    lightDataGI.shape0 = light.areaSize.x;
+                    lightDataGI.shape1 = light.areaSize.y;
 
                     // TEMP: for now, if we bake a rectangle type this will disable the light for runtime, need to speak with GI team about it!
                     lightDataGI.type = UnityEngine.Experimental.GlobalIllumination.LightType.Rectangle;
                     lightDataGI.falloff = add.applyRangeAttenuation ? FalloffType.InverseSquared : FalloffType.InverseSquaredNoRangeAttenuation;
                     if (add.areaLightCookie != null)
-                        lightDataGI.cookieID = add.areaLightCookie.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = add.areaLightCookie.GetEntityId();
                     else if (add.IESSpot != null)
-                        lightDataGI.cookieID = add.IESSpot.GetInstanceID();
+                        lightDataGI.cookieTextureEntityId = add.IESSpot.GetEntityId();
                     else
-                        lightDataGI.cookieID = 0;
+                        lightDataGI.cookieTextureEntityId = EntityId.None;
                 }
                 break;
 
                 case LightType.Tube:
                 {
-                    lightDataGI.InitNoBake(lightDataGI.instanceID);
+                    lightDataGI.InitNoBake(lightDataGI.entityId);
                 }
                 break;
 
@@ -249,7 +247,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     // TEMP: for now, if we bake a rectangle type this will disable the light for runtime, need to speak with GI team about it!
                     lightDataGI.type = UnityEngine.Experimental.GlobalIllumination.LightType.Disc;
                     lightDataGI.falloff = add.applyRangeAttenuation ? FalloffType.InverseSquared : FalloffType.InverseSquaredNoRangeAttenuation;
-                    lightDataGI.cookieID = add.areaLightCookie ? add.areaLightCookie.GetInstanceID() : 0;
+                    lightDataGI.cookieTextureEntityId = add.areaLightCookie ? add.areaLightCookie.GetEntityId() : EntityId.None;
                 }
                 break;
 
@@ -280,7 +278,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 if (LightmapperUtils.Extract(light.bakingOutput.lightmapBakeType) == LightMode.Realtime)
                     LightDataGIExtract(light, ref lightDataGI);
                 else
-                    lightDataGI.InitNoBake(light.GetInstanceID());
+                    lightDataGI.InitNoBake(light.GetEntityId());
 #endif
 
                 lightsOutput[i] = lightDataGI;

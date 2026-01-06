@@ -169,7 +169,7 @@ public class SimpleBRGExample : MonoBehaviour
 
         int dstSize = m_CopySrc.count * m_CopySrc.stride;
         memcpy.SetBuffer(0, "src", m_CopySrc);
-        memcpy.SetBuffer(0, "dst", m_InstanceData);
+        memcpy.SetBuffer(0, "dest", m_InstanceData);
         memcpy.SetInt("dstOffset", BufferOffset);
         memcpy.SetInt("dstSize", dstSize);
         memcpy.Dispatch(0, dstSize / (64 * 4) + 1, 1, 1);
@@ -230,7 +230,7 @@ public class SimpleBRGExample : MonoBehaviour
         drawCommands->drawCommands = (BatchDrawCommand*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawCommand>(), alignment, Allocator.TempJob);
         drawCommands->drawRanges = (BatchDrawRange*)UnsafeUtility.Malloc(UnsafeUtility.SizeOf<BatchDrawRange>(), alignment, Allocator.TempJob);
         drawCommands->visibleInstances = (int*)UnsafeUtility.Malloc(kNumInstances * sizeof(int), alignment, Allocator.TempJob);
-        drawCommands->drawCommandPickingInstanceIDs = null;
+        drawCommands->drawCommandPickingEntityIds = null;
 
         drawCommands->drawCommandCount = 1;
         drawCommands->drawRangeCount = 1;

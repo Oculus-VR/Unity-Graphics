@@ -273,8 +273,6 @@ namespace UnityEditor.Rendering.HighDefinition
                         break;
                     case LightArchetype.Area:
                         serialized.settings.lightType.SetEnumValue(LightType.Rectangle);
-                        serialized.shapeWidth.floatValue = Mathf.Max(serialized.shapeWidth.floatValue, HDAdditionalLightData.k_MinLightSize);
-                        serialized.shapeHeight.floatValue = Mathf.Max(serialized.shapeHeight.floatValue, HDAdditionalLightData.k_MinLightSize);
                         break;
                     default:
                         throw new ArgumentOutOfRangeException();
@@ -360,13 +358,7 @@ namespace UnityEditor.Rendering.HighDefinition
             }
             else if (lightType == LightType.Point)
             {
-                EditorGUI.BeginChangeCheck();
-                EditorGUILayout.PropertyField(serialized.shapeRadius, s_Styles.lightRadius);
-                if (EditorGUI.EndChangeCheck())
-                {
-                    //Also affect baked shadows
-                    serialized.settings.bakedShadowRadiusProp.floatValue = serialized.shapeRadius.floatValue;
-                }
+                EditorGUILayout.PropertyField(serialized.settings.shapeRadius, s_Styles.lightRadius);
             }
             else if (lightType.IsSpot())
             {
@@ -425,8 +417,8 @@ namespace UnityEditor.Rendering.HighDefinition
                     else if (lightType == LightType.Box)
                     {
                         // Box directional light.
-                        EditorGUILayout.PropertyField(serialized.shapeWidth, s_Styles.shapeWidthBox);
-                        EditorGUILayout.PropertyField(serialized.shapeHeight, s_Styles.shapeHeightBox);
+                        EditorGUILayout.PropertyField(serialized.settings.areaSizeX, s_Styles.shapeWidthBox);
+                        EditorGUILayout.PropertyField(serialized.settings.areaSizeY, s_Styles.shapeHeightBox);
                     }
                     else if (lightType == LightType.Spot)
                     {
@@ -435,7 +427,7 @@ namespace UnityEditor.Rendering.HighDefinition
                         // If light unit is currently displayed in lumen and 'reflector' is on, recalculate candela so lumen value remains constant
                         bool isReflectorRelevant = serialized.settings.enableSpotReflector.boolValue &&
                                                    serialized.settings.lightUnit.GetEnumValue<LightUnit>() == LightUnit.Lumen;
-                        bool needsReflectedIntensityRecalc = false;
+                        bool updateSpotAngles = false;
 
                         int indent = EditorGUI.indentLevel;
 
@@ -443,7 +435,7 @@ namespace UnityEditor.Rendering.HighDefinition
                         float spacing = EditorGUIUtility.pixelsPerPoint * 2f;
 
                         float max = oldSpotAngle;
-                        float min = (serialized.spotInnerPercent.floatValue / 100f) * max;
+                        float min = serialized.settings.innerSpotAngle.floatValue;
 
                         Rect position = EditorGUILayout.GetControlRect();
 
@@ -466,49 +458,50 @@ namespace UnityEditor.Rendering.HighDefinition
                         min = EditorGUI.DelayedFloatField(minRect, min);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            serialized.customSpotLightShadowCone.floatValue = Math.Min(serialized.customSpotLightShadowCone.floatValue, serialized.settings.spotAngle.floatValue);
-                            min = Mathf.Clamp(min, HDAdditionalLightData.k_MinSpotAngle, max);
-                            serialized.spotInnerPercent.floatValue = min / max * 100f;
+                            updateSpotAngles = true;
+                            serialized.settings.innerSpotAngle.floatValue = min;
                         }
 
                         EditorGUI.BeginChangeCheck();
                         EditorGUI.MinMaxSlider(sliderRect, ref min, ref max, HDAdditionalLightData.k_MinSpotAngle,HDAdditionalLightData.k_MaxSpotAngle );
                         if (EditorGUI.EndChangeCheck())
                         {
-                            min = Mathf.Clamp(min, HDAdditionalLightData.k_MinSpotAngle, max);
-                            serialized.spotInnerPercent.floatValue = min / max * 100f;
                             serialized.settings.spotAngle.floatValue = max;
-                            serialized.settings.bakedShadowRadiusProp.floatValue = serialized.shapeRadius.floatValue;
-                            needsReflectedIntensityRecalc = (max != oldSpotAngle);
+                            serialized.settings.innerSpotAngle.floatValue = min;
+                            updateSpotAngles = true;
                         }
 
                         EditorGUI.BeginChangeCheck();
                         EditorGUI.DelayedFloatField(maxRect, serialized.settings.spotAngle, GUIContent.none);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            needsReflectedIntensityRecalc = true;
+                            updateSpotAngles = true;
                         }
 
-                        if (isReflectorRelevant && needsReflectedIntensityRecalc)
+                        if (updateSpotAngles)
                         {
-                            // If light unit is currently displayed in lumen and 'reflector' is on and the spot angle has changed,
-                            // recalculate candela so lumen value remains constant
-                            float oldSolidAngle = LightUnitUtils.GetSolidAngleFromSpotLight(oldSpotAngle);
-                            float oldLumen = LightUnitUtils.CandelaToLumen(serialized.settings.intensity.floatValue, oldSolidAngle);
-                            float newSolidAngle = LightUnitUtils.GetSolidAngleFromSpotLight(serialized.settings.spotAngle.floatValue);
-                            float newCandela = LightUnitUtils.LumenToCandela(oldLumen, newSolidAngle);
-                            serialized.settings.intensity.floatValue = newCandela;
+                            // Clamp outer spot angle
+                            serialized.settings.spotAngle.floatValue = Mathf.Max(HDAdditionalLightData.k_MinSpotAngle, serialized.settings.spotAngle.floatValue);
+                            // Clamp inner spot angle
+                            serialized.settings.innerSpotAngle.floatValue = Mathf.Clamp(serialized.settings.innerSpotAngle.floatValue, HDAdditionalLightData.k_MinSpotAngle, serialized.settings.spotAngle.floatValue);
+                            // Update other dependent values
+                            serialized.customSpotLightShadowCone.floatValue = Mathf.Min(serialized.customSpotLightShadowCone.floatValue, serialized.settings.spotAngle.floatValue);
+
+                            if (isReflectorRelevant)
+                            {
+                                // If light unit is currently displayed in lumen and 'reflector' is
+                                // on and the spot angle has changed, recalculate candela so lumen
+                                // value remains constant
+                                float oldSolidAngle = LightUnitUtils.GetSolidAngleFromSpotLight(oldSpotAngle);
+                                float oldLumen = LightUnitUtils.CandelaToLumen(serialized.settings.intensity.floatValue, oldSolidAngle);
+                                float newSolidAngle = LightUnitUtils.GetSolidAngleFromSpotLight(serialized.settings.spotAngle.floatValue);
+                                float newCandela = LightUnitUtils.LumenToCandela(oldLumen, newSolidAngle);
+                                serialized.settings.intensity.floatValue = newCandela;
+                            }
                         }
 
                         EditorGUI.indentLevel = indent - 1;
-                        EditorGUI.BeginChangeCheck();
-                        EditorGUILayout.PropertyField(serialized.shapeRadius, s_Styles.lightRadius);
-                        if (EditorGUI.EndChangeCheck())
-                        {
-                            //Also affect baked shadows
-                            serialized.settings.bakedShadowRadiusProp.floatValue = serialized.shapeRadius.floatValue;
-                        }
-
+                        EditorGUILayout.PropertyField(serialized.settings.shapeRadius, s_Styles.lightRadius);
                         EditorGUI.indentLevel = indent;
                     }
                     else if (lightType == LightType.Pyramid)
@@ -517,19 +510,29 @@ namespace UnityEditor.Rendering.HighDefinition
                         bool isReflectorRelevant = serialized.settings.enableSpotReflector.boolValue && serialized.settings.lightUnit.GetEnumValue<LightUnit>() == LightUnit.Lumen;
                         bool needsReflectedIntensityRecalc = false;
                         float oldSpotAngle = serialized.settings.spotAngle.floatValue;
-                        float oldAspectRatio = serialized.aspectRatio.floatValue;
+                        float oldAspectRatio = serialized.settings.areaSizeX.floatValue;
                         EditorGUI.BeginChangeCheck();
                         serialized.settings.DrawSpotAngle();
                         if (EditorGUI.EndChangeCheck())
                         {
                             serialized.customSpotLightShadowCone.floatValue = Math.Min(serialized.customSpotLightShadowCone.floatValue, serialized.settings.spotAngle.floatValue);
                             needsReflectedIntensityRecalc = true;
+                            // Change the innerSpotAngle to keep the same aspect ratio.
+                            float aspect =
+                                Mathf.Tan(serialized.settings.innerSpotAngle.floatValue * Mathf.PI / 360f)
+                                / Mathf.Tan(oldSpotAngle * Mathf.PI / 360f);
+                            float innerAngle = 360f / Mathf.PI *
+                                               Mathf.Atan(aspect * Mathf.Tan(serialized.settings.spotAngle.floatValue * Mathf.PI / 360f));
+                            serialized.settings.innerSpotAngle.floatValue = innerAngle;
                         }
                         EditorGUI.BeginChangeCheck();
-                        EditorGUILayout.Slider(serialized.aspectRatio, HDAdditionalLightData.k_MinAspectRatio, HDAdditionalLightData.k_MaxAspectRatio, s_Styles.aspectRatioPyramid);
+                        float aspectRatio = Mathf.Tan(serialized.settings.innerSpotAngle.floatValue * Mathf.PI / 360f) / Mathf.Tan(serialized.settings.spotAngle.floatValue * Mathf.PI / 360f);
+                        float newAspectRatio = EditorGUILayout.Slider(s_Styles.aspectRatioPyramid, aspectRatio, 0.05f, 20f);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            serialized.settings.areaSizeX.floatValue = serialized.aspectRatio.floatValue;
+                            float newInnerSpotAngle = 360f / Mathf.PI * Mathf.Atan(newAspectRatio * Mathf.Tan(serialized.settings.spotAngle.floatValue * Mathf.PI / 360f));
+                            serialized.settings.innerSpotAngle.floatValue = newInnerSpotAngle;
+                            serialized.settings.areaSizeX.floatValue = newAspectRatio;
                             needsReflectedIntensityRecalc = true;
                         }
 
@@ -539,17 +542,11 @@ namespace UnityEditor.Rendering.HighDefinition
                             // recalculate candela so lumen value remains constant
                             float oldSolidAngle = LightUnitUtils.GetSolidAngleFromPyramidLight(oldSpotAngle, oldAspectRatio);
                             float oldLumen = LightUnitUtils.CandelaToLumen(serialized.settings.intensity.floatValue, oldSolidAngle);
-                            float newSolidAngle = LightUnitUtils.GetSolidAngleFromPyramidLight(serialized.settings.spotAngle.floatValue, serialized.aspectRatio.floatValue);
+                            float newSolidAngle = LightUnitUtils.GetSolidAngleFromPyramidLight(serialized.settings.spotAngle.floatValue, serialized.settings.areaSizeX.floatValue);
                             float newCandela = LightUnitUtils.LumenToCandela(oldLumen, newSolidAngle);
                             serialized.settings.intensity.floatValue = newCandela;
                         }
-                        EditorGUI.BeginChangeCheck();
-                        EditorGUILayout.PropertyField(serialized.shapeRadius, s_Styles.lightRadius);
-                        if (EditorGUI.EndChangeCheck())
-                        {
-                            //Also affect baked shadows
-                            serialized.settings.bakedShadowRadiusProp.floatValue = serialized.shapeRadius.floatValue;
-                        }
+                        EditorGUILayout.PropertyField(serialized.settings.shapeRadius, s_Styles.lightRadius);
                     }
                     else
                     {
@@ -603,12 +600,12 @@ namespace UnityEditor.Rendering.HighDefinition
                     if (lightType == LightType.Rectangle)
                     {
                         EditorGUI.BeginChangeCheck();
-                        EditorGUILayout.PropertyField(serialized.shapeWidth, s_Styles.shapeWidthRect);
-                        EditorGUILayout.PropertyField(serialized.shapeHeight, s_Styles.shapeHeightRect);
+                        EditorGUILayout.PropertyField(serialized.settings.areaSizeX, s_Styles.shapeWidthRect);
+                        EditorGUILayout.PropertyField(serialized.settings.areaSizeY, s_Styles.shapeHeightRect);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            serialized.shapeWidth.floatValue = Mathf.Max(HDAdditionalLightData.k_MinAreaWidth, serialized.shapeWidth.floatValue);
-                            serialized.shapeHeight.floatValue = Mathf.Max(HDAdditionalLightData.k_MinAreaWidth, serialized.shapeHeight.floatValue);
+                            serialized.settings.areaSizeX.floatValue = Mathf.Max(HDAdditionalLightData.k_MinAreaWidth, serialized.settings.areaSizeX.floatValue);
+                            serialized.settings.areaSizeY.floatValue = Mathf.Max(HDAdditionalLightData.k_MinAreaWidth, serialized.settings.areaSizeY.floatValue);
                             // If light intensity is currently displayed as Lumen,
                             // recalculate native (Nits) intensity so displayed Lumen value remains constant
                             if (serialized.settings.lightUnit.GetEnumValue<LightUnit>() == LightUnit.Lumen)
@@ -617,14 +614,12 @@ namespace UnityEditor.Rendering.HighDefinition
                                 float oldArea = LightUnitUtils.GetAreaFromRectangleLight(oldSize);
                                 float oldLumen = LightUnitUtils.NitsToLumen(serialized.settings.intensity.floatValue, oldArea);
 
-                                Vector2 newSize = new Vector2(serialized.shapeWidth.floatValue, serialized.shapeHeight.floatValue);
+                                Vector2 newSize = new Vector2(serialized.settings.areaSizeX.floatValue, serialized.settings.areaSizeY.floatValue);
                                 float newArea = LightUnitUtils.GetAreaFromRectangleLight(newSize);
                                 float newNits = LightUnitUtils.LumenToNits(oldLumen, newArea);
 
                                 serialized.settings.intensity.floatValue = newNits;
                             }
-                            serialized.settings.areaSizeX.floatValue = serialized.shapeWidth.floatValue;
-                            serialized.settings.areaSizeY.floatValue = serialized.shapeHeight.floatValue;
                         }
                         if (ShaderConfig.s_BarnDoor == 1)
                         {
@@ -666,10 +661,10 @@ namespace UnityEditor.Rendering.HighDefinition
                     else if (lightType == LightType.Tube)
                     {
                         EditorGUI.BeginChangeCheck();
-                        EditorGUILayout.PropertyField(serialized.shapeWidth, s_Styles.shapeWidthTube);
+                        EditorGUILayout.PropertyField(serialized.settings.areaSizeX, s_Styles.shapeWidthTube);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            serialized.shapeWidth.floatValue = Mathf.Max(HDAdditionalLightData.k_MinLightSize, serialized.shapeWidth.floatValue);
+                            serialized.settings.areaSizeX.floatValue = Mathf.Max(HDAdditionalLightData.k_MinLightSize, serialized.settings.areaSizeX.floatValue);
                             // If light intensity is currently displayed as Lumen,
                             // recalculate native (Nits) intensity so displayed Lumen value remains constant
                             if (serialized.settings.lightUnit.GetEnumValue<LightUnit>() == LightUnit.Lumen)
@@ -678,14 +673,14 @@ namespace UnityEditor.Rendering.HighDefinition
                                 float oldArea = LightUnitUtils.GetAreaFromTubeLight(oldLineWidth);
                                 float oldLumen = LightUnitUtils.NitsToLumen(serialized.settings.intensity.floatValue, oldArea);
 
-                                float newLineWidth = serialized.shapeWidth.floatValue;
+                                float newLineWidth = serialized.settings.areaSizeX.floatValue;
                                 float newArea = LightUnitUtils.GetAreaFromTubeLight(newLineWidth);
                                 float newNits = LightUnitUtils.LumenToNits(oldLumen, newArea);
 
                                 serialized.settings.intensity.floatValue = newNits;
                             }
                             // Fake line with a small rectangle in vanilla unity for GI
-                            serialized.settings.areaSizeX.floatValue = serialized.shapeWidth.floatValue;
+                            serialized.settings.areaSizeX.floatValue = serialized.settings.areaSizeX.floatValue;
                             serialized.settings.areaSizeY.floatValue = HDAdditionalLightData.k_MinLightSize;
                         }
                         // If realtime GI is enabled and the shape is unsupported or not implemented, show a warning.
@@ -844,16 +839,12 @@ namespace UnityEditor.Rendering.HighDefinition
             if (lightType != LightType.Directional)
             {
                 EditorGUI.BeginChangeCheck();
-#if UNITY_2020_1_OR_NEWER
                 serialized.settings.DrawRange();
-#else
-                serialized.settings.DrawRange(false);
-#endif
                 if (EditorGUI.EndChangeCheck())
                 {
                     // Make sure the range is not 0.0
                     serialized.settings.range.floatValue = Mathf.Max(0.001f, serialized.settings.range.floatValue);
-                    
+
                     // For GI we need to detect any change on additional data and call SetLightDirty + For intensity we need to detect light shape change
                     serialized.needUpdateAreaLightEmissiveMeshComponents = true;
                     SetLightsDirty(owner); // Should be apply only to parameter that's affect GI, but make the code cleaner
@@ -875,12 +866,11 @@ namespace UnityEditor.Rendering.HighDefinition
                     {
                         EditorGUI.indentLevel++;
                         EditorGUI.BeginChangeCheck();
-                        var size = new Vector2(serialized.shapeWidth.floatValue, serialized.shapeHeight.floatValue);
+                        var size = serialized.settings.cookieSize2D.vector2Value;
                         size = EditorGUILayout.Vector2Field(s_Styles.cookieSize, size);
                         if (EditorGUI.EndChangeCheck())
                         {
-                            serialized.shapeWidth.floatValue = size.x;
-                            serialized.shapeHeight.floatValue = size.y;
+                            serialized.settings.cookieSize2D.vector2Value = size;
                         }
                         EditorGUI.indentLevel--;
                     }
@@ -1252,7 +1242,6 @@ namespace UnityEditor.Rendering.HighDefinition
                         }
                     }
                 }
-#if UNITY_2021_1_OR_NEWER
 
                 if (serialized.shadowUpdateMode.intValue > 0)
                 {
@@ -1271,7 +1260,6 @@ namespace UnityEditor.Rendering.HighDefinition
 
                 }
 
-#endif
 
                 EditorGUI.indentLevel--;
 
@@ -1314,12 +1302,12 @@ namespace UnityEditor.Rendering.HighDefinition
                         enabled &= settings.mixedBakeMode == MixedLightingMode.Shadowmask;
                     using (new EditorGUI.DisabledScope(!enabled))
                     {
-                        Rect nonLightmappedOnlyRect = EditorGUILayout.GetControlRect();
-                        EditorGUI.BeginProperty(nonLightmappedOnlyRect, s_Styles.nonLightmappedOnly, serialized.nonLightmappedOnly);
+                        Rect rect = EditorGUILayout.GetControlRect();
+                        EditorGUI.BeginProperty(rect, s_Styles.shadowMaskMode, serialized.nonLightmappedOnly);
                         {
                             EditorGUI.BeginChangeCheck();
                             ShadowmaskMode shadowmask = serialized.nonLightmappedOnly.boolValue ? ShadowmaskMode.Shadowmask : ShadowmaskMode.DistanceShadowmask;
-                            shadowmask = (ShadowmaskMode)EditorGUI.EnumPopup(nonLightmappedOnlyRect, s_Styles.nonLightmappedOnly, shadowmask);
+                            shadowmask = (ShadowmaskMode)EditorGUI.EnumPopup(rect, s_Styles.shadowMaskMode, shadowmask);
                             fullShadowMask = shadowmask == ShadowmaskMode.Shadowmask;
 
                             if (EditorGUI.EndChangeCheck())
@@ -1327,7 +1315,7 @@ namespace UnityEditor.Rendering.HighDefinition
                                 Undo.RecordObjects(owner.targets, "Light Update Shadowmask Mode");
                                 serialized.nonLightmappedOnly.boolValue = fullShadowMask;
                                 foreach (Light target in owner.targets)
-                                    target.lightShadowCasterMode = shadowmask == ShadowmaskMode.Shadowmask ? LightShadowCasterMode.NonLightmappedOnly : LightShadowCasterMode.Everything;
+                                    target.lightShadowCasterMode = shadowmask == ShadowmaskMode.Shadowmask ? LightShadowCasterMode.ShadowMask : LightShadowCasterMode.DistanceShadowMask;
                             }
                         }
                         EditorGUI.EndProperty();

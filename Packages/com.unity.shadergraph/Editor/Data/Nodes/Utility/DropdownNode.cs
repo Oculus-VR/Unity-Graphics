@@ -13,6 +13,9 @@ namespace UnityEditor.ShaderGraph
     class DropdownNode : AbstractMaterialNode, IOnAssetEnabled, IGeneratesBodyCode, IShaderInputObserver
     {
         internal const int k_MinEnumEntries = 2;
+        protected override bool CanPropagateFloatLiteral => true;
+
+        public override string documentationURL => NodeUtils.GetDocumentationString("Dropdown");
 
         public DropdownNode()
         {
@@ -79,7 +82,7 @@ namespace UnityEditor.ShaderGraph
             }
 
             // Add output slot
-            AddSlot(new DynamicVectorMaterialSlot(OutputSlotId, "Out", "Out", SlotType.Output, Vector4.zero));
+            AddSlot(new DynamicVectorMaterialSlot(OutputSlotId, "Out", "Out", SlotType.Output, Vector4.zero, literalMode:true));
 
             // Add input slots
             int[] slotIds = new int[dropdown.entries.Count + 1];

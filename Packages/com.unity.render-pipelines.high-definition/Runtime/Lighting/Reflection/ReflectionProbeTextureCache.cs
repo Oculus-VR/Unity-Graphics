@@ -113,13 +113,13 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             textureSize = GetTextureSizeInAtlas(probe);
 
-            int textureID = probe.texture.GetInstanceID();
+            int textureHash = probe.texture.GetEntityId().GetHashCode();
 
             // Include texture size in ID using simple hash
             const int kPrime = 31;
-            textureID = kPrime * textureID + textureSize;
+            textureHash = kPrime * textureHash + textureSize;
 
-            return textureID;
+            return textureHash;
         }
 
         private static int GetTextureSizeInAtlas(HDProbe probe)
@@ -641,8 +641,8 @@ namespace UnityEngine.Rendering.HighDefinition
         public void ReserveReflectionProbeSlot(HDProbe probe)
         {
             Texture texture = probe.texture;
-            Assert.IsTrue(texture.width == texture.height);
-            Assert.IsTrue(texture.dimension == TextureDimension.Tex2D || texture.dimension == TextureDimension.Cube);
+            Assert.IsTrue(texture.width == texture.height, "Reflection probe should be a square texture. Check the import settings of the texture, or your Texture Importer presets");
+            Assert.IsTrue(texture.dimension == TextureDimension.Tex2D || texture.dimension == TextureDimension.Cube, "Reflection probe should be a 2D or Cube texture. Check the import settings of the texture, or your Texture Importer presets");
 
             int textureId = GetTextureIDAndSize(probe, out int textureSize);
 

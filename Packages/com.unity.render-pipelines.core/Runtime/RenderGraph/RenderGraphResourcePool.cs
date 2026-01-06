@@ -9,14 +9,12 @@ namespace UnityEngine.Rendering.RenderGraphModule
         public abstract void PurgeUnusedResources(int currentFrameIndex);
         public abstract void Cleanup();
         public abstract void CheckFrameAllocation(bool onException, int frameIndex);
-        public abstract void LogResources(RenderGraphLogger logger);
     }
 
     abstract class RenderGraphResourcePool<Type> : IRenderGraphResourcePool where Type : class
     {
         // Dictionary tracks resources by hash and stores resources with same hash in a List (list instead of a stack because we need to be able to remove stale allocations, potentially in the middle of the stack).
         // The list needs to be sorted otherwise you could get inconsistent resource usage from one frame to another.
-
         protected Dictionary<int, SortedList<int, (Type resource, int frameIndex)>> m_ResourcePool = new Dictionary<int, SortedList<int, (Type resource, int frameIndex)>>();
 
         // This list allows us to determine if all resources were correctly released in the frame when validity checks are enabled.
@@ -58,6 +56,7 @@ namespace UnityEngine.Rendering.RenderGraphModule
 
         public override void Cleanup()
         {
+            // Removing the actual graphics resources
             foreach (var kvp in m_ResourcePool)
             {
                 foreach (var res in kvp.Value)
@@ -65,6 +64,12 @@ namespace UnityEngine.Rendering.RenderGraphModule
                     ReleaseInternalResource(res.Value.resource);
                 }
             }
+
+            // Clearing the lists and the pool itself
+            m_ResourcePool.Clear();
+
+            // Clearing it, if not done already
+            m_FrameAllocatedResources.Clear();
         }
 
         [Conditional("DEVELOPMENT_BUILD"), Conditional("UNITY_EDITOR")]
@@ -101,7 +106,8 @@ namespace UnityEngine.Rendering.RenderGraphModule
                         ReleaseResource(value.Item1, value.Item2, frameIndex);
                     }
 
-                    Debug.LogWarning(logMessage);
+                    if (!onException) // If onException is true, logMessage is ""
+                        Debug.LogWarning(logMessage);
                 }
 
                 // If an error occurred during execution, it's expected that textures are not all released so we clear the tracking list.
@@ -110,36 +116,31 @@ namespace UnityEngine.Rendering.RenderGraphModule
 #endif
         }
 
-        struct ResourceLogInfo
+        public float GetMemorySizeInMB()
         {
-            public string name;
-            public long size;
-        }
+            float totalSize = 0;
 
-        public override void LogResources(RenderGraphLogger logger)
-        {
-            List<ResourceLogInfo> allocationList = new List<ResourceLogInfo>();
             foreach (var kvp in m_ResourcePool)
             {
                 foreach (var res in kvp.Value)
                 {
-                    allocationList.Add(new ResourceLogInfo { name = GetResourceName(res.Value.resource), size = GetResourceSize(res.Value.resource) });
+                    totalSize += GetResourceSize(res.Value.resource) / (1024.0f * 1024.0f);
                 }
             }
 
-            logger.LogLine($"== {GetResourceTypeName()} Resources ==");
+            return totalSize;
+        }
 
-            allocationList.Sort((a, b) => a.size < b.size ? 1 : -1);
-            int index = 0;
-            float total = 0;
-            foreach (var element in allocationList)
+        public int GetNumResourcesAvailable()
+        {
+            int totalResources = 0;
+
+            foreach (var kvp in m_ResourcePool)
             {
-                float size = element.size / (1024.0f * 1024.0f);
-                total += size;
-                logger.LogLine($"[{index++:D2}]\t[{size:0.00} MB]\t{element.name}");
+                totalResources += kvp.Value.Count;
             }
 
-            logger.LogLine($"\nTotal Size [{total:0.00}]");
+            return totalResources;
         }
 
         static List<int> s_ToRemoveList = new List<int>(32);

@@ -4,7 +4,7 @@ Shader "Hidden/HDRP/Blit"
 
         #pragma target 4.5
         #pragma editor_sync_compilation
-        #pragma only_renderers d3d11 playstation xboxone xboxseries vulkan metal switch
+        #pragma only_renderers d3d11 playstation xboxone xboxseries vulkan metal switch switch2
         #pragma multi_compile _ DISABLE_TEXTURE2D_X_ARRAY
         #pragma multi_compile _ BLIT_SINGLE_SLICE
         #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
@@ -298,6 +298,31 @@ Shader "Hidden/HDRP/Blit"
                 #pragma multi_compile_local _ BLIT_DECODE_HDR
                 #pragma vertex VertQuadPadding
                 #pragma fragment FragOctahedralProjectBilinearRepeat
+            ENDHLSL
+        }
+
+        // 23: Nearest quad with padding (for OctahedralTexture)
+        Pass
+        {
+            ZWrite Off ZTest Always Blend Off Cull Off
+            Name "NearestQuadPaddingOctahedral"
+
+            HLSLPROGRAM
+                #pragma vertex VertQuadPadding
+                #pragma fragment FragOctahedralNearestRepeat
+            ENDHLSL
+        }
+
+        // 24: Nearest quad with padding alpha blend (for OctahedralTexture) (23 with alpha blend)
+        Pass
+        {
+            ZWrite Off ZTest Always Blend DstColor Zero Cull Off
+            Name "NearestQuadPaddingAlphaBlendOctahedral"
+
+            HLSLPROGRAM
+                #pragma vertex VertQuadPadding
+                #pragma fragment FragOctahedralNearestRepeat
+                #define WITH_ALPHA_BLEND
             ENDHLSL
         }
     }

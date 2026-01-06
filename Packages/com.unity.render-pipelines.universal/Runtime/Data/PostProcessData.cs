@@ -20,9 +20,9 @@ namespace UnityEngine.Rendering.Universal
     {
 #if UNITY_EDITOR
         [SuppressMessage("Microsoft.Performance", "CA1812")]
-        internal class CreatePostProcessDataAsset : EndNameEditAction
+        internal class CreatePostProcessDataAsset : AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var instance = CreateInstance<PostProcessData>();
                 AssetDatabase.CreateAsset(instance, pathName);
@@ -33,7 +33,8 @@ namespace UnityEngine.Rendering.Universal
         [MenuItem("Assets/Create/Rendering/URP Post-process Data", priority = CoreUtils.Sections.section5 + CoreUtils.Priorities.assetsCreateRenderingMenuPriority)]
         static void CreatePostProcessData()
         {
-            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, CreateInstance<CreatePostProcessDataAsset>(), "CustomPostProcessData.asset", null, null);
+            var icon = EditorGUIUtility.IconContent("ScriptableObject Icon").image as Texture2D;
+            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, CreateInstance<CreatePostProcessDataAsset>(), "CustomPostProcessData.asset", icon, null);
         }
 
         internal static PostProcessData GetDefaultPostProcessData()
@@ -56,7 +57,7 @@ namespace UnityEngine.Rendering.Universal
         {
             if (GraphicsSettings.TryGetRenderPipelineSettings<ShaderResources>(out var defaultShaderResources))
             {
-                if (shaders == null || reset) 
+                if (shaders == null || reset)
                     shaders = new ShaderResources();
 
                 shaders.Populate(defaultShaderResources);
@@ -64,7 +65,7 @@ namespace UnityEngine.Rendering.Universal
 
             if (GraphicsSettings.TryGetRenderPipelineSettings<TextureResources>(out var defaultTextureResources))
             {
-                if (textures == null || reset) 
+                if (textures == null || reset)
                     textures = new TextureResources();
 
                 textures.Populate(defaultTextureResources);
@@ -177,7 +178,7 @@ namespace UnityEngine.Rendering.Universal
             /// </summary>
             [ResourcePath("Shaders/PostProcessing/FinalPost.shader")]
             public Shader finalPostPassPS;
-            
+
 #if UNITY_EDITOR
             /// <summary>
             /// Copies all fields and resources from a source <see cref="ShaderResources"/> object into this object.
@@ -232,7 +233,7 @@ namespace UnityEngine.Rendering.Universal
             /// <summary>
             /// Pre-baked Blue noise textures.
             /// </summary>
-            [ResourceFormattedPaths("Textures/BlueNoise16/L/LDR_LLL1_{0}.png", 0, 32)]
+            // [ResourceFormattedPaths("Textures/BlueNoise16/L/LDR_LLL1_{0}.png", 0, 32)]
             public Texture2D[] blueNoise16LTex;
 
             /// <summary>
@@ -263,7 +264,7 @@ namespace UnityEngine.Rendering.Universal
             /// </summary>
             [ResourcePath("Textures/SMAA/SearchTex.tga")]
             public Texture2D smaaSearchTex;
-            
+
 #if UNITY_EDITOR
             /// <summary>
             /// Copies all fields and resources from a source <see cref="TextureResources"/> object into this object.

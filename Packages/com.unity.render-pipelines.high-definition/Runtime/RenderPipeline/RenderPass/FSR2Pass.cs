@@ -25,9 +25,15 @@ namespace UnityEngine.Rendering.HighDefinition
                 Debug.LogWarning("Cannot instantiate AMD device because the version HDRP expects does not match the backend version.");
                 return false;
             }
+
+            bool deviceReady = AMD.GraphicsDevice.device != null;
+            if (!deviceReady)
+            {
+                AMD.GraphicsDevice.CreateGraphicsDevice();
+                deviceReady = AMD.GraphicsDevice.device != null;
+            }
             
-            AMD.GraphicsDevice device = AMD.GraphicsDevice.CreateGraphicsDevice();
-            return device != null;
+            return deviceReady;
 #else
             return false;
 #endif
@@ -364,7 +370,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
         private void CleanupCameraStates()
         {
-            Dictionary<int, UpscalerCameras.State> cameras = m_CameraStates.cameras;
+            Dictionary<EntityId, UpscalerCameras.State> cameras = m_CameraStates.cameras;
             m_CommandBuffer.Clear();
             foreach (var kv in cameras)
             {
@@ -397,7 +403,7 @@ namespace UnityEngine.Rendering.HighDefinition
             float percentage = 100.0f;
             if (enableAutomaticSettings)
             {
-                var qualityMode = (AMD.FSR2Quality)(hdCam.fidelityFX2SuperResolutionUseCustomAttributes ? hdCam.fidelityFX2SuperResolutionQuality : dynamicResolutionSettings.FSR2QualitySetting);
+                var qualityMode = (AMD.FSR2Quality)(hdCam.fidelityFX2SuperResolutionUseCustomQualitySettings ? hdCam.fidelityFX2SuperResolutionQuality : dynamicResolutionSettings.FSR2QualitySetting);
                 percentage = (1.0f / m_Device.GetUpscaleRatioFromQualityMode(qualityMode)) * 100.0f;
                 DynamicResolutionHandler.SetSystemDynamicResScaler(fsr2Camera.ScaleDelegate, DynamicResScalePolicyType.ReturnsPercentage);
                 DynamicResolutionHandler.SetActiveDynamicScalerSlot(DynamicResScalerSlot.System);
@@ -422,7 +428,10 @@ namespace UnityEngine.Rendering.HighDefinition
             bool useCameraCustomAttributes = parameters.hdCamera.fidelityFX2SuperResolutionUseCustomAttributes;
             var fsr2ViewData = new Fsr2ViewData();
             fsr2ViewData.inputRes  = new UpscalerResolution() { width = (uint)parameters.hdCamera.actualWidth, height = (uint)parameters.hdCamera.actualHeight };
-            fsr2ViewData.outputRes = new UpscalerResolution() { width = (uint)DynamicResolutionHandler.instance.finalViewport.x, height = (uint)DynamicResolutionHandler.instance.finalViewport.y };
+            fsr2ViewData.outputRes = new UpscalerResolution() {
+                width  = (uint)parameters.hdCamera.finalViewport.width,
+                height = (uint)parameters.hdCamera.finalViewport.height
+            };
             fsr2ViewData.jitterX = parameters.hdCamera.taaJitter.x;
             fsr2ViewData.jitterY = parameters.hdCamera.taaJitter.y;
             fsr2ViewData.reset = parameters.hdCamera.isFirstFrame;

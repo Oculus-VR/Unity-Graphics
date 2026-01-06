@@ -60,7 +60,7 @@
     {\
         half4 shadowTex = SAMPLE_TEXTURE2D(_ShadowTex, sampler_ShadowTex, input.shadowUV); \
         half4 shadowIntensity = 1-max(shadowTex.r, shadowTex.g * 1-shadowTex.b);\
-        color.rgb = (color.rgb * shadowIntensity) + (color.rgb * intensity*(1 - shadowIntensity));\
+        color.rgb = (color.rgb * shadowIntensity.rgb) + (color.rgb * intensity*(1 - shadowIntensity.rgb));\
      }
 
 #define TRANSFER_SHADOWS(output)\
@@ -72,6 +72,22 @@
     half2 _ShapeLightBlendFactors##index;\
     half4 _ShapeLightMaskFilter##index;\
     half4 _ShapeLightInvertedFilter##index;
+
+#if USE_SHAPE_LIGHT_TYPE_0
+    SHAPE_LIGHT(0)
+#endif
+
+#if USE_SHAPE_LIGHT_TYPE_1
+    SHAPE_LIGHT(1)
+#endif
+
+#if USE_SHAPE_LIGHT_TYPE_2
+    SHAPE_LIGHT(2)
+#endif
+
+#if USE_SHAPE_LIGHT_TYPE_3
+    SHAPE_LIGHT(3)
+#endif
 
 #if !defined(USE_SHAPE_LIGHT_TYPE_0) && !defined(USE_SHAPE_LIGHT_TYPE_1) && !defined(USE_SHAPE_LIGHT_TYPE_2) && !defined(USE_SHAPE_LIGHT_TYPE_3)
 #define USE_DEFAULT_LIGHT_TYPE 1

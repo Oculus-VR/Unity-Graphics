@@ -57,49 +57,49 @@ namespace UnityEngine.Rendering
         /// <summary>
         /// The shader used to visualize the probes in the debug view.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public Shader probeDebugShader;
         /// <summary>
         /// The shader used to visualize the way probes are sampled for a single pixel in the debug view.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public Shader probeSamplingDebugShader;
         /// <summary>
         /// The debug texture used to display probe weight in the debug view.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public Texture probeSamplingDebugTexture;
         /// <summary>
         /// The debug mesh used to visualize the way probes are sampled for a single pixel in the debug view.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public Mesh probeSamplingDebugMesh;
         /// <summary>
         /// The shader used to visualize probes virtual offset in the debug view.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public Shader offsetDebugShader;
         /// <summary>
         /// The shader used to visualize APV fragmentation.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public Shader fragmentationDebugShader;
         /// <summary>
         /// The compute shader used to interpolate between two lighting scenarios.
         /// Set to null if blending is not supported.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public ComputeShader scenarioBlendingShader;
         /// <summary>
         /// The compute shader used to upload streamed data to the GPU.
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public ComputeShader streamingUploadShader;
 
         /// <summary>
         /// The <see cref="ProbeVolumeSceneData"/>
         /// </summary>
-        [Obsolete("This field is not used anymore.")]
+        [Obsolete("This field is not used anymore. #from(2023.3)")]
         public ProbeVolumeSceneData sceneData;
         /// <summary>True if APV is able to show runtime debug information.</summary>
         [Obsolete("This field is not used anymore. Used with the current Shader Stripping Settings. #from(2023.3)")]
@@ -692,7 +692,7 @@ namespace UnityEngine.Rendering
         int m_TemporaryDataLocationMemCost;
 
 #pragma warning disable 618
-        [Obsolete("This field is only kept for migration purpose.")]
+        [Obsolete("This field is only kept for migration purpose. #from(2023.3)")]
         internal ProbeVolumeSceneData sceneData; // Kept for migration
 #pragma warning restore 618
 
@@ -726,8 +726,19 @@ namespace UnityEngine.Rendering
         // Information of the probe volume scenes that is being loaded (if one is pending)
         List<string> m_ActiveScenes = new List<string>();
 
-        ProbeVolumeBakingSet m_CurrentBakingSet = null;
-        ProbeVolumeBakingSet m_LazyBakingSet = null;
+        ProbeVolumeBakingSetWeakReference m_CurrentBakingSetReference = new();
+        ProbeVolumeBakingSet m_CurrentBakingSet
+        {
+            get => m_CurrentBakingSetReference.Get();
+            set => m_CurrentBakingSetReference.Set(value);
+        }
+
+        ProbeVolumeBakingSetWeakReference m_LazyBakingSetReference = new();
+        ProbeVolumeBakingSet m_LazyBakingSet
+        {
+            get => m_LazyBakingSetReference.Get();
+            set => m_LazyBakingSetReference.Set(value);
+        }
 
         bool m_NeedLoadAsset = false;
         bool m_ProbeReferenceVolumeInit = false;
@@ -1048,7 +1059,6 @@ namespace UnityEngine.Rendering
 
 #if UNITY_EDITOR
             UnityEditor.SceneManagement.EditorSceneManager.sceneSaving += ProbeVolumeBakingSet.OnSceneSaving;
-            ProbeVolumeBakingSet.SyncBakingSets();
 #endif
             m_EnabledBySRP = true;
 
@@ -1076,6 +1086,11 @@ namespace UnityEngine.Rendering
         public void SetVertexSamplingEnabled(bool value)
         {
             m_VertexSampling = value;
+        }
+
+        internal void ForceMemoryBudget(ProbeVolumeTextureMemoryBudget budget)
+        {
+            m_MemoryBudget = budget;
         }
 
         // This is used for steps such as dilation that require the maximum order allowed to be loaded at all times. Should really never be used as a general purpose function.
@@ -1388,7 +1403,7 @@ namespace UnityEngine.Rendering
                 return;
             }
 
-            if (m_CurrentBakingSet != null && bakingSet != m_CurrentBakingSet)
+            if (m_CurrentBakingSet != null && !m_CurrentBakingSet.HasSameSceneGUIDs(bakingSet))
             {
                 // Trying to load data for a scene from a different baking set than currently loaded ones.
                 // This should not throw an error, but it's not supported
@@ -1680,6 +1695,9 @@ namespace UnityEngine.Rendering
             //Ensure that all currently loaded scenes belong to the same set.
             foreach (var data in perSceneDataList)
             {
+                if (UnityEditor.SceneManagement.EditorSceneManager.IsPreviewScene(data.gameObject.scene))
+                    continue; // Ignore preview scenes - they are needed to make closed subscenes work
+
                 var set = ProbeVolumeBakingSet.GetBakingSetForScene(data.gameObject.scene);
                 if (set != bakingSet)
                     return false;
@@ -1725,10 +1743,10 @@ namespace UnityEngine.Rendering
             }
         }
 
-        internal static int CellSize(int subdivisionLevel) => (int)Mathf.Pow(ProbeBrickPool.kBrickCellCount, subdivisionLevel);
-        internal float BrickSize(int subdivisionLevel) => m_MinBrickSize * CellSize(subdivisionLevel);
+        internal static int CellSize(int subdivisionLevel) => ProbeVolumeUtil.CellSize(subdivisionLevel);
+        internal float BrickSize(int subdivisionLevel) => ProbeVolumeUtil.BrickSize(m_MinBrickSize, subdivisionLevel);
         internal float MinBrickSize() => m_MinBrickSize;
-        internal float MaxBrickSize() => BrickSize(m_MaxSubdivision - 1);
+        internal float MaxBrickSize() => ProbeVolumeUtil.MaxBrickSize(m_MinBrickSize, m_MaxSubdivision);
         internal Vector3 ProbeOffset() => m_ProbeOffset;
         internal int GetMaxSubdivision() => m_MaxSubdivision;
         internal int GetMaxSubdivision(float multiplier) => Mathf.CeilToInt(m_MaxSubdivision * multiplier);

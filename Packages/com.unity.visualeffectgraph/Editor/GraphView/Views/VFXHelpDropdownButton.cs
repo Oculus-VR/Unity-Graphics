@@ -11,9 +11,9 @@ namespace UnityEditor.VFX.UI
 {
     class VFXHelpDropdownButton : DropDownButtonBase
     {
-        const string k_AdditionalSamples = "VisualEffectGraph Additions";
-        const string k_AdditionalHelpers = "OutputEvent Helpers";
-        const string k_LearningSamples = "Learning Templates";
+        internal const string k_AdditionalSamples = "Visual Effect Graph Additions";
+        internal const string k_AdditionalHelpers = "Output Event Helpers";
+        internal const string k_LearningSamples = "Learning Templates";
         const string k_ManualUrl = @"https://docs.unity3d.com/Packages/com.unity.visualeffectgraph@{0}/index.html";
 
         string m_ManualUrlWithVersion;
@@ -43,7 +43,7 @@ namespace UnityEditor.VFX.UI
 
         protected override void OnMainButton()
         {
-            if (string.IsNullOrEmpty(m_ManualUrlWithVersion)) 
+            if (string.IsNullOrEmpty(m_ManualUrlWithVersion))
                 m_ManualUrlWithVersion = DocumentationInfo.GetDefaultPackageLink(Documentation.packageName);
 
             GotoUrl(m_ManualUrlWithVersion);
@@ -53,21 +53,27 @@ namespace UnityEditor.VFX.UI
 
         void InstallSample(string sampleName)
         {
-            var sample = Sample.FindByPackage(VisualEffectGraphPackageInfo.name, null).SingleOrDefault(x => x.displayName == sampleName);
+            var searchResult = Sample.FindByPackage(VisualEffectGraphPackageInfo.name, null);
+            var sample = searchResult.SingleOrDefault(x => x.displayName == sampleName);
             if (!string.IsNullOrEmpty(sample.displayName))
             {
-                if (!sample.isImported)
-                {
-                    sample.Import();
-                }
-                else
+                var importMode = Sample.ImportOptions.None;
+                if (sample.isImported)
                 {
                     var reinstall = EditorUtility.DisplayDialog("Warning", "This sample package is already installed.\nDo you want to reinstall it?", "Yes", "No");
                     if (reinstall)
                     {
-                        sample.Import(Sample.ImportOptions.OverridePreviousImports);
+                        importMode = Sample.ImportOptions.OverridePreviousImports;
+                    }
+                    else
+                    {
+                        return;
                     }
                 }
+
+                var packageInfo = PackageManager.PackageInfo.FindForAssetPath(VisualEffectGraphPackageInfo.assetPackagePath);
+                VFXTemplateHelperInternal.ImportSampleDependencies(packageInfo, sample);
+                sample.Import(importMode);
             }
             else
             {

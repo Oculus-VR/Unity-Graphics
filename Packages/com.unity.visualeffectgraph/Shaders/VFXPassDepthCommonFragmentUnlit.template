@@ -1,4 +1,4 @@
-﻿#ifndef VFX_SUPPORT_MAIN_TEXTURE_SAMPLING_IN_FRAGMENT_DEPTH
+#ifndef VFX_SUPPORT_MAIN_TEXTURE_SAMPLING_IN_FRAGMENT_DEPTH
 #define VFX_SUPPORT_MAIN_TEXTURE_SAMPLING_IN_FRAGMENT_DEPTH 0
 #endif
 
@@ -44,6 +44,10 @@ void frag(ps_input i
 #elif VFX_PASSDEPTH == VFX_PASSDEPTH_SHADOW
     , out float4 dummy : SV_Target0
 #endif
+
+#if VFX_WRITE_RENDERING_LAYERS
+    , out uint outRenderingLayers : SV_Target1
+#endif
 )
 {
 	UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
@@ -60,7 +64,7 @@ void frag(ps_input i
         float alpha = OUTSG.${SHADERGRAPH_PARAM_ALPHA};
     #else
         float alpha = VFXGetFragmentColor(i).a;
-		#if VFX_SUPPORT_MAIN_TEXTURE_SAMPLING_IN_FRAGMENT_DEPTH
+		#if VFX_SUPPORT_MAIN_TEXTURE_SAMPLING_IN_FRAGMENT_DEPTH && USE_BASE_COLOR_MAP_ALPHA
 			#ifdef VFX_PROCEDURAL_UV
 				alpha *= VFXGetTextureColorWithProceduralUV(VFX_SAMPLER(mainTexture),i,VFX_PROCEDURAL_UV(i)).a;
 			#else
@@ -102,4 +106,8 @@ void frag(ps_input i
 	#else
 		#error VFX_PASSDEPTH undefined
 	#endif
+
+#if VFX_WRITE_RENDERING_LAYERS
+	outRenderingLayers = EncodeMeshRenderingLayer();
+#endif
 }

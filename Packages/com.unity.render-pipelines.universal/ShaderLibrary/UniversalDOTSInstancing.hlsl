@@ -19,6 +19,7 @@ UNITY_DOTS_INSTANCING_START(BuiltinPropertyMetadata)
     UNITY_DOTS_INSTANCED_PROP_OVERRIDE_SUPPORTED(float3x4, unity_MatrixPreviousMI)
     UNITY_DOTS_INSTANCED_PROP_OVERRIDE_SUPPORTED(SH,       unity_SHCoefficients)
     UNITY_DOTS_INSTANCED_PROP_OVERRIDE_SUPPORTED(uint2,    unity_EntityId)
+    UNITY_DOTS_INSTANCED_PROP_OVERRIDE_SUPPORTED(uint,     unity_RendererUserValuesPropertyEntry)
 UNITY_DOTS_INSTANCING_END(BuiltinPropertyMetadata)
 
 #define unity_LODFade               LoadDOTSInstancedData_LODFade()
@@ -26,6 +27,7 @@ UNITY_DOTS_INSTANCING_END(BuiltinPropertyMetadata)
 #define unity_LightmapST            UNITY_ACCESS_DOTS_INSTANCED_PROP(float4,   unity_LightmapST)
 #define unity_LightmapIndex         UNITY_ACCESS_DOTS_INSTANCED_PROP(float4,   unity_LightmapIndex)
 #define unity_DynamicLightmapST     UNITY_ACCESS_DOTS_INSTANCED_PROP(float4,   unity_DynamicLightmapST)
+#define unity_RendererUserValue    (UNITY_ACCESS_DOTS_INSTANCED_PROP(uint,   unity_RendererUserValuesPropertyEntry))
 #define unity_SHAr                  LoadDOTSInstancedData_SHAr()
 #define unity_SHAg                  LoadDOTSInstancedData_SHAg()
 #define unity_SHAb                  LoadDOTSInstancedData_SHAb()
@@ -37,7 +39,9 @@ UNITY_DOTS_INSTANCING_END(BuiltinPropertyMetadata)
 #define unity_LightData             LoadDOTSInstancedData_LightData()
 #define unity_WorldTransformParams  LoadDOTSInstancedData_WorldTransformParams()
 #define unity_RenderingLayer        LoadDOTSInstancedData_RenderingLayer()
-#define unity_MotionVectorsParams   LoadDOTSInstancedData_MotionVectorsParams() 
+#define unity_MotionVectorsParams   LoadDOTSInstancedData_MotionVectorsParams()
+#define unity_RendererBounds_Min    LoadDOTSInstancedData_RendererBounds_Min()
+#define unity_RendererBounds_Max    LoadDOTSInstancedData_RendererBounds_Max()
 
 #define UNITY_SETUP_DOTS_SH_COEFFS  SetupDOTSSHCoeffs(UNITY_DOTS_INSTANCED_METADATA_NAME(SH, unity_SHCoefficients))
 #define UNITY_SETUP_DOTS_RENDER_BOUNDS  SetupDOTSRendererBounds(UNITY_DOTS_MATRIX_M)
@@ -49,14 +53,12 @@ static const float2x4 unity_LightIndices = float2x4(0,0,0,0, 0,0,0,0);
 static const float4 unity_SpecCube0_BoxMax = float4(1,1,1,1);
 static const float4 unity_SpecCube0_BoxMin = float4(0,0,0,0);
 static const float4 unity_SpecCube0_ProbePosition = float4(0,0,0,0);
-
+static const float4 unity_SpecCube0_Rotation = float4(0,0,0,0);
 static const float4 unity_SpecCube1_BoxMax = float4(1,1,1,1);
 static const float4 unity_SpecCube1_BoxMin = float4(0,0,0,0);
 static const float4 unity_SpecCube1_ProbePosition = float4(0,0,0,0);
+static const float4 unity_SpecCube1_Rotation = float4(0,0,0,0);
 static const float4 unity_SpecCube1_HDR = float4(0,0,0,0);
-
-static const float4 unity_RendererBounds_Min = float4(0,0,0,0);
-static const float4 unity_RendererBounds_Max = float4(0,0,0,0);
 
 // Set up by BRG picking/selection code
 int unity_SubmeshIndex;

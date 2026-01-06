@@ -208,12 +208,14 @@ namespace UnityEngine.Rendering
         /// <returns>The RTHandle Instance ID.</returns>
         public int GetInstanceID()
         {
+#pragma warning disable 618 // todo @emilie.thaulow replace with ulong
             if (m_RT != null)
-                return m_RT.GetInstanceID();
+                return m_RT.GetEntityId();
             else if (m_ExternalTexture != null)
-                return m_ExternalTexture.GetInstanceID();
+                return m_ExternalTexture.GetEntityId();
             else
                 return m_NameID.GetHashCode(); // No instance ID so we return the hash code.
+#pragma warning restore 618
         }
 
         /// <summary>
@@ -275,7 +277,6 @@ namespace UnityEngine.Rendering
             }
         }
 
-#if UNITY_2020_2_OR_NEWER
         /// <summary>
         /// Switch the render target to fast memory on platform that have it.
         /// </summary>
@@ -317,7 +318,5 @@ namespace UnityEngine.Rendering
         {
             cmd.SwitchOutOfFastMemory(m_RT, copyContents);
         }
-
-#endif
     }
 }

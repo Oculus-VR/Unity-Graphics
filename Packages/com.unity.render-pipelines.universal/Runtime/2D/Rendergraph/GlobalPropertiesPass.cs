@@ -7,18 +7,16 @@ namespace UnityEngine.Rendering.Universal
         static readonly string k_SetGlobalProperties = "SetGlobalProperties";
         private static readonly ProfilingSampler m_SetGlobalPropertiesProfilingSampler = new ProfilingSampler(k_SetGlobalProperties);
 
-#if UNITY_EDITOR
-        private static readonly int k_DefaultWhiteTextureID = Shader.PropertyToID("_DefaultWhiteTex");
-#endif
-
         class PassData
         {
             internal Vector2Int screenParams;
         }
 
-        internal static void Setup(RenderGraph graph, ContextContainer frameData, Renderer2DData rendererData, UniversalCameraData cameraData)
+        internal static void Setup(RenderGraph graph, ContextContainer frameData, bool useLights)
         {
             Universal2DResourceData universal2DResourceData = frameData.Get<Universal2DResourceData>();
+            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
+            Renderer2DData rendererData = frameData.Get<Universal2DRenderingData>().renderingData;
 
             using (var builder = graph.AddRasterRenderPass<PassData>(k_SetGlobalProperties, out var passData, m_SetGlobalPropertiesProfilingSampler))
             {
@@ -28,22 +26,22 @@ namespace UnityEngine.Rendering.Universal
                 if (pixelPerfectCamera != null && pixelPerfectCamera.enabled && pixelPerfectCamera.offscreenRTSize != Vector2Int.zero)
                     passData.screenParams = pixelPerfectCamera.offscreenRTSize;
 
-                // Set light lookup and fall off textures as global
-                var lightLookupTexture = graph.ImportTexture(Light2DLookupTexture.GetLightLookupTexture_Rendergraph());
-                var fallOffTexture = graph.ImportTexture(Light2DLookupTexture.GetFallOffLookupTexture_Rendergraph());
+                if (useLights)
+                {
+                    // Set light lookup and fall off textures as global
+                    var lightLookupTexture = graph.ImportTexture(Light2DLookupTexture.GetLightLookupTexture_Rendergraph());
+                    var fallOffTexture = graph.ImportTexture(Light2DLookupTexture.GetFallOffLookupTexture_Rendergraph());
 
-                builder.SetGlobalTextureAfterPass(lightLookupTexture, Light2DLookupTexture.k_LightLookupID);
-                builder.SetGlobalTextureAfterPass(fallOffTexture, Light2DLookupTexture.k_FalloffLookupID);
-#if UNITY_EDITOR
-                builder.SetGlobalTextureAfterPass(graph.defaultResources.whiteTexture, k_DefaultWhiteTextureID);
-#endif
+                    builder.SetGlobalTextureAfterPass(lightLookupTexture, Light2DLookupTexture.k_LightLookupID);
+                    builder.SetGlobalTextureAfterPass(fallOffTexture, Light2DLookupTexture.k_FalloffLookupID);
+                }
 
                 if (rendererData.useCameraSortingLayerTexture)
                     builder.SetGlobalTextureAfterPass(universal2DResourceData.cameraSortingLayerTexture, CopyCameraSortingLayerPass.k_CameraSortingLayerTextureId);
 
                 builder.AllowGlobalStateModification(true);
 
-                builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
+                builder.SetRenderFunc(static (PassData data, RasterGraphContext context) =>
                 {
                     if (data.screenParams != Vector2Int.zero)
                     {

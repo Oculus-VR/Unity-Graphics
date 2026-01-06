@@ -419,17 +419,6 @@ namespace UnityEditor.VFX.UI
                 m_DebugUI.Notify(VFXUIDebug.Events.VFXReset);
         }
 
-        public void OnVisualEffectComponentChanged(IEnumerable<VisualEffect> visualEffects)
-        {
-            if (m_AttachedComponent != null
-                && visualEffects.Contains(m_AttachedComponent)
-                && m_AttachedComponent.visualEffectAsset != controller.graph.visualEffectResource.asset)
-            {
-                //The Visual Effect Asset has been changed and is no longer valid, we don't want to modify capacity on the wrong graph. We have to detach.
-                m_View.attachedComponent = null;
-            }
-        }
-
         VisualEffect m_AttachedComponent;
 
         public VisualEffect GetAttachedComponent()
@@ -808,7 +797,9 @@ namespace UnityEditor.VFX.UI
     [System.Obsolete("VFXComponentBoardEventUIFactory is deprecated and will be removed. Use UxmlElementAttribute instead.", false)]
     class VFXComponentBoardEventUIFactory : UxmlFactory<VFXComponentBoardEventUI>
     { }
-    class VFXComponentBoardEventUI : VisualElement
+
+    [UxmlElement]
+    partial class VFXComponentBoardEventUI : VisualElement
     {
         public VFXComponentBoardEventUI()
         {
@@ -870,11 +861,8 @@ namespace UnityEditor.VFX.UI
         }
     }
 
-    [System.Obsolete("VFXComponentBoardBoundsSystemUIFactory is deprecated and will be removed. Use UxmlElementAttribute instead.", false)]
-    class VFXComponentBoardBoundsSystemUIFactory : UxmlFactory<VFXComponentBoardBoundsSystemUI>
-    { }
-
-    class VFXComponentBoardBoundsSystemUI : VisualElement
+    [UxmlElement]
+    partial class VFXComponentBoardBoundsSystemUI : VisualElement
     {
         public void Setup(VFXView vfxView, string systemName, VFXBoundsRecorder boundsRecorder)
         {

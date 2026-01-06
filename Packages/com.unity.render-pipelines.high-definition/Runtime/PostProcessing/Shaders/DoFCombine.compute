@@ -4,7 +4,7 @@
 #include "Packages/com.unity.render-pipelines.high-definition/Runtime/PostProcessing/Shaders/DepthOfFieldCommon.hlsl"
 #include "Packages/com.unity.render-pipelines.high-definition/Runtime/RenderPipeline/Raytracing/Shaders/RaytracingSampling.hlsl"
 
-#pragma only_renderers d3d11 playstation xboxone xboxseries vulkan metal switch
+#pragma only_renderers d3d11 playstation xboxone xboxseries vulkan metal switch switch2
 
 #pragma kernel UpsampleFastTiles
 
@@ -15,15 +15,10 @@
 #define GROUP_SIZE (GROUP_RES * GROUP_RES)
 
 CBUFFER_START(cb0)
-float4 _Params;
 float4 _Params2;
 uint _DebugTileClassification;
 uint3 _Padding;
 CBUFFER_END
-
-#define NumRings            _Params.x
-#define MaxCoCRadius        _Params.y
-#define Anamorphism         _Params.z
 
 // Out-of-focus areas, computed at lower res
 TEXTURE2D_X(_InputNearTexture);

@@ -11,7 +11,7 @@ using UnityEngine.UIElements;
 namespace UnityEditor.ShaderGraph
 {
     [Serializable]
-    class DynamicVectorMaterialSlot : MaterialSlot, IMaterialSlotHasValue<Vector4>
+    class DynamicVectorMaterialSlot : MaterialSlot, IMaterialSlotHasValue<Vector4>, IMaterialSlotSupportsLiteralMode
     {
         [SerializeField]
         private Vector4 m_Value;
@@ -22,6 +22,15 @@ namespace UnityEditor.ShaderGraph
         static readonly string[] k_Labels = { "X", "Y", "Z", "W" };
 
         private ConcreteSlotValueType m_ConcreteValueType = ConcreteSlotValueType.Vector1;
+
+        [SerializeField]
+        bool m_LiteralMode = false;
+
+        public bool LiteralMode
+        {
+            get => m_LiteralMode;
+            set => m_LiteralMode = value;
+        }
 
         public DynamicVectorMaterialSlot()
         {
@@ -34,10 +43,12 @@ namespace UnityEditor.ShaderGraph
             SlotType slotType,
             Vector4 value,
             ShaderStageCapability stageCapability = ShaderStageCapability.All,
-            bool hidden = false)
+            bool hidden = false,
+            bool literalMode = false)
             : base(slotId, displayName, shaderOutputName, slotType, stageCapability, hidden)
         {
             m_Value = value;
+            m_LiteralMode = literalMode;
         }
 
         public Vector4 defaultValue { get { return m_DefaultValue; } }
@@ -128,9 +139,13 @@ namespace UnityEditor.ShaderGraph
 
         public override void CopyValuesFrom(MaterialSlot foundSlot)
         {
-            var slot = foundSlot as DynamicVectorMaterialSlot;
-            if (slot != null)
-                value = slot.value;
+            switch (foundSlot)
+            {
+                case IMaterialSlotHasValue<float> slot1: value = new Vector4(slot1.value, slot1.value, slot1.value, slot1.value); break;
+                case IMaterialSlotHasValue<Vector2> slot2: value = new Vector4(slot2.value.x, slot2.value.y); break;
+                case IMaterialSlotHasValue<Vector3> slot3: value = new Vector4(slot3.value.x, slot3.value.y, slot3.value.z); break;
+                case IMaterialSlotHasValue<Vector4> slot4: value = slot4.value; break;
+            }
         }
 
         public override void CopyDefaultValue(MaterialSlot other)

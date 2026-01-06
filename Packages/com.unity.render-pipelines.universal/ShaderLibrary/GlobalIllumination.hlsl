@@ -1,4 +1,3 @@
-
 #ifndef UNIVERSAL_GLOBAL_ILLUMINATION_INCLUDED
 #define UNIVERSAL_GLOBAL_ILLUMINATION_INCLUDED
 
@@ -16,11 +15,28 @@
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Packing.hlsl"
 #endif
 
+#if defined(_SCREEN_SPACE_IRRADIANCE)
+TEXTURE2D_X(_ScreenSpaceIrradiance);
+
+half3 SampleScreenSpaceGI(float2 pos)
+{
+    return LOAD_TEXTURE2D_X(_ScreenSpaceIrradiance, pos).rgb;
+}
+#endif
+
 // If lightmap is not defined than we evaluate GI (ambient + probes) from SH
 
 // Renamed -> LIGHTMAP_SHADOW_MIXING
 #if !defined(_MIXED_LIGHTING_SUBTRACTIVE) && defined(LIGHTMAP_SHADOW_MIXING) && !defined(SHADOWS_SHADOWMASK)
     #define _MIXED_LIGHTING_SUBTRACTIVE
+#endif
+
+#if !defined(_REFLECTION_PROBE_BLENDING_KEYWORD_DECLARED) && !defined(_REFLECTION_PROBE_BLENDING)
+    #define _REFLECTION_PROBE_BLENDING 0
+#endif
+
+#if !defined(_REFLECTION_PROBE_BOX_PROJECTION_KEYWORD_DECLARED) && !defined(_REFLECTION_PROBE_BOX_PROJECTION)
+    #define _REFLECTION_PROBE_BOX_PROJECTION 0
 #endif
 
 // SH Vertex Evaluation. Depending on target SH sampling might be
@@ -67,11 +83,9 @@ half3 SampleProbeVolumeVertex(in float3 absolutePositionWS, in float3 normalWS, 
 
 #if defined(EVALUATE_SH_VERTEX) || defined(EVALUATE_SH_MIXED)
     half3 bakedGI;
-    // The screen space position is used for noise, which is irrelevant when doing vertex sampling
-    float2 positionSS = float2(0, 0);
     if (_EnableProbeVolumes)
     {
-        EvaluateAdaptiveProbeVolume(absolutePositionWS, normalWS, viewDir, positionSS, GetMeshRenderingLayer(), bakedGI, probeOcclusion);
+        EvaluateAdaptiveProbeVolume(absolutePositionWS, normalWS, viewDir, GetMeshRenderingLayer(), bakedGI, probeOcclusion);
     }
     else
     {
@@ -192,10 +206,9 @@ half3 SampleLightmap(float2 staticLightmapUV, half3 normalWS)
     return result;
 }
 
-// We either sample GI from baked lightmap or from probes.
-// If lightmap: sampleData.xy = lightmapUV
-// If probe: sampleData.xyz = L2 SH terms
-#if defined(LIGHTMAP_ON) && defined(DYNAMICLIGHTMAP_ON)
+#if defined(_SCREEN_SPACE_IRRADIANCE)
+#define SAMPLE_GI(irradianceTex, pos) SampleScreenSpaceGI(pos)
+#elif defined(LIGHTMAP_ON) && defined(DYNAMICLIGHTMAP_ON)
 #define SAMPLE_GI(staticLmName, dynamicLmName, shName, normalWSName) SampleLightmap(staticLmName, dynamicLmName, normalWSName)
 #elif defined(DYNAMICLIGHTMAP_ON)
 #define SAMPLE_GI(staticLmName, dynamicLmName, shName, normalWSName) SampleLightmap(0, dynamicLmName, normalWSName)
@@ -210,6 +223,16 @@ half3 SampleLightmap(float2 staticLightmapUV, half3 normalWS)
 #else
 #define SAMPLE_GI(staticLmName, shName, normalWSName) SampleSHPixel(shName, normalWSName)
 #endif
+
+float3 GetReflectionProbeCenter(float4 boxMin, float4 boxMax)
+{
+    return boxMin.xyz + (boxMax.xyz - boxMin.xyz) / 2;
+}
+
+float3 GetRotatedPoint(float3 centerPosition, float4 quaternion, float3 pointToRotate)
+{
+    return RotateVectorByQuat(quaternion, pointToRotate - centerPosition) + centerPosition;
+}
 
 half3 BoxProjectedCubemapDirection(half3 reflectionWS, float3 positionWS, float4 cubemapPositionWS, float4 boxMin, float4 boxMax)
 {
@@ -230,6 +253,20 @@ half3 BoxProjectedCubemapDirection(half3 reflectionWS, float3 positionWS, float4
     {
         return reflectionWS;
     }
+}
+
+half3 BoxProjectedCubemapDirection(float4 rotation, half3 reflectionWS, float3 positionWS, float4 cubemapPositionWS, float4 boxMin, float4 boxMax)
+{
+    half3 rotReflectVector = RotateVectorByQuat(rotation, reflectionWS);
+    float4 inverseRotation = -rotation;
+    inverseRotation.w = -inverseRotation.w;
+
+    half3 dir = BoxProjectedCubemapDirection(rotReflectVector, positionWS, cubemapPositionWS, boxMin, boxMax);
+
+    half3 rotatedDir = RotateVectorByQuat(inverseRotation, dir);
+
+    return rotatedDir;
+
 }
 
 float CalculateProbeWeight(float3 positionWS, float4 probeBoxMin, float4 probeBoxMax)
@@ -257,13 +294,26 @@ half3 CalculateIrradianceFromReflectionProbes(half3 reflectVector, float3 positi
     {
         probeIndex -= URP_FP_PROBES_BEGIN;
 
-        float weight = CalculateProbeWeight(positionWS, urp_ReflProbes_BoxMin[probeIndex], urp_ReflProbes_BoxMax[probeIndex]);
+#if defined(REFLECTION_PROBE_ROTATION)
+        // We need to rotated positionWS such that we can assume the influence volumes to be axis aligned
+        // when calculating the weight and box projection.
+        float3 probeCenterPosWS = GetReflectionProbeCenter(urp_ReflProbes_BoxMin[probeIndex], urp_ReflProbes_BoxMax[probeIndex]);
+        float3 rotPosWS = GetRotatedPoint(probeCenterPosWS, urp_ReflProbes_Rotation[probeIndex], positionWS);
+#else
+        float3 rotPosWS = positionWS;
+#endif
+        float weight = CalculateProbeWeight(rotPosWS, urp_ReflProbes_BoxMin[probeIndex], urp_ReflProbes_BoxMax[probeIndex]);
         weight = min(weight, 1.0f - totalWeight);
 
         half3 sampleVector = reflectVector;
-#ifdef _REFLECTION_PROBE_BOX_PROJECTION
-        sampleVector = BoxProjectedCubemapDirection(reflectVector, positionWS, urp_ReflProbes_ProbePosition[probeIndex], urp_ReflProbes_BoxMin[probeIndex], urp_ReflProbes_BoxMax[probeIndex]);
-#endif // _REFLECTION_PROBE_BOX_PROJECTION
+        if (_REFLECTION_PROBE_BOX_PROJECTION)
+        {
+            #if defined(REFLECTION_PROBE_ROTATION)
+            sampleVector = BoxProjectedCubemapDirection(urp_ReflProbes_Rotation[probeIndex], reflectVector, rotPosWS, urp_ReflProbes_ProbePosition[probeIndex], urp_ReflProbes_BoxMin[probeIndex], urp_ReflProbes_BoxMax[probeIndex]);
+            #else
+            sampleVector = BoxProjectedCubemapDirection(reflectVector, rotPosWS, urp_ReflProbes_ProbePosition[probeIndex], urp_ReflProbes_BoxMin[probeIndex], urp_ReflProbes_BoxMax[probeIndex]);
+            #endif
+        }
 
         uint maxMip = (uint)abs(urp_ReflProbes_ProbePosition[probeIndex].w) - 1;
         half probeMip = min(mip, maxMip);
@@ -281,6 +331,18 @@ half3 CalculateIrradianceFromReflectionProbes(half3 reflectVector, float3 positi
         totalWeight += weight;
     }
 #else
+#if defined(REFLECTION_PROBE_ROTATION)
+    // We need to rotated positionWS such that we can assume the influence volumes to be axis aligned
+    // when calculating the weight and box projection.
+    float3 probeCenterPosWS0 = GetReflectionProbeCenter(unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+    float3 rotPosWS0 = GetRotatedPoint(probeCenterPosWS0, unity_SpecCube0_Rotation, positionWS);
+    float3 probeCenterPosWS1 = GetReflectionProbeCenter(unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
+    float3 rotPosWS1 = GetRotatedPoint(probeCenterPosWS1, unity_SpecCube1_Rotation, positionWS);
+#else
+    float3 rotPosWS0 = positionWS;
+    float3 rotPosWS1 = positionWS;
+#endif
+
     half probe0Volume = CalculateProbeVolumeSqrMagnitude(unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
     half probe1Volume = CalculateProbeVolumeSqrMagnitude(unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
 
@@ -292,8 +354,8 @@ half3 CalculateIrradianceFromReflectionProbes(half3 reflectVector, float3 positi
     bool probe0Dominant = importanceSign > 0.0f || (importanceSign == 0.0f && volumeDiff < -0.0001h);
     bool probe1Dominant = importanceSign < 0.0f || (importanceSign == 0.0f && volumeDiff > 0.0001h);
 
-    float desiredWeightProbe0 = CalculateProbeWeight(positionWS, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
-    float desiredWeightProbe1 = CalculateProbeWeight(positionWS, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
+    float desiredWeightProbe0 = CalculateProbeWeight(rotPosWS0, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+    float desiredWeightProbe1 = CalculateProbeWeight(rotPosWS1, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
 
     // Subject the probes weight if the other probe is dominant
     float weightProbe0 = probe1Dominant ? min(desiredWeightProbe0, 1.0f - desiredWeightProbe1) : desiredWeightProbe0;
@@ -310,9 +372,14 @@ half3 CalculateIrradianceFromReflectionProbes(half3 reflectVector, float3 positi
     if (weightProbe0 > 0.01f)
     {
         half3 reflectVector0 = reflectVector;
-#ifdef _REFLECTION_PROBE_BOX_PROJECTION
-        reflectVector0 = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
-#endif // _REFLECTION_PROBE_BOX_PROJECTION
+        if (_REFLECTION_PROBE_BOX_PROJECTION) 
+        {
+            #if defined(REFLECTION_PROBE_ROTATION)
+            reflectVector0 = BoxProjectedCubemapDirection(unity_SpecCube0_Rotation, reflectVector, rotPosWS0, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+            #else
+            reflectVector0 = BoxProjectedCubemapDirection(reflectVector, rotPosWS0, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+             #endif
+         }
 
         half4 encodedIrradiance = half4(SAMPLE_TEXTURECUBE_LOD(unity_SpecCube0, samplerunity_SpecCube0, reflectVector0, mip));
 
@@ -323,9 +390,14 @@ half3 CalculateIrradianceFromReflectionProbes(half3 reflectVector, float3 positi
     if (weightProbe1 > 0.01f)
     {
         half3 reflectVector1 = reflectVector;
-#ifdef _REFLECTION_PROBE_BOX_PROJECTION
-        reflectVector1 = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube1_ProbePosition, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
-#endif // _REFLECTION_PROBE_BOX_PROJECTION
+        if (_REFLECTION_PROBE_BOX_PROJECTION)
+        {
+            #if defined(REFLECTION_PROBE_ROTATION)
+            reflectVector1 = BoxProjectedCubemapDirection(unity_SpecCube1_Rotation, reflectVector, rotPosWS1, unity_SpecCube1_ProbePosition, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
+            #else
+            reflectVector1 = BoxProjectedCubemapDirection(reflectVector, rotPosWS1, unity_SpecCube1_ProbePosition, unity_SpecCube1_BoxMin, unity_SpecCube1_BoxMax);
+            #endif
+        }
         half4 encodedIrradiance = half4(SAMPLE_TEXTURECUBE_LOD(unity_SpecCube1, samplerunity_SpecCube1, reflectVector1, mip));
 
         irradiance += weightProbe1 * DecodeHDREnvironment(encodedIrradiance, unity_SpecCube1_HDR);
@@ -348,17 +420,31 @@ half3 GlossyEnvironmentReflection(half3 reflectVector, float3 positionWS, half p
     half3 irradiance;
 
 #if !defined(_ENVIRONMENTREFLECTIONS_OFF)
-#if defined(_REFLECTION_PROBE_BLENDING)
-    irradiance = CalculateIrradianceFromReflectionProbes(reflectVector, positionWS, perceptualRoughness, normalizedScreenSpaceUV);
-#else
-#ifdef _REFLECTION_PROBE_BOX_PROJECTION
-    reflectVector = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
-#endif // _REFLECTION_PROBE_BOX_PROJECTION
-    half mip = PerceptualRoughnessToMipmapLevel(perceptualRoughness);
-    half4 encodedIrradiance = half4(SAMPLE_TEXTURECUBE_LOD(unity_SpecCube0, samplerunity_SpecCube0, reflectVector, mip));
+    if (_REFLECTION_PROBE_BLENDING)
+    {
+        irradiance = CalculateIrradianceFromReflectionProbes(reflectVector, positionWS, perceptualRoughness, normalizedScreenSpaceUV);
+    }
+    else
+    {
+        if (_REFLECTION_PROBE_BOX_PROJECTION)
+        {
+            #if defined(REFLECTION_PROBE_ROTATION)
+            float3 probeCenterPosWS0 = unity_SpecCube0_BoxMin.xyz + (unity_SpecCube0_BoxMax.xyz - unity_SpecCube0_BoxMin.xyz) / 2;
+            float3 rotPosWS0 = RotateVectorByQuat(unity_SpecCube0_Rotation, positionWS - probeCenterPosWS0) + probeCenterPosWS0;
+            half3 rotReflectVector0 = RotateVectorByQuat(unity_SpecCube0_Rotation, reflectVector);
+            float4 inverseRotation0 = -unity_SpecCube0_Rotation;
+            inverseRotation0.w = -inverseRotation0.w;
+            reflectVector = BoxProjectedCubemapDirection(rotReflectVector0, rotPosWS0, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+            reflectVector = RotateVectorByQuat(inverseRotation0, reflectVector);
+            #else
+            reflectVector = BoxProjectedCubemapDirection(reflectVector, positionWS, unity_SpecCube0_ProbePosition, unity_SpecCube0_BoxMin, unity_SpecCube0_BoxMax);
+            #endif
+        }
+        half mip = PerceptualRoughnessToMipmapLevel(perceptualRoughness);
+        half4 encodedIrradiance = half4(SAMPLE_TEXTURECUBE_LOD(unity_SpecCube0, samplerunity_SpecCube0, reflectVector, mip));
 
-    irradiance = DecodeHDREnvironment(encodedIrradiance, unity_SpecCube0_HDR);
-#endif // _REFLECTION_PROBE_BLENDING
+        irradiance = DecodeHDREnvironment(encodedIrradiance, unity_SpecCube0_HDR);
+    }
 #else // _ENVIRONMENTREFLECTIONS_OFF
     irradiance = _GlossyEnvironmentColor.rgb;
 #endif // !_ENVIRONMENTREFLECTIONS_OFF

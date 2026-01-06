@@ -100,7 +100,7 @@ namespace UnityEngine.Rendering
         public DynamicResUpscaleFilter filter { get; private set; }
 
         // Used to detect the filters set via user API
-        static Dictionary<int, DynamicResUpscaleFilter> s_CameraUpscaleFilters = new Dictionary<int, DynamicResUpscaleFilter>();
+        static Dictionary<EntityId, DynamicResUpscaleFilter> s_CameraUpscaleFilters = new Dictionary<EntityId, DynamicResUpscaleFilter>();
 
         /// <summary>
         /// The viewport of the final buffer. This is likely the resolution the dynamic resolution starts from before any scaling. Note this is NOT the target resolution the rendering will happen in
@@ -132,10 +132,10 @@ namespace UnityEngine.Rendering
 
         private const int CameraDictionaryMaxcCapacity = 32;
         private WeakReference m_OwnerCameraWeakRef = null;
-        private static Dictionary<int, DynamicResolutionHandler> s_CameraInstances = new Dictionary<int, DynamicResolutionHandler>(CameraDictionaryMaxcCapacity);
+        private static Dictionary<EntityId, DynamicResolutionHandler> s_CameraInstances = new Dictionary<EntityId, DynamicResolutionHandler>(CameraDictionaryMaxcCapacity);
         private static DynamicResolutionHandler s_DefaultInstance = new DynamicResolutionHandler();
 
-        private static int s_ActiveCameraId = 0;
+        private static EntityId s_ActiveCameraId = EntityId.None;
         private static DynamicResolutionHandler s_ActiveInstance = s_DefaultInstance;
 
         //private global state of ScalableBufferManager
@@ -161,7 +161,7 @@ namespace UnityEngine.Rendering
                 return null;
 
             DynamicResolutionHandler instance = null;
-            var key = camera.GetInstanceID();
+            var key = camera.GetEntityId();
             if (!s_CameraInstances.TryGetValue(key, out instance))
             {
                 //if this camera is not available in the map of cameras lets try creating one.
@@ -169,7 +169,7 @@ namespace UnityEngine.Rendering
                 //first and foremost, if we exceed the dictionary capacity, lets try and recycle an object that is dead.
                 if (s_CameraInstances.Count >= CameraDictionaryMaxcCapacity)
                 {
-                    int recycledInstanceKey = 0;
+                    EntityId recycledInstanceKey = EntityId.None;
                     DynamicResolutionHandler recycledInstance = null;
                     foreach (var kv in s_CameraInstances)
                     {
@@ -367,7 +367,7 @@ namespace UnityEngine.Rendering
         public static void ClearSelectedCamera()
         {
             s_ActiveInstance = s_DefaultInstance;
-            s_ActiveCameraId = 0;
+            s_ActiveCameraId = EntityId.None;
             s_ActiveInstanceDirty = true;
         }
 
@@ -378,7 +378,7 @@ namespace UnityEngine.Rendering
         /// <param name="filter">The filter to be used by the camera to upscale to final resolution.</param>
         static public void SetUpscaleFilter(Camera camera, DynamicResUpscaleFilter filter)
         {
-            var cameraID = camera.GetInstanceID();
+            var cameraID = camera.GetEntityId();
             if (s_CameraUpscaleFilters.ContainsKey(cameraID))
             {
                 s_CameraUpscaleFilters[cameraID] = filter;
@@ -408,16 +408,16 @@ namespace UnityEngine.Rendering
         /// <param name="OnResolutionChange">An action that will be called every time the dynamic resolution system triggers a change in resolution.</param>
         public static void UpdateAndUseCamera(Camera camera, GlobalDynamicResolutionSettings? settings = null, Action OnResolutionChange = null)
         {
-            int newCameraId;
+            EntityId newCameraId;
             if (camera == null)
             {
                 s_ActiveInstance = s_DefaultInstance;
-                newCameraId = 0;
+                newCameraId = EntityId.None;
             }
             else
             {
                 s_ActiveInstance = GetOrCreateDrsInstanceHandler(camera);
-                newCameraId = camera.GetInstanceID();
+                newCameraId = camera.GetEntityId();
             }
 
             s_ActiveInstanceDirty = newCameraId != s_ActiveCameraId;

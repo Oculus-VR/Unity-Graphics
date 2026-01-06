@@ -61,7 +61,7 @@ namespace UnityEngine.Rendering
         /// <summary>
         /// The current list of all available types that derive from <see cref="VolumeComponent"/>.
         /// </summary>
-        [Obsolete("Please use baseComponentTypeArray instead.")]
+        [Obsolete("Please use baseComponentTypeArray instead. #from(2021.2)")]
         public IEnumerable<Type> baseComponentTypes => baseComponentTypeArray;
 
         static readonly Dictionary<Type, List<(string, Type)>> s_SupportedVolumeComponentsForRenderPipeline = new();
@@ -86,6 +86,53 @@ namespace UnityEngine.Rendering
             return supportedVolumeComponents;
         }
 
+        internal bool TryGetVolumePathAndType(Type type, out (string path, Type t) result)
+        {
+            if (type == null)
+                throw new ArgumentNullException(nameof(type));
+
+            string path = string.Empty;
+            bool skipComponent = false;
+
+            // Look for the attributes of this volume component and decide how is added and if it needs to be skipped
+            var attrs = type.GetCustomAttributes(false);
+            foreach (var attr in attrs)
+            {
+                switch (attr)
+                {
+                    case VolumeComponentMenu attrMenu:
+                    {
+                        path = attrMenu.menu;
+                        break;
+                    }
+                    case HideInInspector:
+                    case ObsoleteAttribute:
+                        skipComponent = true;
+                        break;
+                }
+            }
+
+            if (skipComponent)
+            {
+                result = (string.Empty, type);
+                return false;
+            }
+
+            // If no attribute or in case something went wrong when grabbing it, fallback to a
+            // beautified class name
+            if (string.IsNullOrEmpty(path))
+            {
+#if UNITY_EDITOR
+                path = ObjectNames.NicifyVariableName(type.Name);
+#else
+                path = type.Name;
+#endif
+            }
+
+            result = (path, type);
+            return true;
+        }
+
         List<(string, Type)> BuildVolumeComponentDisplayList(Type[] types)
         {
             if (types == null)
@@ -94,54 +141,31 @@ namespace UnityEngine.Rendering
             var volumes = new List<(string, Type)>();
             foreach (var t in types)
             {
-                string path = string.Empty;
-                bool skipComponent = false;
-
-                // Look for the attributes of this volume component and decide how is added and if it needs to be skipped
-                var attrs = t.GetCustomAttributes(false);
-                foreach (var attr in attrs)
-                {
-                    switch (attr)
-                    {
-                        case VolumeComponentMenu attrMenu:
-                        {
-                            path = attrMenu.menu;
-                            break;
-                        }
-                        case HideInInspector:
-                        case ObsoleteAttribute:
-                            skipComponent = true;
-                            break;
-                    }
-                }
-
-                if (skipComponent)
-                    continue;
-
-                // If no attribute or in case something went wrong when grabbing it, fallback to a
-                // beautified class name
-                if (string.IsNullOrEmpty(path))
-                {
-#if UNITY_EDITOR
-                    path = ObjectNames.NicifyVariableName(t.Name);
-#else
-                    path = t.Name;
-#endif
-                }
-
-
-                volumes.Add((path, t));
+                if (TryGetVolumePathAndType(t, out var result))
+                    volumes.Add(result);
             }
 
             return volumes
                 .OrderBy(i => i.Item1)
                 .ToList();
         }
+        
+        Type[] m_BaseComponentTypeArray;
 
         /// <summary>
         /// The current list of all available types that derive from <see cref="VolumeComponent"/>.
         /// </summary>
-        public Type[] baseComponentTypeArray { get; internal set; } // internal only for tests
+        public Type[] baseComponentTypeArray 
+        { 
+            get
+            {
+                if (isInitialized)
+                    return m_BaseComponentTypeArray;
+
+                throw new InvalidOperationException($"{nameof(VolumeManager)}.{nameof(instance)}.{nameof(baseComponentTypeArray)} cannot be called before the {nameof(VolumeManager)} is initialized. (See {nameof(VolumeManager)}.{nameof(instance)}.{nameof(isInitialized)} and {nameof(RenderPipelineManager)} for creation callback).");
+            }
+            internal set => m_BaseComponentTypeArray = value; // internal only for tests
+        } 
 
         /// <summary>
         /// Global default profile that provides default values for volume components. VolumeManager applies
@@ -204,9 +228,6 @@ namespace UnityEngine.Rendering
             return null;
         }
 
-        // Recycled list used for volume traversal
-        readonly List<Collider> m_TempColliders = new(8);
-
         // The default stack the volume manager uses.
         // We cache this as users able to change the stack through code and
         // we want to be able to switch to the default one through the ResetMainStack() function.
@@ -242,13 +263,19 @@ namespace UnityEngine.Rendering
             Debug.Assert(m_CreatedVolumeStacks.Count == 0);
 
             LoadBaseTypes(GraphicsSettings.currentRenderPipelineAssetType);
+            InitializeInternal(globalDefaultVolumeProfile, qualityDefaultVolumeProfile);
+        }
+
+        //This is called by test where the basetypes are tuned for the purpose of the test.
+        internal void InitializeInternal(VolumeProfile globalDefaultVolumeProfile = null, VolumeProfile qualityDefaultVolumeProfile = null)
+        {
             InitializeVolumeComponents();
 
             globalDefaultProfile = globalDefaultVolumeProfile;
             qualityDefaultProfile = qualityDefaultVolumeProfile;
             EvaluateVolumeDefaultState();
 
-            m_DefaultStack = CreateStack();
+            m_DefaultStack = CreateStackInternal();
             stack = m_DefaultStack;
 
             isInitialized = true;
@@ -348,8 +375,16 @@ namespace UnityEngine.Rendering
         /// <seealso cref="Update(VolumeStack,Transform,LayerMask)"/>
         public VolumeStack CreateStack()
         {
+            if (!isInitialized)
+                throw new InvalidOperationException($"{nameof(VolumeManager)}.{nameof(instance)}.{nameof(CreateStack)}() cannot be called before the {nameof(VolumeManager)} is initialized. (See {nameof(VolumeManager)}.{nameof(instance)}.{nameof(isInitialized)} and {nameof(RenderPipelineManager)} for creation callback).");
+
+            return CreateStackInternal();
+        }
+
+        VolumeStack CreateStackInternal()
+        {
             var stack = new VolumeStack();
-            stack.Reload(baseComponentTypeArray);
+            stack.Reload(m_BaseComponentTypeArray);
             m_CreatedVolumeStacks.Add(stack);
             return stack;
         }
@@ -421,15 +456,18 @@ namespace UnityEngine.Rendering
                         list.Add(t);
                 }
 
-                baseComponentTypeArray = list.ToArray();
+                m_BaseComponentTypeArray = list.ToArray();
             }
         }
 
         internal void InitializeVolumeComponents()
         {
+            if (m_BaseComponentTypeArray == null || m_BaseComponentTypeArray.Length == 0)
+                return;
+
             // Call custom static Init method if present
             var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-            foreach (var type in baseComponentTypeArray)
+            foreach (var type in m_BaseComponentTypeArray)
             {
                 var initMethod = type.GetMethod("Init", flags);
                 if (initMethod != null)
@@ -440,9 +478,9 @@ namespace UnityEngine.Rendering
         }
 
         // Evaluate static default values for VolumeComponents, which is the baseline to reset the values to at the start of Update.
-        internal void EvaluateVolumeDefaultState()
+        void EvaluateVolumeDefaultState()
         {
-            if (baseComponentTypeArray == null || baseComponentTypeArray.Length == 0)
+            if (m_BaseComponentTypeArray == null || m_BaseComponentTypeArray.Length == 0)
                 return;
 
             using var profilerScope = k_ProfilerMarkerEvaluateVolumeDefaultState.Auto();
@@ -453,7 +491,7 @@ namespace UnityEngine.Rendering
 
             // First, default-construct all VolumeComponents
             List<VolumeComponent> componentsDefaultStateList = new();
-            foreach (var type in baseComponentTypeArray)
+            foreach (var type in m_BaseComponentTypeArray)
             {
                 componentsDefaultStateList.Add((VolumeComponent) ScriptableObject.CreateInstance(type));
             }
@@ -723,6 +761,10 @@ namespace UnityEngine.Rendering
                 beginVolumeStackUpdate?.Invoke(stack, camera);
 #endif
 
+#if ENABLE_PHYSICS_MODULE
+            bool physicsBackendIsNone = Physics.GetCurrentIntegrationInfo().isFallback;
+#endif
+
             // Traverse all volumes
             int numVolumes = volumes.Count;
             for (int i = 0; i < numVolumes; i++)
@@ -751,16 +793,19 @@ namespace UnityEngine.Rendering
                 if (onlyGlobal)
                     continue;
 
+                // NOTE: Local volumes require physics module to be enabled
+#if ENABLE_PHYSICS_MODULE
+                if (physicsBackendIsNone)
+                    continue;
+
                 // If volume isn't global and has no collider, skip it as it's useless
-                var colliders = m_TempColliders;
-                volume.GetComponents(colliders);
-                if (colliders.Count == 0)
+                var colliders = volume.colliders;
+                int numColliders = colliders.Count;
+                if (numColliders == 0)
                     continue;
 
                 // Find closest distance to volume, 0 means it's inside it
                 float closestDistanceSqr = float.PositiveInfinity;
-
-                int numColliders = colliders.Count;
                 for (int c = 0; c < numColliders; c++)
                 {
                     var collider = colliders[c];
@@ -774,7 +819,6 @@ namespace UnityEngine.Rendering
                         closestDistanceSqr = d;
                 }
 
-                colliders.Clear();
                 float blendDistSqr = volume.blendDistance * volume.blendDistance;
 
                 // Volume has no influence, ignore it
@@ -790,8 +834,9 @@ namespace UnityEngine.Rendering
                 if (blendDistSqr > 0f)
                     interpFactor = 1f - (closestDistanceSqr / blendDistSqr);
 
-                // No need to clamp01 the interpolation factor as it'll always be in [0;1[ range
+                // No need to clamp01 the interpolation factor or weight as both are always in [0;1[ range
                 OverrideData(stack, volume, interpFactor * Mathf.Clamp01(volume.weight));
+#endif
             }
 
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
@@ -819,12 +864,12 @@ namespace UnityEngine.Rendering
 
         static bool IsVolumeRenderedByCamera(Volume volume, Camera camera)
         {
-#if UNITY_2018_3_OR_NEWER && UNITY_EDITOR
+#if UNITY_EDITOR
             // GameObject for default global volume may not belong to any scene, following check prevents it from being culled
-            if (!volume.gameObject.scene.IsValid())
+            if (!volume.cachedGameObject.scene.IsValid())
                 return true;
             // IsGameObjectRenderedByCamera does not behave correctly when camera is null so we have to catch it here.
-            return camera == null ? true : UnityEditor.SceneManagement.StageUtility.IsGameObjectRenderedByCamera(volume.gameObject, camera);
+            return camera == null || UnityEditor.SceneManagement.StageUtility.IsGameObjectRenderedByCamera(volume.cachedGameObject, camera);
 #else
             return true;
 #endif
@@ -834,7 +879,7 @@ namespace UnityEngine.Rendering
     /// <summary>
     /// A scope in which a Camera filters a Volume.
     /// </summary>
-    [Obsolete("VolumeIsolationScope is deprecated, it does not have any effect anymore.")]
+    [Obsolete("VolumeIsolationScope is deprecated, it does not have any effect anymore. #from(2021.1)")]
     public struct VolumeIsolationScope : IDisposable
     {
         /// <summary>

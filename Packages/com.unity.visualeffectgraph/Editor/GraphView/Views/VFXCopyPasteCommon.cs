@@ -132,9 +132,10 @@ namespace UnityEditor.VFX.UI
         [Serializable]
         protected struct Parameter
         {
-            public int originalInstanceID;
+            public EntityId originalEntityId;
             public string name;
             public string category;
+            public int order;
             public VFXSerializableObject value;
             public bool exposed;
             public VFXValueFilter valueFilter;

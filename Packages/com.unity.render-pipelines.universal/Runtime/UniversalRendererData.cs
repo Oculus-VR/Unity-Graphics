@@ -110,9 +110,9 @@ namespace UnityEngine.Rendering.Universal
     {
 #if UNITY_EDITOR
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Performance", "CA1812")]
-        internal class CreateUniversalRendererAsset : EndNameEditAction
+        internal class CreateUniversalRendererAsset : AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var instance = UniversalRenderPipelineAsset.CreateRendererAsset(pathName, RendererType.UniversalRenderer, false) as UniversalRendererData;
                 Selection.activeObject = instance;
@@ -122,7 +122,8 @@ namespace UnityEngine.Rendering.Universal
         [MenuItem("Assets/Create/Rendering/URP Universal Renderer", priority = CoreUtils.Sections.section3 + CoreUtils.Priorities.assetsCreateRenderingMenuPriority + 2)]
         static void CreateUniversalRendererData()
         {
-            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, CreateInstance<CreateUniversalRendererAsset>(), "New Custom Universal Renderer Data.asset", null, null);
+            var icon = CoreUtils.GetIconForType<ScriptableRendererData>();
+            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, CreateInstance<CreateUniversalRendererAsset>(), "New Custom Universal Renderer Data.asset", icon, null);
         }
 
 #endif
@@ -132,8 +133,9 @@ namespace UnityEngine.Rendering.Universal
         /// </summary>
         public PostProcessData postProcessData = null;
 
-        const int k_LatestAssetVersion = 2;
+        const int k_LatestAssetVersion = 3;
         [SerializeField] int m_AssetVersion = 0;
+        [SerializeField] LayerMask m_PrepassLayerMask = -1;
         [SerializeField] LayerMask m_OpaqueLayerMask = -1;
         [SerializeField] LayerMask m_TransparentLayerMask = -1;
         [SerializeField] StencilStateData m_DefaultStencilState = new StencilStateData() { passOperation = StencilOp.Replace }; // This default state is compatible with deferred renderer.
@@ -161,6 +163,19 @@ namespace UnityEngine.Rendering.Universal
                 ReloadAllNullProperties();
             }
             return new UniversalRenderer(this);
+        }
+
+        /// <summary>
+        /// Use this to configure how to filter prepass objects.
+        /// </summary>
+        public LayerMask prepassLayerMask
+        {
+            get => m_PrepassLayerMask;
+            set
+            {
+                SetDirty();
+                m_PrepassLayerMask = value;
+            }
         }
 
         /// <summary>
@@ -344,7 +359,7 @@ namespace UnityEngine.Rendering.Universal
         /// </summary>
         public bool usesClusterLightLoop => m_RenderingMode == RenderingMode.ForwardPlus ||
                                             m_RenderingMode == RenderingMode.DeferredPlus;
-        
+
         internal override bool stripShadowsOffVariants
         {
             get => m_StripShadowsOffVariants;
@@ -399,6 +414,10 @@ namespace UnityEngine.Rendering.Universal
                 m_CopyDepthMode = CopyDepthMode.AfterOpaques;
             }
 
+            if (m_AssetVersion <= 2)
+            {
+                m_PrepassLayerMask = m_OpaqueLayerMask;
+            }
 
             m_AssetVersion = k_LatestAssetVersion;
         }

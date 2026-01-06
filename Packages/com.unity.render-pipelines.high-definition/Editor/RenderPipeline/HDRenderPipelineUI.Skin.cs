@@ -128,6 +128,7 @@ namespace UnityEditor.Rendering.HighDefinition
             public static readonly GUIContent foamAtlasSizeContent = EditorGUIUtility.TrTextContent("Foam Atlas Size", "Specifies the size of the atlas used to store texture water foam.");
             public static readonly GUIContent supportWaterExclusionContent = EditorGUIUtility.TrTextContent("Exclusion", "When enabled, HDRP allocates a stencil bit to support water excluders.");
             public static readonly GUIContent supportWaterHorizontalDeformationContent = EditorGUIUtility.TrTextContent("Horizontal Deformation", "When enabled, HDRP allocates additional memory to support water horizontal deformation. Enabling this property limits compatibility with other water system features (like scripts interactions or underwater), refer to the documentation for more details.");
+            public static readonly GUIContent waterCausticsMeshResolutionContent = EditorGUIUtility.TrTextContent("Caustics Mesh Resolution", "Specifies the resolution of the mesh used to render the caustics texture. For better efficiency, this needs to be lower than the caustics resolution texture in your water surface. A higher resolution increases the number of vertices in the scene.");
 
             // High Quality Line Rendering
             public static readonly GUIContent highQualityLineRenderingSubTitle = EditorGUIUtility.TrTextContent("High Quality Line Rendering");
@@ -163,6 +164,7 @@ namespace UnityEditor.Rendering.HighDefinition
             public static readonly GUIContent volumetricResolutionContent = EditorGUIUtility.TrTextContent("High Quality ", "When enabled, HDRP increases the resolution of volumetric lighting buffers. Warning: There is a high performance cost, do not enable on consoles.");
             public static readonly GUIContent supportLightLayerContent = EditorGUIUtility.TrTextContent("Light Layers", "When enabled, HDRP allocates memory for processing Light Layers. This allows you to use Light Layers in your Unity Project. For deferred rendering, this allocation includes an extra render target in memory and extra cost.");
             public static readonly GUIContent colorBufferFormatContent = EditorGUIUtility.TrTextContent("Color Buffer Format", "Specifies the format used by the scene color render target. R11G11B10 is a faster option and should have sufficient precision.");
+            public static readonly GUIContent depthBufferFormatContent = EditorGUIUtility.TrTextContent("Depth Buffer Format", "Specifies the format used by the scene depth render target.");
             public static readonly GUIContent supportCustomPassContent = EditorGUIUtility.TrTextContent("Custom Pass", "When enabled, HDRP allocates a custom pass buffer. It also enable custom passes inside Custom Pass Volume components.");
             public static readonly GUIContent supportVariableRateShadingContent = EditorGUIUtility.TrTextContent("Variable Rate Shading", "When enabled, HDRP enables the usage of variable rate shading in custom passes.");
             public static readonly GUIContent customBufferFormatContent = EditorGUIUtility.TrTextContent("Custom Buffer Format", "Specifies the format used by the custom pass render target.");
@@ -183,7 +185,6 @@ namespace UnityEditor.Rendering.HighDefinition
             public static readonly GUIContent supportRaytracing = EditorGUIUtility.TrTextContent("Realtime Raytracing");
             public static readonly GUIContent supportedRayTracingMode = EditorGUIUtility.TrTextContent("Supported Ray Tracing Mode");
             public static readonly GUIContent supportVFXRayTracing = EditorGUIUtility.TrTextContent("Visual Effects Ray Tracing", "When enabled, Visual Effects Outputs which have Enable Ray Tracing on will be accounted for in Ray-traced effects.");
-            public static readonly GUIContent rayTracingUnsupportedWarning = EditorGUIUtility.TrTextContent("Ray tracing is not supported on your device. Please refer to the documentation.");
             public static readonly GUIContent rayTracingRestrictionOnlyWarning = EditorGUIUtility.TrTextContent("Ray tracing is currently only supported on DX12, Playstation 5 and Xbox Series X.", null, CoreEditorStyles.iconWarn);
             public static readonly GUIContent rayTracingMSAAUnsupported = EditorGUIUtility.TrTextContent("When Ray tracing is enabled in asset, MSAA is not supported. Please refer to the documentation.");
             public static readonly GUIContent waterMSAAUnsupported = EditorGUIUtility.TrTextContent("When Water is enabled in asset, MSAA is not supported. Please refer to the documentation.");
@@ -210,10 +211,6 @@ namespace UnityEditor.Rendering.HighDefinition
 
             public static readonly GUIContent cookieSizeContent = EditorGUIUtility.TrTextContent("Cookie Size", "Specifies the maximum size for the individual 2D cookies that HDRP uses for Directional and Spot Lights.");
             public static readonly GUIContent cookieTextureArraySizeContent = EditorGUIUtility.TrTextContent("Texture Array Size", "Sets the maximum Texture Array size for the 2D cookies HDRP uses for Directional and Spot Lights. Higher values allow HDRP to use more cookies concurrently on screen.");
-#if UNITY_2020_1_OR_NEWER
-#else
-            public static readonly GUIContent pointCoockieSizeContent = EditorGUIUtility.TrTextContent("Point Cookie Size", "Specifies the maximum size for the Cube cookies HDRP uses for Point Lights.");
-#endif
             public static readonly GUIContent pointCookieTextureArraySizeContent = EditorGUIUtility.TrTextContent("Cubemap Array Size", "Sets the maximum Texture Array size for the Cube cookies HDRP uses for Directional and Spot Lights. Higher values allow HDRP to use more cookies concurrently on screen.");
             public static readonly GUIContent cookieAtlasSizeContent = EditorGUIUtility.TrTextContent("2D Atlas Size", "Specifies the size of the atlas used for 2D cookies (Directional, Spot and Rectangle Lights).");
             public static readonly GUIContent cookieAtlasFormatContent = EditorGUIUtility.TrTextContent("Format", "Specifies the HDR format of the atlas used for 2D cookies. R16G16B16A16 can be use for EXR cookies (it provides more precision than R11G11B10)");
@@ -276,7 +273,62 @@ namespace UnityEditor.Rendering.HighDefinition
             public static readonly GUIContent defaultInjectionPoint = EditorGUIUtility.TrTextContent("Injection Point", "The injection point at which to apply the upscaling.");
             public static readonly GUIContent TAAUInjectionPoint = EditorGUIUtility.TrTextContent("TAA Upscale Injection Point", "The injection point at which to apply the upscaling.");
             public static readonly GUIContent STPInjectionPoint = EditorGUIUtility.TrTextContent("STP Injection Point", "The injection point at which to apply the upscaling.");
-            public static readonly GUIContent DLSSUseOptimalSettingsContent = EditorGUIUtility.TrTextContent("DLSS Use Optimal Settings", "Sets the sharpness and scale automatically for NVIDIA Deep Learning Super Sampling, depending on the values of quality settings. When DLSS Optimal Settings is on, the percentage settings for Dynamic Resolution Scaling are ignored.");
+#if ENABLE_UPSCALER_FRAMEWORK
+            public static readonly GUIContent IUpscalerInjectionPoint = EditorGUIUtility.TrTextContent("Injection Point", "The injection point at which to apply the upscaling.");
+#endif
+            public static readonly GUIContent DLSSUseOptimalSettingsContent = EditorGUIUtility.TrTextContent("DLSS Use Optimal Settings", "Sets the scale automatically for NVIDIA Deep Learning Super Sampling, depending on the values of quality settings. When DLSS Optimal Settings is on, the percentage settings for Dynamic Resolution Scaling are ignored.");
+            public static readonly GUIContent DLSSRenderPresetsContent = EditorGUIUtility.TrTextContent("DLSS Render Presets", "DLSS will use the specified render preset for each quality value.");
+#if ENABLE_NVIDIA && ENABLE_NVIDIA_MODULE
+            public static readonly string[] DLSSPerfQualityLabels =
+            {   // should follow enum value ordering in DLSSQuality enum
+                UnityEngine.NVIDIA.DLSSQuality.MaximumPerformance.ToString(),
+                UnityEngine.NVIDIA.DLSSQuality.Balanced.ToString(),
+                UnityEngine.NVIDIA.DLSSQuality.MaximumQuality.ToString(),
+                UnityEngine.NVIDIA.DLSSQuality.UltraPerformance.ToString(),
+                UnityEngine.NVIDIA.DLSSQuality.DLAA.ToString()
+            };
+            public static string[][] DLSSPresetOptionsForEachPerfQuality = PopulateDLSSQualityPresetLabels();
+            private static string[][] PopulateDLSSQualityPresetLabels()
+            {
+                int CountBits(uint bitMask) // System.Numerics.BitOperations not available
+                {
+                    int count = 0;
+                    while (bitMask > 0)
+                    {
+                        count += (bitMask & 1) > 0 ? 1 : 0;
+                        bitMask >>= 1;
+                    }
+                    return count;
+                }
+
+                System.Array perfQualities = System.Enum.GetValues(typeof(UnityEngine.NVIDIA.DLSSQuality));
+                string[][] labels = new string[perfQualities.Length][];
+                foreach(UnityEngine.NVIDIA.DLSSQuality quality in perfQualities)
+                {
+                    uint presetBitmask = UnityEngine.NVIDIA.GraphicsDevice.GetAvailableDLSSPresetsForQuality(quality);
+                    int numPresets = CountBits(presetBitmask) + 1; // +1 for default option which is available to all quality enums
+                    labels[(int)quality] = new string[numPresets];
+
+                    int iWrite = 0;
+                    System.Array presets = System.Enum.GetValues(typeof(UnityEngine.NVIDIA.DLSSPreset));
+                    foreach(UnityEngine.NVIDIA.DLSSPreset preset in presets)
+                    {
+                        if (preset == UnityEngine.NVIDIA.DLSSPreset.Preset_Default)
+                        {
+                            labels[(int)quality][iWrite++] = "Default Preset";
+                            continue;
+                        }
+
+                        if ((presetBitmask & (uint)preset) != 0)
+                        {
+                            string presetName = preset.ToString().Replace('_', ' ');
+                            labels[(int)quality][iWrite++] = presetName + " - " + UnityEngine.NVIDIA.GraphicsDevice.GetDLSSPresetExplanation(preset);
+                        }
+                    }
+                }
+                return labels;
+            }
+#endif
 
             public static readonly GUIContent FSR2Title = EditorGUIUtility.TrTextContent("AMD FidelityFX Super Resolution 2.0 (FSR2)");
             public static readonly GUIContent enableFSR2 = EditorGUIUtility.TrTextContent("Enable Fidelity FX 2.2", "Enables FidelityFX 2.0 Super Resolution (FSR2).");
@@ -313,7 +365,7 @@ namespace UnityEditor.Rendering.HighDefinition
             public const string FSR2WinTargetWarning = "HDRP does not support AMD Fidelity FX2 for the current build target and graphics device API. To enable FSR2, set your build target to Windows x86_64 and DirectX12.";
             public const string FSR2SwitchTarget64Button = "Fix";
             public const string FSR2FeatureDetectedMsg = "Unity detected AMD Fidelity FX 2 Super Resolution and will ignore the Fallback Upscale Filter.";
-            public const string FSR2FeatureNotDetectedMsg = "Unity cannot detect Unity detected AMD Fidelity FX 2 Super Resolution and will use the Fallback Upscale Filter instead.";
+            public const string FSR2FeatureNotDetectedMsg = "Unity cannot detect AMD Fidelity FX 2 Super Resolution and will use the Fallback Upscale Filter instead.";
 
             public const string STPSwDrsWarningMsg = "STP cannot support dynamic resolution without hardware dynamic resolution mode. You can use the forced screen percentage feature to guarantee a fixed resoution for STP or HDRP will fall back to the next best supported upscaling filter instead.";
 
@@ -328,6 +380,7 @@ namespace UnityEditor.Rendering.HighDefinition
             public static readonly GUIContent dynResTypeWarning = EditorGUIUtility.TrTextContent("The current graphics API does not support hardware dynamic resolution mode. HDRP will automatically fall back to software dynamic resolution mode.");
             public static readonly GUIContent useMipBias = EditorGUIUtility.TrTextContent("Use Mip Bias", "Offsets the mip bias to recover more detail. This only works if the camera is utilizing TAA.");
             public static readonly GUIContent upsampleFilter = EditorGUIUtility.TrTextContent("Default Upscale Filter", "Specifies the filter that HDRP uses for upscaling unless overwritten by API by the user.");
+            public static readonly GUIContent upsampleLowResFilter = EditorGUIUtility.TrTextContent("Upscale Filter", "Specifies the filter that HDRP uses for upscaling the low-resolution transparent texture. Bilinear provides good quality at the cost of performance whereas Nearest Depth is more performant.");
             public static readonly GUIContent fallbackUpsampleFilter = EditorGUIUtility.TrTextContent("Default Fallback Upscale Filter", "Specifies the filter that HDRP uses for upscaling as a fallback if DLSS is not detected. Can be overwritten via API.");
             public static readonly GUIContent forceScreenPercentage = EditorGUIUtility.TrTextContent("Force Screen Percentage", "When enabled, HDRP uses the Forced Screen Percentage value as the screen percentage.");
             public static readonly GUIContent forcedScreenPercentage = EditorGUIUtility.TrTextContent("Forced Screen Percentage", "Sets a specific screen percentage value. HDRP forces this screen percentage for dynamic resolution.");

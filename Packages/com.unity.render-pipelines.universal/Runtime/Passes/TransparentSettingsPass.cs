@@ -25,16 +25,6 @@ namespace UnityEngine.Rendering.Universal
             return !m_shouldReceiveShadows;
         }
 
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            RasterCommandBuffer rasterCommandBuffer = CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer);
-            using (new ProfilingScope(rasterCommandBuffer, profilingSampler))
-            {
-                ExecutePass(rasterCommandBuffer);
-            }
-        }
-
         public static void ExecutePass(RasterCommandBuffer rasterCommandBuffer)
         {
             // -----------------------------------------------------------

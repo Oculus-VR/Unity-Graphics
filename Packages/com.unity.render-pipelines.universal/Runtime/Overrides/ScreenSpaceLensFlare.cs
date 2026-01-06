@@ -163,6 +163,7 @@ namespace UnityEngine.Rendering.Universal
     [Serializable, VolumeComponentMenu("Post-processing/Screen Space Lens Flare")]
     [SupportedOnRenderPipeline(typeof(UniversalRenderPipelineAsset))]
     [URPHelpURL("shared/lens-flare/lens-flare-component")]
+    [DisplayInfo(name = "Screen Space Lens Flare")]
     public class ScreenSpaceLensFlare : VolumeComponent, IPostProcessComponent
     {
         /// <summary>
@@ -245,14 +246,7 @@ namespace UnityEngine.Rendering.Universal
         /// </summary>
         [Header("Chromatic Abberation")]
         public ClampedFloatParameter chromaticAbberationIntensity = new ClampedFloatParameter(0.5f, 0f, 1f);
-        /// <summary>
-        /// Default constructor for the lens flare volume component.
-        /// </summary>
-        public ScreenSpaceLensFlare()
-        {
-            displayName = "Screen Space Lens Flare";
-        }
-
+        
         /// <summary>
         /// Tells if the post process needs to be rendered or not.
         /// </summary>
@@ -276,7 +270,7 @@ namespace UnityEngine.Rendering.Universal
         /// Tells if the post process can run the effect on-tile or if it needs a full pass.
         /// </summary>
         /// <returns><c>true</c> if it can run on-tile, <c>false</c> otherwise.</returns>
-        [Obsolete("Unused #from(2023.1)", false)]
+        [Obsolete("Unused. #from(2023.1)")]
         public bool IsTileCompatible() => false;
     }
 

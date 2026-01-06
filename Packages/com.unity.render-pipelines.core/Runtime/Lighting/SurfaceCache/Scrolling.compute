@@ -1,0 +1,54 @@
+#pragma only_renderers d3d11 playstation xboxone xboxseries vulkan metal glcore ps5
+
+#pragma kernel Scroll
+
+#include "VectorLogic.hlsl"
+#include "Common.hlsl"
+#include "PatchUtil.hlsl"
+
+RWStructuredBuffer<uint> _CellAllocationMarks;
+RWStructuredBuffer<uint> _CellPatchIndices;
+RWStructuredBuffer<uint> _PatchCellIndices;
+
+StructuredBuffer<int3> _NewCascadeOffsets;
+
+int4 _OldCascadeOffsets[cascadeMax];
+uint _VolumeSpatialResolution;
+uint _CascadeCount;
+
+[numthreads(8, 8, 8)]
+void Scroll(uint3 threadId : SV_DispatchThreadID)
+{
+    if (any(uint3(_VolumeSpatialResolution, _VolumeSpatialResolution, _VolumeSpatialResolution * _CascadeCount) <= threadId))
+        return;
+
+    const uint3 positionStorageSpace = threadId % _VolumeSpatialResolution;
+
+    const uint cascadeIdx = threadId.z / _VolumeSpatialResolution;
+    const int3 newCascadeOffset = _NewCascadeOffsets[cascadeIdx];
+    const int3 oldCascadeOffset = _OldCascadeOffsets[cascadeIdx].xyz;
+
+    const int3 positionStorageSpaceInt = int3(positionStorageSpace);
+    const int3 oldPositionVolumeSpace = PatchUtil::ConvertStorageSpaceToVolumeSpace(positionStorageSpaceInt, _VolumeSpatialResolution, oldCascadeOffset);
+
+    const int3 offsetDelta = newCascadeOffset - oldCascadeOffset;
+    const int3 offsettedOldPositionVolumeSpace = oldPositionVolumeSpace - offsetDelta;
+
+    // If the old position (in volume space) is outside [0, VolumeSpatialResolution]^3 after the scroll (offsetDelta) has been applied, we know
+    // it will no longer be queried, so we can remove it.
+    if (any(VECTOR_LOGIC_OR(offsettedOldPositionVolumeSpace < 0, (int)_VolumeSpatialResolution <= offsettedOldPositionVolumeSpace)))
+    {
+        for (uint directionIdx = 0; directionIdx < PatchUtil::volumeAngularResolution * PatchUtil::volumeAngularResolution; ++directionIdx)
+        {
+            const uint cellIdx = PatchUtil::GetCellIndex(cascadeIdx, positionStorageSpace, directionIdx, _VolumeSpatialResolution, PatchUtil::volumeAngularResolution);
+            const uint patchIdx = _CellPatchIndices[cellIdx];
+
+            if (patchIdx != PatchUtil::invalidCellIndex)
+            {
+                _CellAllocationMarks[cellIdx] = 0;
+                _PatchCellIndices[patchIdx] = PatchUtil::invalidCellIndex;
+                _CellPatchIndices[cellIdx] = PatchUtil::invalidPatchIndex;
+            }
+        }
+    }
+}

@@ -175,10 +175,11 @@ namespace UnityEngine.Rendering.HighDefinition
                     lightData.rangeAttenuationBias = hugeValue;
                 }
 
-                float shapeWidthVal = lightRenderData.shapeWidth;
-                float shapeHeightVal = lightRenderData.shapeHeight;
+                float shapeWidthVal = light.areaSize.x;
+                float shapeHeightVal = light.areaSize.y;
 
                 if (lightData.lightType == GPULightType.Tube) shapeHeightVal = 0;
+                if (lightData.lightType == GPULightType.Disc) shapeHeightVal = shapeWidthVal;
 
                 lightData.color = GetLightColor(light);
                 lightData.forward = visibleLightAxisAndPosition.Forward;
@@ -201,7 +202,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     // Get width and height for the current frustum
                     var spotAngle = light.spotAngle;
-                    float aspectRatioValue = lightRenderData.aspectRatio;
+                    float aspectRatioValue = Mathf.Tan(light.innerSpotAngle * Mathf.PI / 360f) / Mathf.Tan(light.spotAngle * Mathf.PI / 360f);
 
                     float frustumWidth, frustumHeight;
 
@@ -229,10 +230,9 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     var spotAngle = light.spotAngle;
 
-                    var innerConePercent = lightRenderData.innerSpotPercent / 100.0f;
                     var cosSpotOuterHalfAngle = Mathf.Clamp(Mathf.Cos(spotAngle * 0.5f * Mathf.Deg2Rad), 0.0f, 1.0f);
                     var sinSpotOuterHalfAngle = Mathf.Sqrt(1.0f - cosSpotOuterHalfAngle * cosSpotOuterHalfAngle);
-                    var cosSpotInnerHalfAngle = Mathf.Clamp(Mathf.Cos(spotAngle * 0.5f * innerConePercent * Mathf.Deg2Rad), 0.0f, 1.0f); // inner cone
+                    var cosSpotInnerHalfAngle = Mathf.Clamp(Mathf.Cos(light.innerSpotAngle * 0.5f * Mathf.Deg2Rad), 0.0f, 1.0f); // inner cone
 
                     var val = Mathf.Max(0.0001f, (cosSpotInnerHalfAngle - cosSpotOuterHalfAngle));
                     lightData.angleScale = 1.0f / val;
@@ -252,7 +252,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     lightData.iesCut = 1.0f;
                 }
 
-                float shapeRadiusVal = lightRenderData.shapeRadius;
+                float shapeRadiusVal = light.shapeRadius;
                 if (lightData.lightType != GPULightType.Directional && lightData.lightType != GPULightType.ProjectorBox)
                 {
                     // Store the squared radius of the light to simulate a fill light.
@@ -301,13 +301,13 @@ namespace UnityEngine.Rendering.HighDefinition
                 if (processedEntity.isBakedShadowMask)
                 {
                     lightData.shadowMaskSelector[visibleLightBakingOutput.occlusionMaskChannel] = 1.0f;
-                    lightData.nonLightMappedOnly = visibleLightShadowCasterMode == LightShadowCasterMode.NonLightmappedOnly ? 1 : 0;
+                    lightData.useShadowMask = visibleLightShadowCasterMode == LightShadowCasterMode.ShadowMask ? 1 : 0;
                 }
                 else
                 {
                     // use -1 to say that we don't use shadow mask
                     lightData.shadowMaskSelector.x = -1.0f;
-                    lightData.nonLightMappedOnly = 0;
+                    lightData.useShadowMask = 0;
                 }
             }
 
@@ -582,8 +582,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 lightData.isRayTracedContactShadow = 0.0f;
 
                 // Rescale for cookies and windowing.
-                lightData.right = light.GetRight() * 2 / Mathf.Max(lightRenderData.shapeWidth, 0.001f);
-                lightData.up = light.GetUp() * 2 / Mathf.Max(lightRenderData.shapeHeight, 0.001f);
+                lightData.right = light.GetRight() * 2 / Mathf.Max(light.areaSize.x, 0.001f);
+                lightData.up = light.GetUp() * 2 / Mathf.Max(light.areaSize.y, 0.001f);
                 lightData.positionRWS = light.GetPosition();
                 lightData.shadowDimmer = lightRenderData.shadowDimmer;
 
@@ -610,13 +610,13 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     var bakingOutput = visibleLightBakingOutput[lightIndex];
                     lightData.shadowMaskSelector[bakingOutput.occlusionMaskChannel] = 1.0f;
-                    lightData.nonLightMappedOnly = visibleLightShadowCasterMode[lightIndex] == LightShadowCasterMode.NonLightmappedOnly ? 1 : 0;
+                    lightData.useShadowMask = visibleLightShadowCasterMode[lightIndex] == LightShadowCasterMode.ShadowMask ? 1 : 0;
                 }
                 else
                 {
                     // use -1 to say that we don't use shadow mask
                     lightData.shadowMaskSelector.x = -1.0f;
-                    lightData.nonLightMappedOnly = 0;
+                    lightData.useShadowMask = 0;
                 }
 
                 lightData.angularDiameter = lightRenderData.angularDiameter * Mathf.Deg2Rad;

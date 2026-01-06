@@ -39,19 +39,6 @@ public class NormalReconstructionTestFeature : ScriptableRendererFeature
             m_Material = material;
         }
 
-        [Obsolete("This rendering path is for compatibility mode only (when Render Graph is disabled). Use Render Graph API instead.", false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            CommandBuffer cmd = CommandBufferPool.Get();
-
-            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(cmd), renderingData.cameraData);
-
-            context.ExecuteCommandBuffer(cmd);
-            cmd.Clear();
-
-            CommandBufferPool.Release(cmd);
-        }
-
         static void ExecutePass(RasterCommandBuffer cmd, in CameraData cameraData)
         {
             using (new ProfilingScope(cmd, m_ProfilingSampler))

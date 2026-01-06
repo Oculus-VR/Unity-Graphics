@@ -9,7 +9,7 @@ using UnityEngine.UIElements;
 namespace UnityEditor.ShaderGraph
 {
     [Serializable]
-    class Vector1MaterialSlot : MaterialSlot, IMaterialSlotHasValue<float>
+    class Vector1MaterialSlot : MaterialSlot, IMaterialSlotHasValue<float>, IMaterialSlotSupportsLiteralMode
     {
         [SerializeField]
         float m_Value;
@@ -31,6 +31,15 @@ namespace UnityEditor.ShaderGraph
             }
         }
 
+        [SerializeField]
+        bool m_LiteralMode = false;
+
+        public bool LiteralMode
+        {
+            get => m_LiteralMode;
+            set => m_LiteralMode = value;
+        }
+
         public Vector1MaterialSlot()
         {
         }
@@ -43,11 +52,13 @@ namespace UnityEditor.ShaderGraph
             float value,
             ShaderStageCapability stageCapability = ShaderStageCapability.All,
             string label1 = null,
-            bool hidden = false)
+            bool hidden = false,
+            bool literal = false)
             : base(slotId, displayName, shaderOutputName, slotType, stageCapability, hidden)
         {
             m_DefaultValue = value;
             m_Value = value;
+            m_LiteralMode = literal;
             if (label1 != null)
                 m_Labels = new[] { label1 };
         }
@@ -105,9 +116,16 @@ namespace UnityEditor.ShaderGraph
 
         public override void CopyValuesFrom(MaterialSlot foundSlot)
         {
-            var slot = foundSlot as Vector1MaterialSlot;
-            if (slot != null)
-                value = slot.value;
+            if (foundSlot is IMaterialSlotSupportsLiteralMode literal)
+                LiteralMode = literal.LiteralMode;
+
+            switch(foundSlot)
+            {
+                case IMaterialSlotHasValue<float> slot1: value = slot1.value; break;
+                case IMaterialSlotHasValue<Vector2> slot2: value = slot2.value.x; break;
+                case IMaterialSlotHasValue<Vector3> slot3: value = slot3.value.x; break;
+                case IMaterialSlotHasValue<Vector4> slot4: value = slot4.value.x; break;
+            }
         }
 
         public override void CopyDefaultValue(MaterialSlot other)

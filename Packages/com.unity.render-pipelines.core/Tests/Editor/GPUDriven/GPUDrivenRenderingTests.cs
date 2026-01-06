@@ -111,14 +111,14 @@ namespace UnityEngine.Rendering.Tests
             objList.Add(go1.GetComponent<MeshRenderer>());
             objList.Add(go2.GetComponent<MeshRenderer>());
 
-            var objIDs = new NativeList<int>(Allocator.TempJob);
+            var objIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             Shader dotsShader = Shader.Find("Unlit/SimpleDots");
             var dotsMaterial = new Material(dotsShader);
             foreach (var obj in objList)
             {
                 obj.material = dotsMaterial;
-                objIDs.Add(obj.GetInstanceID());
+                objIDs.Add(obj.GetEntityId());
             }
 
             var instances = new NativeArray<InstanceHandle>(objList.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -165,7 +165,7 @@ namespace UnityEngine.Rendering.Tests
             objList.Add(go1.GetComponent<MeshRenderer>());
             objList.Add(go2.GetComponent<MeshRenderer>());
 
-            var objIDs = new NativeList<int>(Allocator.TempJob);
+            var objIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             Shader simpleDots = Shader.Find("Unlit/SimpleDots");
             Material simpleDotsMat = new Material(simpleDots);
@@ -173,7 +173,7 @@ namespace UnityEngine.Rendering.Tests
             foreach (var obj in objList)
             {
                 obj.material = simpleDotsMat;
-                objIDs.Add(obj.GetInstanceID());
+                objIDs.Add(obj.GetEntityId());
             }
 
             var instances = new NativeArray<InstanceHandle>(objList.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -193,10 +193,11 @@ namespace UnityEngine.Rendering.Tests
                 var callbackCounter = new BoxedCounter();
                 cpuDrivenDesc.onCompleteCallback = (JobHandle jobHandle, in BatchCullingContext cc, in BatchCullingOutput cullingOutput) =>
                 {
+                    jobHandle.Complete();
+
                     if (cc.viewType != BatchCullingViewType.Camera)
                         return;
 
-                    jobHandle.Complete();
                     BatchCullingOutputDrawCommands drawCommands = cullingOutput.drawCommands[0];
 
                     var materials = new NativeParallelHashSet<BatchMaterialID>(10, Allocator.Temp);
@@ -225,12 +226,16 @@ namespace UnityEngine.Rendering.Tests
 
                 using (var brg = new GPUResidentBatcher(brgContext, cpuDrivenDesc, gpuDrivenProcessor))
                 {
+                    brg.OnBeginContextRendering();
+
                     brg.UpdateRenderers(objIDs.AsArray());
 
                     var cameraObject = new GameObject("myCamera");
                     var mainCamera = cameraObject.AddComponent<Camera>();
 
                     SubmitCameraRenderRequest(mainCamera);
+
+                    brg.OnEndContextRendering();
 
                     Assert.AreEqual(1, callbackCounter.Value);
 
@@ -258,9 +263,9 @@ namespace UnityEngine.Rendering.Tests
             var renderer = go.GetComponent<MeshRenderer>();
             renderer.material = simpleDotsMat;
 
-            var objIDs = new NativeArray<int>(1, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
+            var objIDs = new NativeArray<EntityId>(1, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
             var instances = new NativeArray<InstanceHandle>(1, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
-            objIDs[0] = renderer.GetInstanceID();
+            objIDs[0] = renderer.GetEntityId();
             instances[0] = InstanceHandle.Invalid;
 
             var gpuDrivenProcessor = new GPUDrivenProcessor();
@@ -272,16 +277,19 @@ namespace UnityEngine.Rendering.Tests
 
                 cpuDrivenDesc.onCompleteCallback = (JobHandle jobHandle, in BatchCullingContext cc, in BatchCullingOutput cullingOutput) =>
                 {
+                    jobHandle.Complete();
+
                     if (cc.viewType != BatchCullingViewType.Camera)
                         return;
 
-                    jobHandle.Complete();
                     BatchCullingOutputDrawCommands drawCommands = cullingOutput.drawCommands[0];
                     callbackCounter.Value = drawCommands.visibleInstanceCount;
                 };
 
                 using (var brg = new GPUResidentBatcher(brgContext, cpuDrivenDesc, gpuDrivenProcessor))
                 {
+                    brg.OnBeginContextRendering();
+
                     brg.UpdateRenderers(objIDs);
 
                     var cameraObject = new GameObject("SceneViewCamera");
@@ -301,6 +309,8 @@ namespace UnityEngine.Rendering.Tests
                     SubmitCameraRenderRequest(mainCamera);
                     brg.OnEndCameraRendering(mainCamera);
                     Assert.AreEqual(callbackCounter.Value, 1);
+
+                    brg.OnEndContextRendering();
 
                     GameObject.DestroyImmediate(cameraObject);
                     brgContext.ScheduleQueryRendererGroupInstancesJob(objIDs, instances).Complete();
@@ -325,7 +335,7 @@ namespace UnityEngine.Rendering.Tests
             objList.Add(go1.GetComponent<MeshRenderer>());
             objList.Add(go2.GetComponent<MeshRenderer>());
 
-            var objIDs = new NativeList<int>(Allocator.TempJob);
+            var objIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             Shader simpleDots = Shader.Find("Unlit/SimpleDots");
             Material simpleDotsMat = new Material(simpleDots);
@@ -335,7 +345,7 @@ namespace UnityEngine.Rendering.Tests
                 obj.receiveGI = ReceiveGI.LightProbes;
                 obj.lightProbeUsage = LightProbeUsage.BlendProbes;
                 obj.material = simpleDotsMat;
-                objIDs.Add(obj.GetInstanceID());
+                objIDs.Add(obj.GetEntityId());
             }
             objList[2].lightProbeUsage = LightProbeUsage.Off;
 
@@ -350,10 +360,11 @@ namespace UnityEngine.Rendering.Tests
                 var cpuDrivenDesc = InstanceCullingBatcherDesc.NewDefault();
                 cpuDrivenDesc.onCompleteCallback = (JobHandle jobHandle, in BatchCullingContext cc, in BatchCullingOutput cullingOutput) =>
                 {
+                    jobHandle.Complete();
+
                     if (cc.viewType != BatchCullingViewType.Camera)
                         return;
 
-                    jobHandle.Complete();
                     BatchCullingOutputDrawCommands drawCommands = cullingOutput.drawCommands[0];
 
                     var drawCommandCount = 0U;
@@ -374,12 +385,16 @@ namespace UnityEngine.Rendering.Tests
 
                 using (var brg = new GPUResidentBatcher(brgContext, cpuDrivenDesc, gpuDrivenProcessor))
                 {
+                    brg.OnBeginContextRendering();
+
                     brg.UpdateRenderers(objIDs.AsArray());
 
                     var cameraObject = new GameObject("myCamera");
                     var mainCamera = cameraObject.AddComponent<Camera>();
 
                     SubmitCameraRenderRequest(mainCamera);
+
+                    brg.OnEndContextRendering();
 
                     mainCamera = null;
                     GameObject.DestroyImmediate(cameraObject);
@@ -424,8 +439,8 @@ namespace UnityEngine.Rendering.Tests
             gos[lodCount].transform.parent = gameObject.transform;
             lodGroup.SetLODs(lods);
 
-            var lodGroupInstancesID = new NativeList<int>(Allocator.TempJob);
-            lodGroupInstancesID.Add(lodGroup.GetInstanceID());
+            var lodGroupInstancesID = new NativeList<EntityId>(Allocator.TempJob);
+            lodGroupInstancesID.Add(lodGroup.GetEntityId());
 
             var objList = new List<MeshRenderer>();
             for (var i = 0; i < lodCount; i++)
@@ -434,14 +449,14 @@ namespace UnityEngine.Rendering.Tests
             }
             objList.Add(gos[lodCount].GetComponent<MeshRenderer>());
 
-            var objIDs = new NativeList<int>(Allocator.TempJob);
+            var objIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             Shader dotsShader = Shader.Find("Unlit/SimpleDots");
             var dotsMaterial = new Material(dotsShader);
             foreach (var obj in objList)
             {
                 obj.material = dotsMaterial;
-                objIDs.Add(obj.GetInstanceID());
+                objIDs.Add(obj.GetEntityId());
             }
 
             var instances = new NativeArray<InstanceHandle>(objList.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -462,10 +477,11 @@ namespace UnityEngine.Rendering.Tests
                 var expectedDrawCommandCount = 2;
                 cpuDrivenDesc.onCompleteCallback = (JobHandle jobHandle, in BatchCullingContext cc, in BatchCullingOutput cullingOutput) =>
                 {
+                    jobHandle.Complete();
+
                     if (cc.viewType != BatchCullingViewType.Camera)
                         return;
 
-                    jobHandle.Complete();
                     BatchCullingOutputDrawCommands drawCommands = cullingOutput.drawCommands[0];
 
                     var drawCommandCount = 0U;
@@ -486,6 +502,8 @@ namespace UnityEngine.Rendering.Tests
 
                 using (var brg = new GPUResidentBatcher(brgContext, cpuDrivenDesc, gpuDrivenProcessor))
                 {
+                    brg.OnBeginContextRendering();
+
                     brgContext.UpdateLODGroups(lodGroupInstancesID.AsArray());
                     brg.UpdateRenderers(objIDs.AsArray());
 
@@ -514,8 +532,8 @@ namespace UnityEngine.Rendering.Tests
                     Vector3 worldRefPoint = lodGroup.GetWorldReferencePoint();
                     float worldSize = lodGroup.GetWorldSpaceSize();
 
-                    var transformedLODGroups = new NativeArray<int>(1, Allocator.Temp);
-                    transformedLODGroups[0] = lodGroup.GetInstanceID();
+                    var transformedLODGroups = new NativeArray<EntityId>(1, Allocator.Temp);
+                    transformedLODGroups[0] = lodGroup.GetEntityId();
 
                     brgContext.TransformLODGroups(transformedLODGroups);
 
@@ -529,6 +547,8 @@ namespace UnityEngine.Rendering.Tests
                     expectedMeshID = 4;
                     expectedDrawCommandCount = 1;
                     SubmitCameraRenderRequest(mainCamera);
+
+                    brg.OnEndContextRendering();
 
                     Assert.AreEqual(7, callbackCounter.Value);
 
@@ -584,17 +604,17 @@ namespace UnityEngine.Rendering.Tests
             }
             objList.Add(gos[lodCount].GetComponent<MeshRenderer>());
 
-            var lodGroupInstancesID = new NativeList<int>(Allocator.TempJob);
-            lodGroupInstancesID.Add(lodGroup.GetInstanceID());
+            var lodGroupInstancesID = new NativeList<EntityId>(Allocator.TempJob);
+            lodGroupInstancesID.Add(lodGroup.GetEntityId());
 
-            var objIDs = new NativeList<int>(Allocator.TempJob);
+            var objIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             var simpleDots = Shader.Find("Unlit/SimpleDots");
             var simpleDotsMat = new Material(simpleDots);
             foreach (var obj in objList)
             {
                 obj.material = simpleDotsMat;
-                objIDs.Add(obj.GetInstanceID());
+                objIDs.Add(obj.GetEntityId());
             }
 
             var instances = new NativeArray<InstanceHandle>(objList.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -615,10 +635,11 @@ namespace UnityEngine.Rendering.Tests
                 var expectedDrawCommandCount = 0;
                 cpuDrivenDesc.onCompleteCallback = (JobHandle jobHandle, in BatchCullingContext cc, in BatchCullingOutput cullingOutput) =>
                 {
+                    jobHandle.Complete();
+
                     if (cc.viewType != BatchCullingViewType.Camera)
                         return;
 
-                    jobHandle.Complete();
                     BatchCullingOutputDrawCommands drawCommands = cullingOutput.drawCommands[0];
 
                     unsafe
@@ -637,6 +658,8 @@ namespace UnityEngine.Rendering.Tests
 
                 using (var brg = new GPUResidentBatcher(brgContext, cpuDrivenDesc, gpuDrivenProcessor))
                 {
+                    brg.OnBeginContextRendering();
+
                     brgContext.UpdateLODGroups(lodGroupInstancesID.AsArray());
                     brg.UpdateRenderers(objIDs.AsArray());
 
@@ -688,6 +711,8 @@ namespace UnityEngine.Rendering.Tests
                     cameraObject.transform.position = new Vector3(0.0f, 0.0f, -4.0f);
                     SubmitCameraRenderRequest(mainCamera);
 
+                    brg.OnEndContextRendering();
+
                     mainCamera = null;
                     GameObject.DestroyImmediate(cameraObject);
 
@@ -719,14 +744,14 @@ namespace UnityEngine.Rendering.Tests
             objList.Add(sphere0.GetComponent<MeshRenderer>());
             objList.Add(sphere1.GetComponent<MeshRenderer>());
 
-            var objIDs = new NativeList<int>(Allocator.TempJob);
+            var objIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             var simpleDots = Shader.Find("Unlit/SimpleDots");
             var simpleDotsMat = new Material(simpleDots);
             foreach (var obj in objList)
             {
                 obj.material = simpleDotsMat;
-                objIDs.Add(obj.GetInstanceID());
+                objIDs.Add(obj.GetEntityId());
             }
 
             var instances = new NativeArray<InstanceHandle>(objList.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -751,10 +776,11 @@ namespace UnityEngine.Rendering.Tests
                 var expectedDrawCommandCount = 0;
                 cpuDrivenDesc.onCompleteCallback = (JobHandle jobHandle, in BatchCullingContext cc, in BatchCullingOutput cullingOutput) =>
                 {
+                    jobHandle.Complete();
+
                     if (cc.viewType != BatchCullingViewType.Camera)
                         return;
 
-                    jobHandle.Complete();
                     BatchCullingOutputDrawCommands drawCommands = cullingOutput.drawCommands[0];
 
                     unsafe
@@ -773,6 +799,8 @@ namespace UnityEngine.Rendering.Tests
 
                 using (var brg = new GPUResidentBatcher(brgContext, cpuDrivenDesc, gpuDrivenProcessor))
                 {
+                    brg.OnBeginContextRendering();
+
                     brg.UpdateRenderers(objIDs.AsArray());
 
                     var cameraObject = new GameObject("myCamera");
@@ -807,6 +835,8 @@ namespace UnityEngine.Rendering.Tests
                     expectedDrawCommandCount = 1;
                     cameraObject.transform.position = new Vector3(0.0f, 0.0f, -10.0f);
                     SubmitCameraRenderRequest(mainCamera);
+
+                    brg.OnEndContextRendering();
 
                     mainCamera = null;
                     GameObject.DestroyImmediate(cameraObject);
@@ -955,12 +985,12 @@ namespace UnityEngine.Rendering.Tests
                     renderer.sharedMaterial = simpleDotsMat;
                 }
 
-                var renderersID = new NativeArray<int>(3, Allocator.TempJob);
-                renderersID[0] = gameObjects[0].GetComponent<MeshRenderer>().GetInstanceID();
-                renderersID[1] = gameObjects[1].GetComponent<MeshRenderer>().GetInstanceID();
-                renderersID[2] = gameObjects[2].GetComponent<MeshRenderer>().GetInstanceID();
+                var renderersID = new NativeArray<EntityId>(3, Allocator.TempJob);
+                renderersID[0] = gameObjects[0].GetComponent<MeshRenderer>().GetEntityId();
+                renderersID[1] = gameObjects[1].GetComponent<MeshRenderer>().GetEntityId();
+                renderersID[2] = gameObjects[2].GetComponent<MeshRenderer>().GetEntityId();
 
-                var lodGroupDataMap = new NativeParallelHashMap<int, GPUInstanceIndex>(64, Allocator.TempJob);
+                var lodGroupDataMap = new NativeParallelHashMap<EntityId, GPUInstanceIndex>(64, Allocator.TempJob);
 
                 gpuDrivenProcessor.EnableGPUDrivenRenderingAndDispatchRendererData(renderersID, (in GPUDrivenRendererGroupData rendererData, IList<Mesh> meshes, IList<Material> materials) =>
                 {
@@ -981,9 +1011,9 @@ namespace UnityEngine.Rendering.Tests
 
                 Assert.IsTrue(instanceSystem.InternalSanityCheckStates());
 
-                renderersID[0] = gameObjects[3].GetComponent<MeshRenderer>().GetInstanceID();
-                renderersID[1] = gameObjects[4].GetComponent<MeshRenderer>().GetInstanceID();
-                renderersID[2] = gameObjects[5].GetComponent<MeshRenderer>().GetInstanceID();
+                renderersID[0] = gameObjects[3].GetComponent<MeshRenderer>().GetEntityId();
+                renderersID[1] = gameObjects[4].GetComponent<MeshRenderer>().GetEntityId();
+                renderersID[2] = gameObjects[5].GetComponent<MeshRenderer>().GetEntityId();
 
                 gpuDrivenProcessor.EnableGPUDrivenRenderingAndDispatchRendererData(renderersID, (in GPUDrivenRendererGroupData rendererData, IList<Mesh> meshes, IList<Material> materials) =>
                 {
@@ -1006,8 +1036,8 @@ namespace UnityEngine.Rendering.Tests
 
                 renderersID.Dispose();
 
-                renderersID = new NativeArray<int>(1, Allocator.TempJob);
-                renderersID[0] = gameObjects[6].GetComponent<MeshRenderer>().GetInstanceID();
+                renderersID = new NativeArray<EntityId>(1, Allocator.TempJob);
+                renderersID[0] = gameObjects[6].GetComponent<MeshRenderer>().GetEntityId();
 
                 gpuDrivenProcessor.EnableGPUDrivenRenderingAndDispatchRendererData(renderersID, (in GPUDrivenRendererGroupData rendererData, IList<Mesh> meshes, IList<Material> materials) =>
                 {
@@ -1071,9 +1101,9 @@ namespace UnityEngine.Rendering.Tests
 
                 StaticBatchingUtility.Combine(gameObjects, staticBatchingRoot);
 
-                var renderersID = new NativeArray<int>(2, Allocator.TempJob);
-                renderersID[0] = gameObjects[0].GetComponent<MeshRenderer>().GetInstanceID();
-                renderersID[1] = gameObjects[1].GetComponent<MeshRenderer>().GetInstanceID();
+                var renderersID = new NativeArray<EntityId>(2, Allocator.TempJob);
+                renderersID[0] = gameObjects[0].GetComponent<MeshRenderer>().GetEntityId();
+                renderersID[1] = gameObjects[1].GetComponent<MeshRenderer>().GetEntityId();
 
                 var lodGroupDataMap = new NativeParallelHashMap<int, InstanceHandle>(64, Allocator.TempJob);
                 var instances = new NativeArray<InstanceHandle>(2, Allocator.TempJob);
@@ -1145,9 +1175,9 @@ namespace UnityEngine.Rendering.Tests
             renderer0.sharedMaterial = simpleDotsMat;
             renderer1.sharedMaterial = simpleDotsMat;
 
-            var rendererIDs = new NativeArray<int>(2, Allocator.Temp);
-            rendererIDs[0] = renderer0.GetInstanceID();
-            rendererIDs[1] = renderer1.GetInstanceID();
+            var rendererIDs = new NativeArray<EntityId>(2, Allocator.Temp);
+            rendererIDs[0] = renderer0.GetEntityId();
+            rendererIDs[1] = renderer1.GetEntityId();
 
             bool dispatched = false;
 
@@ -1167,9 +1197,9 @@ namespace UnityEngine.Rendering.Tests
             gpuDrivenProcessor.EnableGPUDrivenRenderingAndDispatchRendererData(rendererIDs, (in GPUDrivenRendererGroupData rendererData, IList<Mesh> meshes, IList<Material> materials) =>
             {
                 Assert.IsTrue(rendererData.rendererGroupID.Length == 1);
-                Assert.IsTrue(rendererData.rendererGroupID[0] == renderer1.GetInstanceID());
+                Assert.IsTrue(rendererData.rendererGroupID[0] == renderer1.GetEntityId());
                 Assert.IsTrue(rendererData.invalidRendererGroupID.Length == 1);
-                Assert.IsTrue(rendererData.invalidRendererGroupID[0] == renderer0.GetInstanceID());
+                Assert.IsTrue(rendererData.invalidRendererGroupID[0] == renderer0.GetEntityId());
                 dispatched = true;
             }, true);
 
@@ -1214,11 +1244,11 @@ namespace UnityEngine.Rendering.Tests
             renderer2.sharedMaterial = simpleDotsMat;
             renderer3.sharedMaterial = simpleDotsMat;
 
-            var rendererIDs = new NativeArray<int>(4, Allocator.Temp);
-            rendererIDs[0] = renderer0.GetInstanceID();
-            rendererIDs[1] = renderer1.GetInstanceID();
-            rendererIDs[2] = renderer2.GetInstanceID();
-            rendererIDs[3] = renderer3.GetInstanceID();
+            var rendererIDs = new NativeArray<EntityId>(4, Allocator.Temp);
+            rendererIDs[0] = renderer0.GetEntityId();
+            rendererIDs[1] = renderer1.GetEntityId();
+            rendererIDs[2] = renderer2.GetEntityId();
+            rendererIDs[3] = renderer3.GetEntityId();
 
             bool dispatched = false;
 
@@ -1276,9 +1306,9 @@ namespace UnityEngine.Rendering.Tests
 
             renderer0.forceRenderingOff = true;
 
-            var rendererIDs = new NativeArray<int>(2, Allocator.Temp);
-            rendererIDs[0] = renderer0.GetInstanceID();
-            rendererIDs[1] = renderer1.GetInstanceID();
+            var rendererIDs = new NativeArray<EntityId>(2, Allocator.Temp);
+            rendererIDs[0] = renderer0.GetEntityId();
+            rendererIDs[1] = renderer1.GetEntityId();
 
             bool dispatched = false;
 
@@ -1333,14 +1363,14 @@ namespace UnityEngine.Rendering.Tests
                 tree1.GetComponent<MeshRenderer>()
             };
 
-            var rendererIDs = new NativeList<int>(Allocator.TempJob);
+            var rendererIDs = new NativeList<EntityId>(Allocator.TempJob);
 
             foreach (var renderer in renderers)
             {
                 renderer.receiveGI = ReceiveGI.LightProbes;
                 renderer.lightProbeUsage = LightProbeUsage.BlendProbes;
                 renderer.material = simpleSpeedTreeDotsMat;
-                rendererIDs.Add(renderer.GetInstanceID());
+                rendererIDs.Add(renderer.GetEntityId());
             }
 
             var instances = new NativeArray<InstanceHandle>(renderers.Count, Allocator.TempJob, NativeArrayOptions.UninitializedMemory);
@@ -1370,8 +1400,8 @@ namespace UnityEngine.Rendering.Tests
                 var sharedInstanceIndex0 = context.sharedInstanceData.SharedInstanceToIndex(sharedInstance0);
                 var sharedInstanceIndex1 = context.sharedInstanceData.SharedInstanceToIndex(sharedInstance1);
 
-                Assert.AreEqual(context.sharedInstanceData.rendererGroupIDs[sharedInstanceIndex0], tree0.GetComponent<Renderer>().GetInstanceID());
-                Assert.AreEqual(context.sharedInstanceData.rendererGroupIDs[sharedInstanceIndex1], tree1.GetComponent<Renderer>().GetInstanceID());
+                Assert.AreEqual(context.sharedInstanceData.rendererGroupIDs[sharedInstanceIndex0], tree0.GetComponent<Renderer>().GetEntityId());
+                Assert.AreEqual(context.sharedInstanceData.rendererGroupIDs[sharedInstanceIndex1], tree1.GetComponent<Renderer>().GetEntityId());
 
                 context.FreeInstances(instances);
 

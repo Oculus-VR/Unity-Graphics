@@ -10,7 +10,9 @@ namespace UnityEditor.ShaderGraph
     [Serializable]
     class ShaderKeyword : ShaderInput
     {
-        public const string kVariantLimitWarning = "Graph is generating too many variants. Either delete Keywords, reduce Keyword variants or increase the Shader Variant Limit in Preferences > Shader Graph.";
+        public const string kVariantLimitWarning = "Graph is generating too many variants. Either delete Keywords, reduce Keyword variants or increase the Shader Variant Limit in Preferences > Shader Graph or Project Settings > Shader Graph.";
+
+        internal override bool canPromoteToFinalShader => true;
 
         public ShaderKeyword()
         {
@@ -63,6 +65,8 @@ namespace UnityEditor.ShaderGraph
             get => m_KeywordType;
             set => m_KeywordType = value;
         }
+
+        internal bool IsDynamic => m_KeywordDefinition == KeywordDefinition.DynamicBranch;
 
         [SerializeField]
         private KeywordDefinition m_KeywordDefinition = KeywordDefinition.ShaderFeature;
@@ -173,7 +177,23 @@ namespace UnityEditor.ShaderGraph
 
         public string GetKeywordPreviewDeclarationString()
         {
-            switch (keywordType)
+            if (this.IsDynamic)
+            {
+                switch(keywordType)
+                {
+                    case KeywordType.Boolean:
+                        return $"#define {referenceName} {(value == 0 ? "false" : " true")}";
+                    case KeywordType.Enum:
+                        string result = $"#define {referenceName}_{entries[value].referenceName} true";
+                        for (int i = 0; i < entries.Count; ++i)
+                            if (i != value)
+                                result += $"\n#define {referenceName}_{entries[i].referenceName} false";
+                        return result;
+                    default:
+                        throw new ArgumentOutOfRangeException();
+                }
+            }
+            else switch (keywordType)
             {
                 case KeywordType.Boolean:
                     return value == 1 ? $"#define {referenceName}" : string.Empty;

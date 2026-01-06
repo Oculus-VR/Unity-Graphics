@@ -26,6 +26,7 @@ namespace UnityEngine.Rendering
     /// <summary>
     /// An Asset which holds a set of settings to use with a <see cref="Probe Reference Volume"/>.
     /// </summary>
+    [CoreRPHelpURL("probevolumes-usebakingsets", "com.unity.render-pipelines.high-definition")]
     public sealed partial class ProbeVolumeBakingSet : ScriptableObject, ISerializationCallbackReceiver
     {
         internal enum Version
@@ -92,7 +93,7 @@ namespace UnityEngine.Rendering
 
         // We keep a separate list with only the guids for the sake of convenience when iterating from outside this class.
         [SerializeField] private List<string> m_SceneGUIDs = new List<string>();
-        [SerializeField, Obsolete("This is now contained in the SceneBakeData structure"), FormerlySerializedAs("scenesToNotBake")] internal List<string> obsoleteScenesToNotBake = new List<string>();
+        [SerializeField, Obsolete("This is now contained in the SceneBakeData structure. #from(2023.3)"), FormerlySerializedAs("scenesToNotBake")] internal List<string> obsoleteScenesToNotBake = new List<string>();
         [SerializeField, FormerlySerializedAs("lightingScenarios")] internal List<string> m_LightingScenarios = new List<string>();
 
         /// <summary>The list of scene GUIDs.</summary>
@@ -1114,6 +1115,20 @@ namespace UnityEngine.Rendering
                 size += ProbeOcclusionChunkSize;
 
             return size;
+        }
+
+        internal bool HasSameSceneGUIDs(ProbeVolumeBakingSet other)
+        {
+            var otherSceneGUIDs = other.sceneGUIDs;
+            if (m_SceneGUIDs.Count != otherSceneGUIDs.Count)
+                return false;
+
+            for (var i = 0; i < m_SceneGUIDs.Count; ++i)
+            {
+                if (m_SceneGUIDs[i] != otherSceneGUIDs[i])
+                    return false;
+            }
+            return true;
         }
     }
 }

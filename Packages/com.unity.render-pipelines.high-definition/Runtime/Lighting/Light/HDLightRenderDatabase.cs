@@ -37,12 +37,7 @@ namespace UnityEngine.Rendering.HighDefinition
         public float shadowDimmer;
         public float shadowFadeDistance;
         public float volumetricShadowDimmer;
-        public float shapeWidth;
-        public float shapeHeight;
-        public float aspectRatio;
-        public float innerSpotPercent;
         public float spotIESCutoffPercent;
-        public float shapeRadius;
         public float barnDoorLength;
         public float barnDoorAngle;
         public bool affectVolumetric;
@@ -64,13 +59,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
         public float shadowNearPlane;
         public float normalBias;
-        public float shapeHeight;
-        public float aspectRatio;
-        public float shapeWidth;
         public float areaLightShadowCone;
         public float softnessScale;
         public float angularDiameter;
-        public float shapeRadius;
         public float slopeBias;
         public float minFilterSize;
         public float lightAngle;
@@ -139,13 +130,9 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             shadowNearPlane = additionalLightData.shadowNearPlane;
             normalBias = additionalLightData.normalBias;
-            shapeHeight = additionalLightData.shapeHeight;
-            aspectRatio = additionalLightData.aspectRatio;
-            shapeWidth = additionalLightData.shapeWidth;
             areaLightShadowCone = additionalLightData.areaLightShadowCone;
             softnessScale = additionalLightData.softnessScale;
             angularDiameter = additionalLightData.angularDiameter;
-            shapeRadius = additionalLightData.shapeRadius;
             slopeBias = additionalLightData.slopeBias;
             minFilterSize = additionalLightData.minFilterSize;
             lightAngle = additionalLightData.lightAngle;
@@ -256,46 +243,6 @@ namespace UnityEngine.Rendering.HighDefinition
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetShapeWidth(in HDLightRenderEntity entity, float shapeWidth)
-        {
-            if (!entity.valid)
-                return;
-
-            EditLightDataAsRef(entity).shapeWidth = shapeWidth;
-            EditAdditionalLightUpdateDataAsRef(entity).shapeWidth = shapeWidth;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetShapeHeight(in HDLightRenderEntity entity, float shapeHeight)
-        {
-            if (!entity.valid)
-                return;
-
-            EditLightDataAsRef(entity).shapeHeight = shapeHeight;
-            EditAdditionalLightUpdateDataAsRef(entity).shapeHeight = shapeHeight;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetShapeRadius(in HDLightRenderEntity entity, float shapeRadius)
-        {
-            if (!entity.valid)
-                return;
-
-            EditLightDataAsRef(entity).shapeRadius = shapeRadius;
-            EditAdditionalLightUpdateDataAsRef(entity).shapeRadius = shapeRadius;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void SetAspectRatio(in HDLightRenderEntity entity, float aspectRatio)
-        {
-            if (!entity.valid)
-                return;
-
-            EditLightDataAsRef(entity).aspectRatio = aspectRatio;
-            EditAdditionalLightUpdateDataAsRef(entity).aspectRatio = aspectRatio;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetAngularDiameter(in HDLightRenderEntity entity, float angularDiameter)
         {
             if (!entity.valid)
@@ -370,7 +317,7 @@ namespace UnityEngine.Rendering.HighDefinition
         //Dots lights wont have to use this and instead will have to set this data on their own.
         public unsafe void AttachGameObjectData(
             HDLightRenderEntity entity,
-            int instanceID,
+            EntityId entityId,
             HDAdditionalLightData additionalLightData,
             GameObject aovGameObject)
         {
@@ -382,10 +329,10 @@ namespace UnityEngine.Rendering.HighDefinition
             if (dataIndex == InvalidDataIndex)
                 return;
 
-            entityInfo.lightInstanceID = instanceID;
+            entityInfo.lightEntityId = entityId;
             m_LightEntities[entity.entityIndex] = entityInfo;
 
-            m_LightsToEntityItem.Add(entityInfo.lightInstanceID, entityInfo);
+            m_LightsToEntityItem.Add(entityInfo.lightEntityId, entityInfo);
             m_HDAdditionalLightData[dataIndex] = additionalLightData;
             m_AOVGameObjects[dataIndex] = aovGameObject;
             HDAdditionalLightDataUpdateInfo updateInfo = default;
@@ -412,7 +359,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
             m_FreeIndices.Enqueue(lightEntity.entityIndex);
             LightEntityInfo entityData = m_LightEntities[lightEntity.entityIndex];
-            m_LightsToEntityItem.Remove(entityData.lightInstanceID);
+            m_LightsToEntityItem.Remove(entityData.lightEntityId);
 
             var lightData = m_HDAdditionalLightData[entityData.dataIndex];
             if (lightData != null)
@@ -438,8 +385,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 LightEntityInfo dataToUpdate = m_LightEntities[entityToUpdate.entityIndex];
                 dataToUpdate.dataIndex = entityData.dataIndex;
                 m_LightEntities[entityToUpdate.entityIndex] = dataToUpdate;
-                if (dataToUpdate.lightInstanceID != entityData.lightInstanceID)
-                    m_LightsToEntityItem[dataToUpdate.lightInstanceID] = dataToUpdate;
+                if (dataToUpdate.lightEntityId != entityData.lightEntityId)
+                    m_LightsToEntityItem[dataToUpdate.lightEntityId] = dataToUpdate;
             }
         }
 
@@ -578,7 +525,7 @@ namespace UnityEngine.Rendering.HighDefinition
         // If the entity is invalid, it returns InvalidDataIndex
         public int FindEntityDataIndex(in Light light)
         {
-            if (light != null && m_LightsToEntityItem.TryGetValue(light.GetInstanceID(), out var foundEntity))
+            if (light != null && m_LightsToEntityItem.TryGetValue(light.GetEntityId(), out var foundEntity))
                 return foundEntity.dataIndex;
 
             return -1;
@@ -594,9 +541,9 @@ namespace UnityEngine.Rendering.HighDefinition
         private struct LightEntityInfo
         {
             public int dataIndex;
-            public int lightInstanceID;
-            public static readonly LightEntityInfo Invalid = new LightEntityInfo() { dataIndex = InvalidDataIndex, lightInstanceID = -1 };
-            public bool valid { get { return dataIndex != -1 && lightInstanceID != -1; } }
+            public EntityId lightEntityId;
+            public static readonly LightEntityInfo Invalid = new LightEntityInfo() { dataIndex = InvalidDataIndex, lightEntityId = EntityId.None };
+            public bool valid { get { return dataIndex != -1 && lightEntityId != EntityId.None; } }
         }
 
         internal struct SpotLightCallbackData
@@ -622,7 +569,7 @@ namespace UnityEngine.Rendering.HighDefinition
         private NativeList<HDShadowRequestSetHandle> m_ShadowRequestSetPackedHandles;
 
         private Queue<int> m_FreeIndices = new Queue<int>();
-        private Dictionary<int, LightEntityInfo> m_LightsToEntityItem = new Dictionary<int, LightEntityInfo>();
+        private Dictionary<EntityId, LightEntityInfo> m_LightsToEntityItem = new Dictionary<EntityId, LightEntityInfo>();
 
         private NativeArray<HDLightRenderData> m_LightData;
         private NativeArray<HDLightRenderEntity> m_OwnerEntity;
@@ -705,7 +652,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             int newIndex = m_LightCount++;
-            LightEntityInfo newDataIndex = new LightEntityInfo { dataIndex = newIndex, lightInstanceID = -1 };
+            LightEntityInfo newDataIndex = new LightEntityInfo { dataIndex = newIndex, lightEntityId = EntityId.None };
             return newDataIndex;
         }
 

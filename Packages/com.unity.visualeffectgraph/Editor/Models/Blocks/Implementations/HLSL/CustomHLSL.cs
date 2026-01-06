@@ -230,12 +230,12 @@ namespace UnityEditor.VFX.Block
             }
         }
 
-        public override void GetImportDependentAssets(HashSet<int> dependencies)
+        public override void GetImportDependentAssets(HashSet<EntityId> dependencies)
         {
             base.GetImportDependentAssets(dependencies);
             if (!ReferenceEquals(m_ShaderFile, null))
             {
-                dependencies.Add(m_ShaderFile.GetInstanceID());
+                dependencies.Add(m_ShaderFile.GetEntityId());
             }
         }
 
@@ -305,10 +305,10 @@ namespace UnityEditor.VFX.Block
             }
 
             var hasError = m_Function?.errorList.Count > 0;
-            var strippedHLSL = HLSLParser.StripCommentedCode(GetHLSLCode());
-            if (hasError || strippedHLSL != cachedHLSLCode || m_SelectedFunction != m_AvailableFunction.GetSelection() || m_AvailableFunction.values == null)
+            var hlslCode = GetHLSLCode();
+            if (hasError || hlslCode != cachedHLSLCode || m_SelectedFunction != m_AvailableFunction.GetSelection() || m_AvailableFunction.values == null)
             {
-                var functions = new List<HLSLFunction>(HLSLFunction.Parse(graph.attributesManager, strippedHLSL));
+                var functions = new List<HLSLFunction>(HLSLFunction.Parse(graph.attributesManager, hlslCode));
 
                 if (functions.Count > 0)
                 {
@@ -363,7 +363,7 @@ namespace UnityEditor.VFX.Block
                     m_AvailableFunction = new MultipleValuesChoice<string>() { values = new List<string>() };
                 }
 
-                cachedHLSLCode = strippedHLSL;
+                cachedHLSLCode = hlslCode;
             }
         }
 

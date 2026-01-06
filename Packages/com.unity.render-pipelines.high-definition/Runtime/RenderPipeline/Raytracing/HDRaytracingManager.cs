@@ -66,7 +66,7 @@ namespace UnityEngine.Rendering.HighDefinition
         static RayTracingSubMeshFlags[] subMeshFlagArray = new RayTracingSubMeshFlags[maxNumSubMeshes];
         static uint[] vfxSystemMasks = new uint[maxNumSubMeshes];
         static List<Material> materialArray = new List<Material>(maxNumSubMeshes);
-        static Dictionary<int, int> m_MaterialCRCs = new Dictionary<int, int>();
+        static Dictionary<EntityId, int> m_MaterialCRCs = new Dictionary<EntityId, int>();
 
         // Global shader variables ray tracing lightloop constant buffer
         ShaderVariablesRaytracingLightLoop m_ShaderVariablesRaytracingLightLoopCB = new ShaderVariablesRaytracingLightLoop();
@@ -200,7 +200,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     && HDRenderQueue.k_RenderQueue_OpaqueAlphaTest.upperBound >= currentMaterial.renderQueue);
         }
 
-        private static bool UpdateMaterialCRC(int matInstanceId, int matCRC)
+        private static bool UpdateMaterialCRC(EntityId matInstanceId, int matCRC)
         {
             int matPrevCRC;
             if (m_MaterialCRCs.TryGetValue(matInstanceId, out matPrevCRC))
@@ -288,7 +288,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         // Check if the material has changed since last time we were here
                         if (!materialsDirty)
                         {
-                            materialsDirty |= UpdateMaterialCRC(currentMaterial.GetInstanceID(), currentMaterial.ComputeCRC());
+                            materialsDirty |= UpdateMaterialCRC(currentMaterial.GetEntityId(), currentMaterial.ComputeCRC());
                         }
                     }
                 }
@@ -369,7 +369,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         // Check if the material has changed since last time we were here
                         if (!materialsDirty)
                         {
-                            materialsDirty |= UpdateMaterialCRC(currentMaterial.GetInstanceID(), currentMaterial.ComputeCRC());
+                            materialsDirty |= UpdateMaterialCRC(currentMaterial.GetEntityId(), currentMaterial.ComputeCRC());
                         }
                     }
                 }
@@ -667,7 +667,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     for (int i = 0; i < cullingResults.materialsCRC.Length; i++)
                     {
                         RayTracingInstanceMaterialCRC matCRC = cullingResults.materialsCRC[i];
-                        m_RTASManager.materialsDirty |= UpdateMaterialCRC(matCRC.instanceID, matCRC.crc);
+                        m_RTASManager.materialsDirty |= UpdateMaterialCRC(matCRC.entityId, matCRC.crc);
                     }
                 }
 
@@ -748,10 +748,8 @@ namespace UnityEngine.Rendering.HighDefinition
 
             RTASDebugPassData passData;
 
-            using (var builder = renderGraph.AddRenderPass<RTASDebugPassData>("Debug view of the RTAS", out passData, ProfilingSampler.Get(HDProfileId.RaytracingBuildAccelerationStructureDebug)))
+            using (var builder = renderGraph.AddUnsafePass<RTASDebugPassData>("Debug view of the RTAS", out passData, ProfilingSampler.Get(HDProfileId.RaytracingBuildAccelerationStructureDebug)))
             {
-                builder.EnableAsyncCompute(false);
-
                 // Camera data
                 passData.actualWidth = hdCamera.actualWidth;
                 passData.actualHeight = hdCamera.actualHeight;
@@ -767,11 +765,12 @@ namespace UnityEngine.Rendering.HighDefinition
                 passData.rayTracingAccelerationStructure = RequestAccelerationStructure(hdCamera);
 
                 // Depending of if we will have to denoise (or not), we need to allocate the final format, or a bigger texture
-                passData.outputTexture = builder.WriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "RTAS Debug" }));
+                passData.outputTexture = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
+                { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "RTAS Debug" });
+                builder.UseTexture(passData.outputTexture, AccessFlags.Write);
 
                 builder.SetRenderFunc(
-                    (RTASDebugPassData data, RenderGraphContext ctx) =>
+                    static (RTASDebugPassData data, UnsafeGraphContext ctx) =>
                     {
                         // Define the shader pass to use for the reflection pass
                         ctx.cmd.SetRayTracingShaderPass(data.debugRTASRT, "DebugDXR");
@@ -788,7 +787,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         ctx.cmd.SetRayTracingTextureParam(data.debugRTASRT, "_OutputDebugBuffer", data.outputTexture);
 
                         // Evaluate the debug view
-                        ctx.cmd.DispatchRays(data.debugRTASRT, m_RTASDebugRTKernel, (uint)data.actualWidth, (uint)data.actualHeight, (uint)data.viewCount);
+                        ctx.cmd.DispatchRays(data.debugRTASRT, m_RTASDebugRTKernel, (uint)data.actualWidth, (uint)data.actualHeight, (uint)data.viewCount, null);
                     });
             }
 
@@ -985,7 +984,7 @@ namespace UnityEngine.Rendering.HighDefinition
             return Mathf.Atan(GetPixelSpreadTangent(fov, width, height));
         }
 
-        internal TextureHandle EvaluateHistoryValidationBuffer(RenderGraph renderGraph, HDCamera hdCamera, TextureHandle depthBuffer, TextureHandle normalBuffer, TextureHandle motionVectorsBuffer)
+        internal TextureHandle EvaluateHistoryValidationBuffer(RenderGraph renderGraph, HDCamera hdCamera, in TextureHandle depthBuffer, in TextureHandle normalBuffer, in TextureHandle motionVectorsBuffer)
         {
             // Grab the temporal filter
             HDTemporalFilter temporalFilter = GetTemporalFilter();

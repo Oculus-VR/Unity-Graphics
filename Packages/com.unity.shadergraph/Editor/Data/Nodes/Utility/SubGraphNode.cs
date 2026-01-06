@@ -4,6 +4,7 @@ using System.Linq;
 using UnityEngine;
 using UnityEditor.Graphing;
 using UnityEditor.ShaderGraph.Internal;
+using UnityEngine.Rendering.ShaderGraph;
 
 namespace UnityEditor.ShaderGraph
 {
@@ -31,6 +32,7 @@ namespace UnityEditor.ShaderGraph
         , IMayRequireVertexSkinning
         , IMayRequireVertexID
         , IMayRequireInstanceID
+        , IMayRequireUITK
         , IDisposable
     {
         [Serializable]
@@ -104,6 +106,9 @@ namespace UnityEditor.ShaderGraph
         [SerializeField]
         List<string> m_DropdownSelectedEntries = new List<string>();
 
+        public override string documentationURL =>
+            Documentation.GetPageLink(string.IsNullOrEmpty(m_SubGraph.documentationPath)? "Sub-graph-Node" : m_SubGraph.documentationPath);
+
         public string subGraphGuid
         {
             get
@@ -140,7 +145,7 @@ namespace UnityEditor.ShaderGraph
                 m_SubGraph.LoadGraphData();
                 m_SubGraph.LoadDependencyData();
 
-                name = m_SubGraph.name;
+                name = ObjectNames.NicifyVariableName(m_SubGraph.name);
             }
         }
 
@@ -412,7 +417,13 @@ namespace UnityEditor.ShaderGraph
                     }
                 }
 
-                MaterialSlot slot = MaterialSlot.CreateMaterialSlot(valueType, id, prop.displayName, prop.referenceName, SlotType.Input, Vector4.zero, ShaderStageCapability.All);
+                MaterialSlot slot;
+                if (prop is Vector1ShaderProperty { LiteralFloatMode: true })
+                {
+                    slot = new Vector1MaterialSlot(id, prop.displayName, prop.referenceName, SlotType.Input, 0, literal:true);
+                }
+                else
+                    slot = MaterialSlot.CreateMaterialSlot(valueType, id, prop.displayName, prop.referenceName, SlotType.Input, Vector4.zero);
 
                 // Copy defaults
                 switch (prop.concreteShaderValueType)
@@ -586,7 +597,8 @@ namespace UnityEditor.ShaderGraph
 
         public override void ValidateNode()
         {
-            base.ValidateNode();
+            owner.ClearErrorsForNode(this);
+            base.ValidateNode();            
 
             if (asset == null)
             {
@@ -654,6 +666,42 @@ namespace UnityEditor.ShaderGraph
             }
 
             ValidateShaderStage();
+            ValidatePromotedProperties();
+        }
+
+        internal HashSet<string> UsedReferenceNames()
+        {
+            HashSet<string> usedNames = new();
+
+            foreach (var property in this.asset.nodeProperties)
+                if (property.promoteToFinalShader)
+                    usedNames.Add(property.referenceName);
+
+            foreach (var keyword in this.asset.keywords)
+                if (keyword.promoteToFinalShader)
+                    usedNames.Add(keyword.referenceName);
+
+            return usedNames;
+        }
+        
+        void ValidatePromotedProperties()
+        {
+            var usedNames = UsedReferenceNames();
+
+            foreach (var property in this.owner.properties)
+            {
+                if (usedNames.Contains(property.referenceName))
+                {
+                    owner.AddValidationError(objectId, $"A promoted reference name '{property.referenceName}' conflicts with property '{property.displayName}' in this graph.");
+                }
+            }
+            foreach (var keyword in this.owner.keywords)
+            {
+                if (usedNames.Contains(keyword.referenceName))
+                {
+                    owner.AddValidationError(objectId, $"A promoted reference name '{keyword.referenceName}' conflicts with keyword '{keyword.displayName}' in this graph.");
+                }
+            }
         }
 
         public override void CollectShaderProperties(PropertyCollector visitor, GenerationMode generationMode)
@@ -687,6 +735,10 @@ namespace UnityEditor.ShaderGraph
 
             foreach (var keyword in asset.keywords)
             {
+                // when generating the final shader, the main graph will pull the promoted keywords out for permutations
+                // so they don't need to be provided here.
+                if (generationMode == GenerationMode.ForReals && keyword.promoteToFinalShader)
+                    continue;
                 keywords.AddShaderKeyword(keyword as ShaderKeyword);
             }
         }
@@ -886,6 +938,14 @@ namespace UnityEditor.ShaderGraph
                 return false;
 
             return asset.requirements.requiresInstanceID;
+        }
+
+        public bool RequiresUITK(ShaderStageCapability stageCapability)
+        {
+            if (asset == null)
+                return false;
+
+            return asset.requirements.requiresUITK;
         }
 
         public string GetDropdownEntryName(string referenceName)

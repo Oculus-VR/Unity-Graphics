@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor.Inspector.GraphicsSettingsInspectors;
-using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.UIElements;
@@ -74,7 +73,7 @@ namespace UnityEditor.Rendering.HighDefinition
         /// True: managed to do the operation.
         /// False: unknown shader used in material
         /// </returns>
-        [Obsolete("Use HDShaderUtils.ResetMaterialKeywords instead")]
+        [Obsolete("Use HDShaderUtils.ResetMaterialKeywords instead. #from(2021.1)")]
         public static bool ResetMaterialKeywords(Material material)
             => HDShaderUtils.ResetMaterialKeywords(material);
 
@@ -154,25 +153,6 @@ namespace UnityEditor.Rendering.HighDefinition
                 EditorGUI.indentLevel = i;
 
                 EditorGUILayout.EndHorizontal();
-            }
-        }
-
-        internal static void DrawToolBarButton<TEnum>(
-            TEnum button, Editor owner,
-            Dictionary<TEnum, EditMode.SceneViewEditMode> toolbarMode,
-            Dictionary<TEnum, GUIContent> toolbarContent,
-            params GUILayoutOption[] options
-        )
-            where TEnum : struct, IConvertible
-        {
-            var intButton = (int)(object)button;
-            bool enabled = toolbarMode[button] == EditMode.editMode;
-            EditorGUI.BeginChangeCheck();
-            enabled = GUILayout.Toggle(enabled, toolbarContent[button], EditorStyles.miniButton, options);
-            if (EditorGUI.EndChangeCheck())
-            {
-                EditMode.SceneViewEditMode targetMode = EditMode.editMode == toolbarMode[button] ? EditMode.SceneViewEditMode.None : toolbarMode[button];
-                EditMode.ChangeEditMode(targetMode, GetBoundsGetter(owner)(), owner);
             }
         }
 
@@ -386,16 +366,25 @@ namespace UnityEditor.Rendering.HighDefinition
 
             bool disabledByDefault = !defaultValue && !cameraOverrideState;
             bool disabledByCameraOverride = cameraOverrideState && !cameraOverridenValue;
-            
-            var textBase = $"The FrameSetting required to render this effect in the {(camera.cameraType == CameraType.SceneView ? "Scene" : "Game")} view (by {camera.name}) ";
+
+            // If the setting is enabled in the frame settings but is disabled in the HDRP Asset (cameraSanitizedValue), it means the feature is disabled and we should not display anything.
+            bool disabledbySanitized = (cameraOverrideState ? cameraOverridenValue : defaultValue) && !cameraSanitizedValue;
+
+            var textBase = $"The Frame Setting required to render this effect in the {(camera.cameraType == CameraType.SceneView ? "Scene" : "Game")} view ";
 
             if (disabledByDefault)
-                GlobalSettingsHelpBox(textBase + "is disabled in the HDRP Global Settings.", MessageType.Warning, field, attribute.displayedName);
+                GlobalSettingsHelpBox(textBase + "is disabled in the HDRP Default Frame Settings.", MessageType.Warning, field, attribute.displayedName);
             else if (disabledByCameraOverride)
-                CoreEditorUtils.DrawFixMeBox(textBase + $"is disabled on the Camera.", MessageType.Warning, "Open", () => EditorUtility.OpenPropertyEditor(camera));
+                CoreEditorUtils.DrawFixMeBox(textBase + $"is disabled in the {camera.name}'s Custom Frame Settings.", MessageType.Warning, "Open", () => EditorUtility.OpenPropertyEditor(camera));
             else if (!dependenciesSanitizedValueOk)
-                GlobalSettingsHelpBox(textBase + "depends on a disabled FrameSetting.", MessageType.Warning, field, attribute.displayedName);
-            else if (!finalValue)
+            {
+                if(cameraOverrideState)
+                    CoreEditorUtils.DrawFixMeBox(textBase + $"depends on a disabled Frame Setting parent in the {camera.name} Custom Frame Settings.", MessageType.Warning, "Open", () => EditorUtility.OpenPropertyEditor(camera));
+                else
+                    GlobalSettingsHelpBox(textBase + "depends on a disabled Frame Setting parent in the HDRP Default Frame Settings.", MessageType.Warning, field, attribute.displayedName);
+
+            }
+            else if (!finalValue && !disabledbySanitized)
                 CoreEditorUtils.DrawFixMeBox(textBase + "is disabled in the Rendering Debugger.", MessageType.Warning, "Open", () => HighlightInDebugger(camera, field, attribute.displayedName));
         }
 
@@ -417,7 +406,7 @@ namespace UnityEditor.Rendering.HighDefinition
         static IEnumerable<(Camera camera, T component)> SelectVolumeComponent<T>(IEnumerable<Camera> cameras) where T : VolumeComponent
         {
             // Wait for volume system to be initialized
-            if (VolumeManager.instance.baseComponentTypeArray == null)
+            if (!VolumeManager.instance.isInitialized)
                 yield break;
 
             foreach (var camera in GetAllCameras())

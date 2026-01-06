@@ -1,4 +1,8 @@
 using System;
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.Build;
+#endif
 
 namespace UnityEngine.Rendering.Universal
 {
@@ -35,7 +39,8 @@ namespace UnityEngine.Rendering.Universal
     [SupportedOnRenderPipeline(typeof(UniversalRenderPipelineAsset))]
     [Categorization.CategoryInfo(Name = "Render Graph", Order = 50)]
     [Categorization.ElementInfo(Order = -10)]
-    public class RenderGraphSettings: IRenderPipelineGraphicsSettings
+    [Obsolete("These settings are not used. #from(6000.4)", false)]
+    public class RenderGraphSettings : IRenderPipelineGraphicsSettings
     {
         #region Version
         internal enum Version : int
@@ -50,30 +55,17 @@ namespace UnityEngine.Rendering.Universal
         public int version => (int)m_Version;
         #endregion
 
-        bool IRenderPipelineGraphicsSettings.isAvailableInPlayerBuild => true;
-
-        #region SerializeFields
-
-        [SerializeField]
-        [Tooltip("When enabled, URP does not use the Render Graph API to construct and execute the frame. Use this option only for compatibility purposes.")]
-        [RecreatePipelineOnChange]
-        private bool m_EnableRenderCompatibilityMode;
-        #endregion
+        bool IRenderPipelineGraphicsSettings.isAvailableInPlayerBuild => false;
 
         #region Data Accessors
 
         /// <summary>
         /// When enabled, Universal Rendering Pipeline will not use Render Graph API to construct and execute the frame.
         /// </summary>
-        public bool enableRenderCompatibilityMode
-        {
-            get => m_EnableRenderCompatibilityMode && !RenderGraphGraphicsAutomatedTests.enabled;
-            set
-            {
-                this.SetValueAndNotify(ref m_EnableRenderCompatibilityMode, value, nameof(m_EnableRenderCompatibilityMode));
-            }
-        }
+        [Obsolete("This property is not used. #from(6000.4)", false)]
+        public bool enableRenderCompatibilityMode => false;
 
         #endregion
+
     }
 }

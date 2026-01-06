@@ -234,29 +234,32 @@ namespace UnityEngine.Rendering.HighDefinition
 
         }
 
-        public unsafe void BlitCachedIntoAtlas(RenderGraph renderGraph, TextureHandle cachedAtlasTexture, Vector2Int cachedAtlasSize, Material blitMaterial, string passName, HDProfileId profileID)
+        public unsafe void BlitCachedIntoAtlas(RenderGraph renderGraph, in TextureHandle cachedAtlasTexture, Vector2Int cachedAtlasSize, Material blitMaterial, string passName, HDProfileId profileID)
         {
             if (m_MixedRequestsPendingBlits.Length > 0)
             {
-                using (var builder = renderGraph.AddRenderPass<BlitCachedShadowPassData>(passName, out var passData, ProfilingSampler.Get(profileID)))
+                using (var builder = renderGraph.AddUnsafePass<BlitCachedShadowPassData>(passName, out var passData, ProfilingSampler.Get(profileID)))
                 {
                     passData.requestsWaitingBlits = m_MixedRequestsPendingBlits;
                     passData.blitMaterial = blitMaterial;
                     passData.cachedShadowAtlasSize = cachedAtlasSize;
-                    passData.sourceCachedAtlas = builder.ReadTexture(cachedAtlasTexture);
-                    passData.atlasTexture = builder.WriteTexture(GetShadowMapDepthTexture(renderGraph));
+                    passData.sourceCachedAtlas = cachedAtlasTexture;
+                    builder.UseTexture(passData.sourceCachedAtlas, AccessFlags.Read);
+                    passData.atlasTexture = GetShadowMapDepthTexture(renderGraph);
+                    builder.UseTexture(passData.atlasTexture, AccessFlags.Write);
 
                     builder.SetRenderFunc(
-                        (BlitCachedShadowPassData data, RenderGraphContext ctx) =>
+                        static (BlitCachedShadowPassData data, UnsafeGraphContext ctx) =>
                         {
+                            var natCmd = CommandBufferHelpers.GetNativeCommandBuffer(ctx.cmd);
                             NativeList<HDShadowRequest> requestStorage = HDShadowRequestDatabase.instance.hdShadowRequestStorage;
                             ref UnsafeList<HDShadowRequest> requestStorageUnsafe = ref *requestStorage.GetUnsafeList();
                             foreach (var requestHandle in data.requestsWaitingBlits)
                             {
                                 ref var request = ref requestStorageUnsafe.ElementAt(requestHandle.storageIndexForShadowRequest);
                                 var mpb = ctx.renderGraphPool.GetTempMaterialPropertyBlock();
-                                ctx.cmd.SetRenderTarget(data.atlasTexture);
-                                ctx.cmd.SetViewport(request.dynamicAtlasViewport);
+                                natCmd.SetRenderTarget(data.atlasTexture);
+                                natCmd.SetViewport(request.dynamicAtlasViewport);
 
                                 Vector4 sourceScaleBias = new Vector4(request.cachedAtlasViewport.width / data.cachedShadowAtlasSize.x,
                                     request.cachedAtlasViewport.height / data.cachedShadowAtlasSize.y,
@@ -265,7 +268,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
                                 mpb.SetTexture(HDShaderIDs._CachedShadowmapAtlas, data.sourceCachedAtlas);
                                 mpb.SetVector(HDShaderIDs._BlitScaleBias, sourceScaleBias);
-                                CoreUtils.DrawFullScreen(ctx.cmd, data.blitMaterial, mpb, 0);
+                                CoreUtils.DrawFullScreen(natCmd, data.blitMaterial, mpb, 0);
                             }
 
                             data.requestsWaitingBlits.Clear();

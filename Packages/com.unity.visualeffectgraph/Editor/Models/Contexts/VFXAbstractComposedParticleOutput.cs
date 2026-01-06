@@ -115,7 +115,7 @@ namespace UnityEditor.VFX
             return traitDescription;
         }
 
-        public virtual void GetImportDependentAssets(HashSet<int> dependencies)
+        public virtual void GetImportDependentAssets(HashSet<EntityId> dependencies)
         {
         }
 
@@ -191,6 +191,7 @@ namespace UnityEditor.VFX
             if (m_ShowParticleOptions)
                 DoDefaultContextEditorGUI();
 
+            ApplyAndInvalidate();
             DisplayWarnings();
             DisplaySummary();
         }
@@ -403,7 +404,7 @@ namespace UnityEditor.VFX
             return base.CanBeCompiled() && m_Topology.CanBeCompiled() && m_Shading.CanBeCompiled();
         }
 
-        public sealed override void GetImportDependentAssets(HashSet<int> dependencies)
+        public sealed override void GetImportDependentAssets(HashSet<EntityId> dependencies)
         {
             base.GetImportDependentAssets(dependencies);
             m_Topology?.GetImportDependentAssets(dependencies);
@@ -420,11 +421,17 @@ namespace UnityEditor.VFX
         {
             if (m_Topology != null && m_Shading != null)
             {
+                var currentName = name;
                 MarkCacheAsDirty();
                 base.CheckGraphBeforeImport();
                 if (!VFXGraph.explicitCompile)
                 {
-                    ResyncSlots(true);
+                    bool slotChanged = ResyncSlots(true);
+                    if (!slotChanged && currentName != name)
+                    {
+                        //`Invalidate(this, InvalidationCause.kUIChangedTransient)` won't trigger Modified/onModified
+                        Invalidate(InvalidationCause.kUIChangedTransient);
+                    }
                 }
             }
         }

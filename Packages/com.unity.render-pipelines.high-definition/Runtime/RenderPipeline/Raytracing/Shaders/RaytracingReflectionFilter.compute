@@ -1,7 +1,7 @@
 #pragma kernel ReflectionAdjustWeight
 #pragma kernel ReflectionUpscale
 
-#pragma only_renderers d3d11 xboxseries ps5
+#pragma only_renderers d3d11 xboxseries ps5 switch2
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 #include "Packages/com.unity.render-pipelines.high-definition/Runtime/ShaderLibrary/ShaderVariables.hlsl"
@@ -29,7 +29,7 @@ TEXTURE2D_X(_DepthTexture);
 TEXTURE2D_X(_SsrLightingTextureRW);
 TEXTURE2D_X(_DirectionPDFTexture);
 TEXTURE2D_X(_SsrClearCoatMaskTexture);
-TEXTURE2D_X_UINT2(_StencilTexture);
+TYPED_TEXTURE2D_X(uint2, _StencilTexture);
 
 // Output Textures for the spatial filtering
 RW_TEXTURE2D_X(float4, _RaytracingReflectionTexture);
@@ -162,7 +162,7 @@ void ReflectionUpscale(uint3 dispatchThreadId : SV_DispatchThreadID,
     uint2 fullResolution = dispatchThreadId.xy;
 
     // Fetch the full resolution depth
-    float hiResDepth = Linear01Depth(LOAD_TEXTURE2D_X(_DepthTexture, fullResolution).x, _ZBufferParams); 
+    float hiResDepth = Linear01Depth(LOAD_TEXTURE2D_X(_DepthTexture, fullResolution).x, _ZBufferParams);
 
     // If the full resolution depth is a background pixel, write the invalid data and we are done
     if (hiResDepth == 1.0)
@@ -196,10 +196,10 @@ void ReflectionUpscale(uint3 dispatchThreadId : SV_DispatchThreadID,
 
             // Make sure the pixel has a valid signal
             weight *= gs_cacheValidity[tapHalfResLDSIndex] ? 1.0 : 0.0;
-            
+
             // Add the contribution of the sample
             fallbackLighting += float4(gs_cacheLighting[tapHalfResLDSIndex], 0.0) * weight;
-            weightSum += weight; 
+            weightSum += weight;
         }
     }
 

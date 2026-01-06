@@ -80,10 +80,10 @@ namespace UnityEngine.Rendering.HighDefinition
                 }
             }
 
-            Dictionary<int, Set> m_Requests = new Dictionary<int, Set>();
-            public Dictionary<int, Set> requests => m_Requests;
+            Dictionary<EntityId, Set> m_Requests = new Dictionary<EntityId, Set>();
+            public Dictionary<EntityId, Set> requests => m_Requests;
 
-            public Set this[int index]
+            public Set this[EntityId index]
             {
                 get
                 {
@@ -150,9 +150,9 @@ namespace UnityEngine.Rendering.HighDefinition
                 }
             }
 
-            Dictionary<int, Set> m_Requests = new Dictionary<int, Set>();
+            Dictionary<EntityId, Set> m_Requests = new Dictionary<EntityId, Set>();
 
-            public Set this[int index]
+            public Set this[EntityId index]
             {
                 get
                 {
@@ -190,10 +190,10 @@ namespace UnityEngine.Rendering.HighDefinition
         }
 
         public const int kInvalidIndex = -1;
-        public const int kNullMaterialIndex = int.MaxValue;
+        public static readonly EntityId kNullMaterialIndex = EntityId.None;
         public class DecalHandle
         {
-            public DecalHandle(int index, int materialID)
+            public DecalHandle(int index, EntityId materialID)
             {
                 m_MaterialID = materialID;
                 m_Index = index;
@@ -208,7 +208,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 return true;
             }
 
-            public int m_MaterialID;    // identifies decal set
+            public EntityId m_MaterialID;    // identifies decal set
             public int m_Index;         // identifies decal within the set
         }
 
@@ -284,7 +284,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
         // to work on Vulkan Mobile?
         // Core\CoreRP\ShaderLibrary\UnityInstancing.hlsl
-        // #if (defined(SHADER_API_VULKAN) && defined(SHADER_API_MOBILE)) || defined(SHADER_API_SWITCH)
+        // #if (defined(SHADER_API_VULKAN) && defined(SHADER_API_MOBILE)) || defined(SHADER_API_SWITCH) || defined(SHADER_API_SWITCH2)
         //      #define UNITY_INSTANCED_ARRAY_SIZE  250
         private const int kDrawIndexedBatchSize = 250;
 
@@ -318,15 +318,15 @@ namespace UnityEngine.Rendering.HighDefinition
         static public Vector4[] m_BaseColor = new Vector4[kDecalBlockSize];
 
         // Clustered decal world space info -- useful when m_CullingMode is set to WorldspaceBasedCulling
-        // This data is cached and can be queried for algorithms doing their own clustering (e.g. path tracing). 
+        // This data is cached and can be queried for algorithms doing their own clustering (e.g. path tracing).
         static public Vector3[] m_DecalDatasWSPositions = new Vector3[kDecalBlockSize];
         static public Vector3[] m_DecalDatasWSRanges = new Vector3[kDecalBlockSize];
- 
+
         static public int m_DecalDatasCount = 0;
 
         static public float[] m_BoundingDistances = new float[1];
 
-        private Dictionary<int, DecalSet> m_DecalSets = new Dictionary<int, DecalSet>();
+        private Dictionary<EntityId, DecalSet> m_DecalSets = new Dictionary<EntityId, DecalSet>();
         private List<DecalSet> m_DecalSetsRenderList = new List<DecalSet>(); // list of visible decalsets sorted by material draw order
 
         // current camera
@@ -638,7 +638,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     float normalBlendSrc = 0.0f;
                     float maskBlendSrc = 1.0f;
                     m_BlendParams = new Vector3(normalBlendSrc, maskBlendSrc, (float)affectFlags);
-                    
+
                     m_SampleNormalAlpha = 1.0f;
                     // Metallic, AO and Smoothness remapping can be done directly in the shader graph
                     // By hard coding those values we do an additional lerp within EvalDecalMask which could be avoided
@@ -648,7 +648,7 @@ namespace UnityEngine.Rendering.HighDefinition
                     m_ScalingBlueMaskMap = 1.0f;
                     m_RemappingMetallic = new Vector2(remapMin, remapMax);
                     m_RemappingAOS = new Vector4(remapMin, remapMax, remapMin, remapMax);
-                    
+
                     // With ShaderGraph it is possible that the pass isn't generated. But if it is, it can be disabled.
                     m_cachedProjectorPassValue = m_Material.FindPass(s_MaterialDecalPassNames[(int)MaterialDecalPass.DBufferProjector]);
                     if (m_cachedProjectorPassValue != -1 && m_Material.GetShaderPassEnabled(s_MaterialDecalPassNames[(int)MaterialDecalPass.DBufferProjector]) == false)
@@ -765,7 +765,7 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             // Update memory allocation and assign decal handle, then update cached data
-            public DecalHandle AddDecal(int materialID, DecalProjector decalProjector)
+            public DecalHandle AddDecal(EntityId materialID, DecalProjector decalProjector)
             {
                 // increase array size if no space left
                 if (m_DecalsCount == m_Handles.Length)
@@ -938,7 +938,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 var camera = instance.CurrentCamera;
                 Matrix4x4 worldToView = HDRenderPipeline.WorldToCamera(camera);
 
-                /* Prepare data for the DBuffer drawing */ 
+                /* Prepare data for the DBuffer drawing */
                 if ((DecalSystem.m_CullingMode & DecalCullingMode.ViewspaceBasedCulling) != 0)
                 {
                     int cullingMask = camera.cullingMask;
@@ -960,7 +960,7 @@ namespace UnityEngine.Rendering.HighDefinition
                         int decalMask = 1 << m_CachedLayerMask[decalIndex];
                         ulong decalSceneCullingMask = m_CachedSceneLayerMask[decalIndex];
                         bool sceneViewCullingMaskTest = true;
-#if UNITY_EDITOR    
+#if UNITY_EDITOR
                         // In the player, both masks will be zero. Besides we don't want to pay the cost in this case.
                         sceneViewCullingMaskTest = (sceneCullingMask & decalSceneCullingMask) != 0;
 #endif
@@ -1278,7 +1278,7 @@ namespace UnityEngine.Rendering.HighDefinition
             var material = decalProjector.material;
 
             DecalSet decalSet = null;
-            int key = material != null ? material.GetInstanceID() : kNullMaterialIndex;
+            EntityId key = material != null ? material.GetEntityId() : kNullMaterialIndex;
             if (!m_DecalSets.TryGetValue(key, out decalSet))
             {
 				SetupMipStreamingSettings(material, true);
@@ -1294,7 +1294,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 return;
 
             DecalSet decalSet = null;
-            int key = handle.m_MaterialID;
+            EntityId key = handle.m_MaterialID;
             if (m_DecalSets.TryGetValue(key, out decalSet))
             {
                 decalSet.RemoveDecal(handle);
@@ -1314,8 +1314,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 return null;
 
             DecalSet decalSet = null;
-            int key = handle.m_MaterialID;
-            if (m_DecalSets.TryGetValue(key, out decalSet))
+            EntityId decalMaterialId = handle.m_MaterialID;
+            if (m_DecalSets.TryGetValue(decalMaterialId, out decalSet))
                 return decalSet;
             else
                 return null;
@@ -1426,7 +1426,9 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     if (!Atlas.IsCached(out textureScaleBias.m_ScaleBias, textureScaleBias.texture))
                     {
-                        if (!Atlas.AllocateTextureWithoutBlit(textureScaleBias.texture.GetInstanceID(), textureScaleBias.width, textureScaleBias.height, ref textureScaleBias.m_ScaleBias))
+#pragma warning disable 618 // Todo(@daniel.andersen): Potentially use GetRawData or sometin'
+                        if (!Atlas.AllocateTextureWithoutBlit(textureScaleBias.texture.GetEntityId(), textureScaleBias.width, textureScaleBias.height, ref textureScaleBias.m_ScaleBias))
+#pragma warning restore 618
                         {
                             m_AllocationSuccess = false;
                         }
@@ -1493,9 +1495,10 @@ namespace UnityEngine.Rendering.HighDefinition
             m_ShaderGraphVertexCount.Clear();
 
             UpdateShaderGraphTexturePassData updatePassData;
-            using (var builder = renderGraph.AddRenderPass<UpdateShaderGraphTexturePassData>("UpdateShaderGraphDecalTexture", out updatePassData, ProfilingSampler.Get(HDProfileId.UpdateShaderGraphDecalTexture)))
+            using (var builder = renderGraph.AddUnsafePass<UpdateShaderGraphTexturePassData>("UpdateShaderGraphDecalTexture", out updatePassData, ProfilingSampler.Get(HDProfileId.UpdateShaderGraphDecalTexture)))
             {
-                updatePassData.atlasTexture = builder.WriteTexture(renderGraph.ImportTexture(Atlas.AtlasTexture));
+                updatePassData.atlasTexture = renderGraph.ImportTexture(Atlas.AtlasTexture);
+                builder.UseTexture(updatePassData.atlasTexture, AccessFlags.Write);
                 updatePassData.shaderGraphData = m_ShaderGraphList;
                 updatePassData.updateMipmaps = false;
 
@@ -1504,7 +1507,9 @@ namespace UnityEngine.Rendering.HighDefinition
                     ShaderGraphData shaderGraphData = m_ShaderGraphList[i];
                     if (shaderGraphData.passIndex == -1)
                     {
-                        Debug.LogError("Trying to update a shader graph texture with an invalid pass index");
+                        m_ShaderGraphVertexCount.Add(0);
+
+                        Debug.LogError($"Trying to update a shader graph texture with an invalid pass index on Material {shaderGraphData.material.name}");
                         continue;
                     }
 
@@ -1543,9 +1548,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 updatePassData.shaderGraphVertexCount = m_ShaderGraphVertexCount;
 
-                builder.SetRenderFunc((UpdateShaderGraphTexturePassData data, RenderGraphContext context) =>
+                builder.SetRenderFunc(static (UpdateShaderGraphTexturePassData data, UnsafeGraphContext ctx) =>
                 {
-                    context.cmd.SetRenderTarget(data.atlasTexture);
+                    ctx.cmd.SetRenderTarget(data.atlasTexture);
 
                     for (int i = 0; i < data.shaderGraphData.Count; i++)
                     {
@@ -1554,7 +1559,7 @@ namespace UnityEngine.Rendering.HighDefinition
                             continue;
 
                         ShaderGraphData shaderGraphData = data.shaderGraphData[i];
-                        context.cmd.DrawProcedural(Matrix4x4.identity, shaderGraphData.material, shaderGraphData.passIndex, MeshTopology.Quads, vertexCount, 1, shaderGraphData.propertyBlock);
+                        ctx.cmd.DrawProcedural(Matrix4x4.identity, shaderGraphData.material, shaderGraphData.passIndex, MeshTopology.Quads, vertexCount, 1, shaderGraphData.propertyBlock);
                     }
                 });
             }
@@ -1562,13 +1567,14 @@ namespace UnityEngine.Rendering.HighDefinition
             // Create the mipmaps for the texture atlas
             if (updatePassData.updateMipmaps)
             {
-                using (var builder = renderGraph.AddRenderPass<UpdateAtlasMipmapsPassData>("UpdateDecalAtlasMipmaps", out var passData, ProfilingSampler.Get(HDProfileId.UpdateDecalAtlasMipmaps)))
+                using (var builder = renderGraph.AddUnsafePass<UpdateAtlasMipmapsPassData>("UpdateDecalAtlasMipmaps", out var passData, ProfilingSampler.Get(HDProfileId.UpdateDecalAtlasMipmaps)))
                 {
-                    passData.atlasTexture = builder.WriteTexture(renderGraph.ImportTexture(Atlas.AtlasTexture));
+                    passData.atlasTexture = renderGraph.ImportTexture(Atlas.AtlasTexture);
+                    builder.UseTexture(passData.atlasTexture, AccessFlags.Write);
 
-                    builder.SetRenderFunc((UpdateAtlasMipmapsPassData data, RenderGraphContext context) =>
+                    builder.SetRenderFunc(static (UpdateAtlasMipmapsPassData data, UnsafeGraphContext ctx) =>
                     {
-                        context.cmd.GenerateMips(data.atlasTexture);
+                        CommandBufferHelpers.GetNativeCommandBuffer(ctx.cmd).GenerateMips(data.atlasTexture);
                     });
                 }
             }
@@ -1609,7 +1615,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
         public void CreateDrawData()
         {
-            // Reset number of clustered decals 
+            // Reset number of clustered decals
             m_DecalDatasCount = 0;
             // Count the current maximum number of decals to cluster, to allow reallocation if needed
             int maxDecalsToCluster = m_DecalsVisibleThisFrame;
@@ -1673,7 +1679,8 @@ namespace UnityEngine.Rendering.HighDefinition
         public void RenderDebugOverlay(HDCamera hdCamera, CommandBuffer cmd, int mipLevel, Rendering.DebugOverlay debugOverlay)
         {
             cmd.SetViewport(debugOverlay.Next());
-            HDUtils.BlitQuad(cmd, Atlas.AtlasTexture, new Vector4(1, 1, 0, 0), new Vector4(1, 1, 0, 0), mipLevel, true);
+            HDUtils.BlitQuad(cmd, Atlas.AtlasTexture,
+                new Vector4(1, 1, 0, 0), new Vector4(1, 1, 0, 0), mipLevel, true);
         }
 
         public void LoadCullResults(CullResult cullResult)

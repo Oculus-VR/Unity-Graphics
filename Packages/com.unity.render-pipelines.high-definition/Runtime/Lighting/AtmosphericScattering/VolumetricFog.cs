@@ -3,8 +3,9 @@ using System;
 namespace UnityEngine.Rendering.HighDefinition
 {
     // Deprecated, kept for migration
-    [Obsolete()]
+    [Obsolete("#from(2021.2)")]
     [SupportedOnRenderPipeline(typeof(HDRenderPipelineAsset))]
+    [DisplayInfo(name = "Volumetric Fog (Deprecated)")]
     class VolumetricFog : AtmosphericScattering
     {
         public ColorParameter albedo = new ColorParameter(Color.white);
@@ -18,7 +19,5 @@ namespace UnityEngine.Rendering.HighDefinition
         internal override void PushShaderParameters(HDCamera hdCamera, CommandBuffer cmd)
         {
         }
-
-        VolumetricFog() => displayName = "Volumetric Fog (Deprecated)";
     }
 }

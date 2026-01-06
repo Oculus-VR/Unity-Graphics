@@ -1,6 +1,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using Unity.Mathematics;
+using UnityEngine.Experimental.Rendering;
 
 namespace UnityEngine.Rendering.RenderGraphModule.Util
 {
@@ -17,6 +18,9 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         /// <returns>Returns true if the shader features required by the copy pass is supported for MSAA, otherwise will it return false.</returns>
         public static bool CanAddCopyPassMSAA()
         {
+            if (!IsFramebufferFetchEmulationMSAASupportedOnCurrentPlatform())
+                return false;
+
             return Blitter.CanCopyMSAA();
         }
 
@@ -27,7 +31,91 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         /// <returns>Returns true if the shader features required by the copy pass is supported for MSAA, otherwise will it return false.</returns>
         public static bool CanAddCopyPassMSAA(in TextureDesc sourceDesc)
         {
-            return Blitter.CanCopyMSAA(sourceDesc);
+            if (!IsFramebufferFetchEmulationMSAASupportedOnCurrentPlatform())
+                return false;
+
+            return Blitter.CanCopyMSAA(sourceDesc.bindTextureMS);
+        }
+
+        /// <summary>
+        /// Checks if the shader features required by the MSAA version of the copy pass is supported on current platform.
+        /// </summary>
+        /// <param name="bindTextureMS">The texture description of the that will be copied from.</param>
+        /// <returns>Returns true if the shader features required by the copy pass is supported for MSAA, otherwise will it return false.</returns>
+        public static bool CanAddCopyPassMSAA(bool bindTextureMS)
+        {
+            if (!IsFramebufferFetchEmulationMSAASupportedOnCurrentPlatform())
+                return false;
+
+            return Blitter.CanCopyMSAA(bindTextureMS);
+        }
+
+        internal static bool IsFramebufferFetchEmulationMSAASupportedOnCurrentPlatform()
+        {
+            // TODO: Temporarily disable this utility pending a more efficient solution for supporting or disabling framebuffer fetch emulation on PS4/PS5.
+            return (SystemInfo.graphicsDeviceType != GraphicsDeviceType.PlayStation4
+                 && SystemInfo.graphicsDeviceType != GraphicsDeviceType.PlayStation5 && SystemInfo.graphicsDeviceType != GraphicsDeviceType.PlayStation5NGGC);
+        }
+
+        /// <summary>
+        /// Determines whether framebuffer fetch is supported on the current platform for the given texture.
+        /// This includes checking both general support for framebuffer fetch emulation and specific support
+        /// for multisampled (MSAA) textures.
+        /// </summary>
+        /// <param name="graph">The RenderGraph adding this pass to.</param>
+        /// <param name="tex">The texture handle to validate for framebuffer fetch compatibility.</param>
+        /// <returns>
+        /// Returns true if framebuffer fetch is supported on the current platform for the given texture;
+        /// otherwise, returns false.
+        /// </returns>
+        public static bool IsFramebufferFetchSupportedOnCurrentPlatform(this RenderGraph graph, in TextureHandle tex)
+        {
+            if (!IsFramebufferFetchEmulationMSAASupportedOnCurrentPlatform())
+            {
+                var sourceInfo = graph.GetRenderTargetInfo(tex);
+                if (sourceInfo.msaaSamples > 1)
+                    return sourceInfo.bindMS;
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Checks whether the copy pass can be used between the given source and destination textures within the RenderGraph.
+        /// </summary>
+        /// <param name="graph">The RenderGraph adding this pass to.</param>
+        /// <param name="source">The texture the data is copied from.</param>
+        /// <param name="destination">The texture the data is copied to. This has to be different from souce.</param>
+        /// <returns>True if the copy pass can be used between the given source and destination textures, false otherwise.</returns>
+        public static bool CanAddCopyPass(this RenderGraph graph, TextureHandle source, TextureHandle destination)
+        {
+            if (!source.IsValid() || !destination.IsValid())
+                return false;
+
+            var sourceInfo = graph.GetRenderTargetInfo(source);
+            var destinationInfo = graph.GetRenderTargetInfo(destination);
+
+            if (sourceInfo.msaaSamples != destinationInfo.msaaSamples)
+                return false;
+
+            if (sourceInfo.width != destinationInfo.width ||
+                sourceInfo.height != destinationInfo.height)
+                return false;
+
+            if (sourceInfo.volumeDepth != destinationInfo.volumeDepth)
+                return false;
+
+            if (GraphicsFormatUtility.IsDepthFormat(sourceInfo.format) || GraphicsFormatUtility.IsDepthFormat(destinationInfo.format))
+                return false;
+
+            // Note: Needs shader model ps_4.1 to support SV_SampleIndex which means the copy pass isn't supported for MSAA on some platforms.
+            //       We can check this by checking the amout of shader passes the copy shader has.
+            //       It would have 1 if the MSAA pass is not able to be used for target and 2 otherwise.
+            //       https://docs.unity3d.com/2017.4/Documentation/Manual/SL-ShaderCompileTargets.html
+            //       https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-get-sample-position
+            if ((int)sourceInfo.msaaSamples > 1 && !CanAddCopyPassMSAA(sourceInfo.bindMS))
+                return false;
+
+            return true;
         }
 
         class CopyPassData
@@ -36,75 +124,91 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
             public bool force2DForXR;
         }
 
-        private const string DisableTexture2DXArray = "DISABLE_TEXTURE2D_X_ARRAY";
-
         /// <summary>
-        /// Adds a pass to copy data from a source texture to a destination texture. The data in the texture is copied pixel by pixel. The copy function can only do 1:1 copies it will not allow scaling the data or
+        /// Adds a pass to copy data from a source texture to a destination texture and returns the builder.
+        /// The data in the texture is copied pixel by pixel. The copy function can only do 1:1 copies it will not allow scaling the data or
         /// doing texture filtering. Furthermore it requires the source and destination surfaces to be the same size in pixels and have the same number of MSAA samples and array slices.
         /// If the textures are multi sampled, individual samples will be copied.
         ///
         /// Copy is intentionally limited in functionally so it can be implemented using frame buffer fetch for optimal performance on tile based GPUs. If you are looking for a more generic
-        /// function please use the AddBlitPass function.
+        /// function please use the AddBlitPass function. To verify whether the copy pass is supported for the intended operation, use the CanAddCopyPass function.
         ///
         /// When XR is active, array textures containing both eyes will be automatically copied.
-        ///
-        /// For MSAA textures please use the CanAddCopyPassMSAA() function first to check if the CopyPass is supported on current platform.
         /// 
         /// </summary>
         /// <param name="graph">The RenderGraph adding this pass to.</param>
         /// <param name="source">The texture the data is copied from.</param>
         /// <param name="destination">The texture the data is copied to. This has to be different from souce.</param>
+        /// <param name="returnBuilder">The builder instance of the added copy pass.</param>
         /// <param name="passName">A name to use for debugging and error logging. This name will be shown in the rendergraph debugger. </param>
         /// <param name="file">File line of the source file this function is called from. Used for debugging. This parameter is automatically generated by the compiler. Users do not need to pass it.</param>
         /// <param name="line">File line of the source file this function is called from. Used for debugging. This parameter is automatically generated by the compiler. Users do not need to pass it.</param>
-        public static void AddCopyPass(
+        /// <returns>The builder instance of the added copy pass.</returns>
+        public static IBaseRenderGraphBuilder AddCopyPass(
             this RenderGraph graph,
             TextureHandle source,
             TextureHandle destination,
-            string passName = "Copy Pass Utility"
+            string passName = "Copy Pass Utility",
+            bool returnBuilder = false
 #if !CORE_PACKAGE_DOCTOOLS
             , [CallerFilePath] string file = "",
             [CallerLineNumber] int line = 0)
 #endif
         {
-            if (!graph.nativeRenderPassesEnabled)
-                throw new ArgumentException("CopyPass only supported for native render pass. Please use the blit functions instead for non native render pass platforms.");
+            var sourceInfo = graph.GetRenderTargetInfo(source);
+            var destinationInfo = graph.GetRenderTargetInfo(destination);
 
-            var sourceDesc = graph.GetTextureDesc(source);
-            var destinationDesc = graph.GetTextureDesc(destination);
-
-            if (sourceDesc.msaaSamples != destinationDesc.msaaSamples)
+            if (sourceInfo.msaaSamples != destinationInfo.msaaSamples)
                 throw new ArgumentException("MSAA samples from source and destination texture doesn't match.");
 
-            if (sourceDesc.width != destinationDesc.width || 
-                sourceDesc.height != destinationDesc.height)
+            if (sourceInfo.width != destinationInfo.width ||
+                sourceInfo.height != destinationInfo.height)
                 throw new ArgumentException("Dimensions for source and destination texture doesn't match.");
 
-            if (sourceDesc.slices != destinationDesc.slices)
+            if (sourceInfo.volumeDepth != destinationInfo.volumeDepth)
                 throw new ArgumentException("Slice count for source and destination texture doesn't match.");
 
-            var isMSAA = (int)sourceDesc.msaaSamples > 1;
+            if (GraphicsFormatUtility.IsDepthFormat(sourceInfo.format) || GraphicsFormatUtility.IsDepthFormat(destinationInfo.format))
+                throw new ArgumentException("Depth format for source or destination texture is not supported. Use AddBlitPass instead.");
+
+            var isMSAA = (int)sourceInfo.msaaSamples > 1;
 
             // Note: Needs shader model ps_4.1 to support SV_SampleIndex which means the copy pass isn't supported for MSAA on some platforms.
             //       We can check this by checking the amout of shader passes the copy shader has.
             //       It would have 1 if the MSAA pass is not able to be used for target and 2 otherwise.
             //       https://docs.unity3d.com/2017.4/Documentation/Manual/SL-ShaderCompileTargets.html
             //       https://learn.microsoft.com/en-us/windows/win32/direct3dhlsl/dx-graphics-hlsl-to-get-sample-position
-            if (isMSAA && !Blitter.CanCopyMSAA(sourceDesc))
+            if (isMSAA && !CanAddCopyPassMSAA(sourceInfo.bindMS))
                 throw new ArgumentException("Target does not support MSAA for AddCopyPass. Please use the blit alternative or use non MSAA textures.");
 
-            using (var builder = graph.AddRasterRenderPass<CopyPassData>(passName, out var passData, file, line))
-            {
-                passData.isMSAA = isMSAA;
+            var builder = graph.AddRasterRenderPass<CopyPassData>(passName, out var passData, file, line);
 
+            try
+            {
                 bool isXRArrayTextureActive = TextureXR.useTexArray;
-                bool isArrayTexture = sourceDesc.slices > 1;
-                passData.force2DForXR = isXRArrayTextureActive && (isArrayTexture == false);
-                builder.SetInputAttachment(source, 0, AccessFlags.Read);
+                bool isArrayTexture = sourceInfo.volumeDepth > 1;
+
+                passData.isMSAA = isMSAA;
+                passData.force2DForXR = isXRArrayTextureActive && (!isArrayTexture);
+
+                builder.SetInputAttachment(source, 0);
                 builder.SetRenderAttachment(destination, 0, AccessFlags.Write);
-                builder.SetRenderFunc((CopyPassData data, RasterGraphContext context) => CopyRenderFunc(data, context));
-                if (passData.force2DForXR) builder.AllowGlobalStateModification(true);// So we can set the keywords
+                builder.SetRenderFunc(static (CopyPassData data, RasterGraphContext context) => CopyRenderFunc(data, context));
+
+                if (passData.force2DForXR)
+                    builder.AllowGlobalStateModification(true);// So we can set the keywords
             }
+            catch
+            {
+                builder.Dispose();
+                throw;
+            }
+
+            if (returnBuilder)
+                return builder;
+
+            builder.Dispose();
+            return null;
         }
 
         /// <summary>
@@ -114,14 +218,13 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         ///
         /// Copy is intentionally limited in functionally so it can be implemented using frame buffer fetch for optimal performance on tile based GPUs. If you are looking for a more generic
         /// function please use the AddBlitPass function. Blit will automatically decide (based on the arguments) whether to use normal rendering or to instead call copy internally.
+        /// To verify whether the copy pass is supported for the intended operation, use the CanAddCopyPass function.
         ///
         /// The source/destination mip and slice arguments are ignored and were never used by this function therefore it is better to call the AddCopyPass overload without them. This function
         /// is here for backwards compatibility with existing code.
         ///
         /// When XR is active, array textures containing both eyes will be automatically copied.
         ///
-        /// For MSAA textures please use the CanAddCopyPassMSAA() function first to check if the CopyPass is supported on current platform.
-        /// 
         /// </summary>
         /// <param name="graph">The RenderGraph adding this pass to.</param>
         /// <param name="source">The texture the data is copied from.</param>
@@ -147,7 +250,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
             [CallerLineNumber] int line = 0)
 #endif
         {
-            AddCopyPass(graph, source, destination, passName, file, line);
+            AddCopyPass(graph, source, destination, passName, false, file, line);
         }
 
         static void CopyRenderFunc(CopyPassData data, RasterGraphContext rgContext)
@@ -164,11 +267,11 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         /// <param name="destinationSlice"></param>
         /// <param name="numSlices"></param>
         /// <param name="numMips"></param>
-        internal static bool IsTextureXR(ref TextureDesc destDesc, int sourceSlice, int destinationSlice, int numSlices, int numMips)
+        internal static bool IsTextureXR(ref RenderTargetInfo destDesc, int sourceSlice, int destinationSlice, int numSlices, int numMips)
         {
             if (TextureXR.useTexArray &&
-                  destDesc.dimension == TextureDimension.Tex2DArray &&
-                  destDesc.slices == TextureXR.slices &&
+                  destDesc.volumeDepth > 1 &&
+                  destDesc.volumeDepth == TextureXR.slices &&
                   sourceSlice == 0 &&
                   destinationSlice == 0 &&
                   numSlices == TextureXR.slices &&
@@ -208,16 +311,19 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
             public int numMips;
             public BlitFilterMode filterMode;
             public bool isXR;
-
+            public bool isDepth;
         }
 
         /// <summary>
         /// Add a render graph pass to blit an area of the source texture into the destination texture. Blitting is a high-level way to transfer texture data from a source to a destination texture.
         /// It may scale and texture-filter the transferred data as well as doing data transformations on it (e.g. R8Unorm to float).
         ///
-        /// This function does not have special handling for MSAA textures. This means that when the source is sampled this will be a resolved value (standard Unity behavior when sampling an MSAA render texture)
+        /// This function does not have special handling for MSAA color textures. This means that when the source color is sampled this will be a resolved value (standard Unity behavior when sampling an MSAA render texture)
         /// and when the destination is MSAA all written samples will contain the same values (e.g. as you would expect when rendering a full screen quad to an msaa buffer). If you need special MSAA
         /// handling or custom resolving please use the overload that takes a Material and implement the appropriate behavior in the shader.
+        ///
+        /// For depth textures, MSAA handling is different. If the bindTextureMS flag of the source texture is set to true, then the MSAA values will be resolved by the blit shader and write a single value to a non-MSAA output texture.
+        /// It is not supported to set the source texture bindTextureMS flag to false or to bind an MSAA texture as destination when using a depth texture as source texture.
         ///
         /// This function works transparently with regular textures and XR textures (which may depending on the situation be 2D array textures). In the case of an XR array texture
         /// the operation will be repeated for each slice in the texture if numSlices is set to -1.
@@ -236,9 +342,11 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         /// <param name="numMips"> The number of mipmaps to copy. -1 to copy all mipmaps. Arguments that copy invalid mips to be copied will lead to an error.</param>
         /// <param name="filterMode">The filtering used when blitting from source to destination.</param>
         /// <param name="passName">A name to use for debugging and error logging. This name will be shown in the rendergraph debugger. </param>
+        /// <param name="returnBuilder">A boolean indicating whether to return the builder instance for the blit pass.</param>
         /// <param name="file">File line of the source file this function is called from. Used for debugging. This parameter is automatically generated by the compiler. Users do not need to pass it.</param>
         /// <param name="line">File line of the source file this function is called from. Used for debugging. This parameter is automatically generated by the compiler. Users do not need to pass it.</param>
-        public static void AddBlitPass(this RenderGraph graph,
+        /// <returns>A new instance of IBaseRenderGraphBuilder used to setup the new Render Pass, returned only if <paramref name="returnBuilder"/> is set to <c>true</c>or <c>null</c> if <paramref name="returnBuilder"/> is <c>false</c>.</returns>
+        public static IBaseRenderGraphBuilder AddBlitPass(this RenderGraph graph,
             TextureHandle source,
             TextureHandle destination,
             Vector2 scale,
@@ -250,24 +358,34 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
             int destinationMip = 0,
             int numMips = 1,
             BlitFilterMode filterMode = BlitFilterMode.ClampBilinear,
-            string passName = "Blit Pass Utility"
+            string passName = "Blit Pass Utility",
+            bool returnBuilder = false
 #if !CORE_PACKAGE_DOCTOOLS
                 , [CallerFilePath] string file = "",
                 [CallerLineNumber] int line = 0)
 #endif
         {
+            if (!source.IsValid())
+            {
+                throw new ArgumentException($"BlitPass: {passName} source needs to be a valid texture handle.");
+            }
             var sourceDesc = graph.GetTextureDesc(source);
-            var destinationDesc = graph.GetTextureDesc(destination);
+
+            if (!destination.IsValid())
+            {
+                throw new ArgumentException($"BlitPass: {passName} destination needs to be a valid texture handle.");
+            }
+            var destinationDesc = graph.GetRenderTargetInfo(destination);
 
             int sourceMaxWidth = math.max(math.max(sourceDesc.width, sourceDesc.height), sourceDesc.slices);
             int sourceTotalMipChainLevels = (int)math.log2(sourceMaxWidth) + 1;
 
-            int destinationMaxWidth = math.max(math.max(destinationDesc.width, destinationDesc.height), destinationDesc.slices);
+            int destinationMaxWidth = math.max(math.max(destinationDesc.width, destinationDesc.height), destinationDesc.volumeDepth);
             int destinationTotalMipChainLevels = (int)math.log2(destinationMaxWidth) + 1;
 
             if (numSlices == -1) numSlices = sourceDesc.slices - sourceSlice;
             if (numSlices > sourceDesc.slices - sourceSlice
-                || numSlices > destinationDesc.slices - destinationSlice)
+                || numSlices > destinationDesc.volumeDepth - destinationSlice)
             {
                 throw new ArgumentException($"BlitPass: {passName} attempts to blit too many slices. The pass will be skipped.");
             }
@@ -278,8 +396,26 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
                 throw new ArgumentException($"BlitPass: {passName} attempts to blit too many mips. The pass will be skipped.");
             }
 
-            using (var builder = graph.AddUnsafePass<BlitPassData>(passName, out var passData, file, line))
+            bool sourceIsDepth = GraphicsFormatUtility.IsDepthFormat(sourceDesc.format);
+            bool destinationIsDepth = GraphicsFormatUtility.IsDepthFormat(destinationDesc.format);
+            if (!sourceIsDepth && destinationIsDepth)
+                throw new ArgumentException($"BlitPass: {passName} attempts to blit from a color texture to a depth texture. This is not allowed.");
+
+            if (sourceIsDepth && !sourceDesc.bindTextureMS && sourceDesc.msaaSamples != MSAASamples.None)
+                throw new ArgumentException($"BlitPass: {passName} source depth render texture is MSAA but doesn't have the bindTextureMS flag set to true, this is not supported. This is not allowed.");
+
+            var canUseCopyPass = CanAddCopyPass(graph, source, destination)
+                                 && scale == Vector2.one && offset == Vector2.zero && numSlices == 1 && numMips == 1;
+
+            if (canUseCopyPass && !destinationIsDepth)
             {
+                return AddCopyPass(graph, source, destination, passName, returnBuilder, file, line);
+            }
+
+            var builder = graph.AddUnsafePass<BlitPassData>(passName, out var passData, file, line);
+            try
+            {
+                passData.isXR = IsTextureXR(ref destinationDesc, sourceSlice, destinationSlice, numSlices, numMips);
                 passData.source = source;
                 passData.destination = destination;
                 passData.scale = scale;
@@ -291,12 +427,24 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
                 passData.destinationMip = destinationMip;
                 passData.numMips = numMips;
                 passData.filterMode = filterMode;
-                passData.isXR = IsTextureXR(ref destinationDesc, sourceSlice, destinationSlice, numSlices, numMips);
+                passData.isDepth = destinationIsDepth;
                 builder.UseTexture(source, AccessFlags.Read);
                 builder.UseTexture(destination, AccessFlags.Write);
-                builder.SetRenderFunc((BlitPassData data, UnsafeGraphContext context) => BlitRenderFunc(data, context));
+                builder.SetRenderFunc(static (BlitPassData data, UnsafeGraphContext context) => BlitRenderFunc(data, context));
             }
+            catch
+            {
+                builder.Dispose();
+                throw;
+            }
+
+            if (returnBuilder)
+                return builder;
+
+            builder.Dispose();
+            return null;
         }
+
         static Vector4 s_BlitScaleBias = new Vector4();
         static void BlitRenderFunc(BlitPassData data, UnsafeGraphContext context)
         {
@@ -306,9 +454,15 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
             s_BlitScaleBias.w = data.offset.y;
 
             CommandBuffer unsafeCmd = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
-            if (data.isXR)
+
+            if (data.isDepth)
             {
-                // This is the magic that makes XR work for blit. We set the rendertargets passing -1 for the slices. This means it will bind all (both eyes) slices. 
+                context.cmd.SetRenderTarget(data.destination, 0, CubemapFace.Unknown, -1);
+                Blitter.BlitDepth(unsafeCmd, data.source, s_BlitScaleBias, 0);
+            }
+            else if (data.isXR)
+            {
+                // This is the magic that makes XR work for blit. We set the rendertargets passing -1 for the slices. This means it will bind all (both eyes) slices.
                 // The engine will then also automatically duplicate our draws and the vertex and pixel shader (through macros) will ensure those draws end up in the right eye.
                 context.cmd.SetRenderTarget(data.destination, 0, CubemapFace.Unknown, -1);
                 Blitter.BlitTexture(unsafeCmd, data.source, s_BlitScaleBias, data.sourceMip, data.filterMode == BlitFilterMode.ClampBilinear);
@@ -356,7 +510,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         /// Use one of the constructor overloads for common use cases.
         ///
         /// By default most constructors will copy all array texture slices. This ensures XR textures are handled "automatically" without additional consideration.
-        /// 
+        ///
         /// The shader properties defined in the struct or constructors is used for most common usecases but they are not required to be used in the shader.
         /// By using the <c>MaterialPropertyBlock</c> can you add your shader properties with custom values.
         /// </summary>
@@ -369,7 +523,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
 
             /// <summary>
             /// Simple constructor that sets only the most common parameters to blit. The other parameters will be set to sensible default values.
-            /// 
+            ///
             /// </summary>
             /// <param name="source">The texture the data is copied from.</param>
             /// <param name="destination">The texture the data is copied to.</param>
@@ -724,7 +878,8 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         }
 
         /// <summary>
-        /// Add a render graph pass to blit an area of the source texture into the destination texture. Blitting is a high-level way to transfer texture data from a source to a destination texture.
+        /// Add a render graph pass to blit an area of the source texture into the destination texture and return the builder if requested.
+        /// Blitting is a high-level way to transfer texture data from a source to a destination texture.
         /// In this overload the data may be transformed by an arbitrary material.
         ///
         /// This function works transparently with regular textures and XR textures (which may depending on the situation be 2D array textures) if numSlices is set to -1 and the slice property works correctly.
@@ -750,16 +905,19 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
         /// Notes on using this function:
         /// - If you need special handling of MSAA buffers this can be implemented using the bindMS flag on the source texture and per-sample pixel shader invocation on the destination texture (e.g. using SV_SampleIndex).
         /// - MaterialPropertyBlocks used for this function should not contain any textures added by MaterialPropertyBlock.SetTexture(...) as it will cause untracked textures when using RenderGraph causing uninstended behaviour.
-        /// 
+        ///
         /// </summary>
         /// <param name="graph">The RenderGraph adding this pass to.</param>
         /// <param name="blitParameters">Parameters used for rendering.</param>
-        /// <param name="passName">A name to use for debugging and error logging. This name will be shown in the rendergraph debugger. </param>
+		/// <param name="passName">A name to use for debugging and error logging. This name will be shown in the rendergraph debugger. </param>
+        /// <param name="returnBuilder">A boolean indicating whether to return the builder instance for the blit pass.</param>
         /// <param name="file">File line of the source file this function is called from. Used for debugging. This parameter is automatically generated by the compiler. Users do not need to pass it.</param>
         /// <param name="line">File line of the source file this function is called from. Used for debugging. This parameter is automatically generated by the compiler. Users do not need to pass it.</param>
-        public static void AddBlitPass(this RenderGraph graph,
+        /// <returns>A new instance of IBaseRenderGraphBuilder used to setup the new Render Pass, returned only if <paramref name="returnBuilder"/> is set to <c>true</c>or <c>null</c> if <paramref name="returnBuilder"/> is <c>false</c>.</returns>
+        public static IBaseRenderGraphBuilder AddBlitPass(this RenderGraph graph,
             BlitMaterialParameters blitParameters,
-            string passName = "Blit Pass Utility w. Material"
+            string passName = "Blit Pass Utility w. Material",
+            bool returnBuilder = false
 #if !CORE_PACKAGE_DOCTOOLS
                 , [CallerFilePath] string file = "",
                 [CallerLineNumber] int line = 0)
@@ -770,14 +928,14 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
                 throw new ArgumentException($"BlitPass: {passName} destination needs to be a valid texture handle.");
             }
 
-            var destinationDesc = graph.GetTextureDesc(blitParameters.destination);
+            var destinationDesc = graph.GetRenderTargetInfo(blitParameters.destination);
 
             // Fill in unspecified parameters automatically based on the texture descriptor
-            int destinationMaxWidth = math.max(math.max(destinationDesc.width, destinationDesc.height), destinationDesc.slices);
+            int destinationMaxWidth = math.max(math.max(destinationDesc.width, destinationDesc.height), destinationDesc.volumeDepth);
             int destinationTotalMipChainLevels = (int)math.log2(destinationMaxWidth) + 1;
             if (blitParameters.numSlices == -1)
             {
-                blitParameters.numSlices = destinationDesc.slices - blitParameters.destinationSlice;
+                blitParameters.numSlices = destinationDesc.volumeDepth - blitParameters.destinationSlice;
             }
 
             if (blitParameters.numMips == -1)
@@ -804,9 +962,9 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
             }
 
             // Validate against destination
-            if (blitParameters.numSlices > destinationDesc.slices - blitParameters.destinationSlice)
+            if (blitParameters.numSlices > destinationDesc.volumeDepth - blitParameters.destinationSlice)
             {
-               throw new ArgumentException($"BlitPass: {passName} attempts to blit too many slices. There are not enough slices in the destination array. The pass will be skipped.");
+                throw new ArgumentException($"BlitPass: {passName} attempts to blit too many slices. There are not enough slices in the destination array. The pass will be skipped.");
             }
 
             if (blitParameters.numMips > destinationTotalMipChainLevels - blitParameters.destinationMip)
@@ -814,7 +972,13 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
                 throw new ArgumentException($"BlitPass: {passName} attempts to blit too many mips. There are not enough mips in the destination texture. The pass will be skipped.");
             }
 
-            using (var builder = graph.AddUnsafePass<BlitMaterialPassData>(passName, out var passData, file, line))
+            if (blitParameters.material == null)
+            {
+                throw new ArgumentException($"BlitPass: {passName} attempts to use a null material.");
+            }
+
+            var builder = graph.AddUnsafePass<BlitMaterialPassData>(passName, out var passData, file, line);
+            try
             {
                 passData.sourceTexturePropertyID = blitParameters.sourceTexturePropertyID;
                 passData.source = blitParameters.source;
@@ -834,16 +998,26 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
                 passData.sourceSlicePropertyID = blitParameters.sourceSlicePropertyID;
                 passData.sourceMipPropertyID = blitParameters.sourceMipPropertyID;
                 passData.scaleBiasPropertyID = blitParameters.scaleBiasPropertyID;
-                passData.isXR = IsTextureXR(ref destinationDesc, (passData.sourceSlice == -1) ? 0 : passData.sourceSlice, passData.destinationSlice, passData.numSlices, passData.numMips);
 
+                passData.isXR = IsTextureXR(ref destinationDesc, (passData.sourceSlice == -1) ? 0 : passData.sourceSlice, passData.destinationSlice, passData.numSlices, passData.numMips);
                 if (blitParameters.source.IsValid())
                 {
                     builder.UseTexture(blitParameters.source);
                 }
-
                 builder.UseTexture(blitParameters.destination, AccessFlags.Write);
-                builder.SetRenderFunc((BlitMaterialPassData data, UnsafeGraphContext context) => BlitMaterialRenderFunc(data, context));
+                builder.SetRenderFunc(static (BlitMaterialPassData data, UnsafeGraphContext context) => BlitMaterialRenderFunc(data, context));
             }
+            catch
+            {
+                builder.Dispose();
+                throw;
+            }
+
+            if (returnBuilder)
+                return builder;
+
+            builder.Dispose();
+            return null;
         }
 
         static void BlitMaterialRenderFunc(BlitMaterialPassData data, UnsafeGraphContext context)
@@ -866,9 +1040,9 @@ namespace UnityEngine.Rendering.RenderGraphModule.Util
 
             if (data.isXR)
             {
-                // This is the magic that makes XR work for blit. We set the rendertargets passing -1 for the slices. This means it will bind all (both eyes) slices. 
+                // This is the magic that makes XR work for blit. We set the rendertargets passing -1 for the slices. This means it will bind all (both eyes) slices.
                 // The engine will then also automatically duplicate our draws and the vertex and pixel shader (through macros) will ensure those draws end up in the right eye.
-                
+
                 if (data.sourceSlice != -1)
                     data.propertyBlock.SetInt(data.sourceSlicePropertyID, 0);
                 if (data.sourceMip != -1)

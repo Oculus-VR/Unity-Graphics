@@ -1,3 +1,4 @@
+
 * [Visual Effect Graph](index.md)
 * [Requirements](System-Requirements.md)
 * [What's new](whats-new.md)
@@ -16,6 +17,7 @@
   * [Experimental Features](ExperimentalFeatures.md)
   * [Sample Content](sample-content.md)
     * [Learning Templates](sample-learningTemplates.md)
+  * [Shortcuts](Shortcuts.md) 
 * [Graph Logic & Philosophy](GraphLogicAndPhilosophy.md)
   * [Systems](Systems.md)
   * [Contexts](Contexts.md)
@@ -39,10 +41,10 @@
   * [Property Binders](PropertyBinders.md)
   * [Event Binders](EventBinders.md)
   * [Output Event Handlers](OutputEventHandlers.md)
-* Shader Graph Integration
+* [Shader Graph Integration](ShaderGraphIntegration.md)
   * [Shader Graphs in Visual Effects](sg-working-with.md)
   * [Visual Effect Target](sg-target-visual-effect.md)
-* Pipeline Tools
+* [Pipeline Tools](PipelineTools.md)
   * [Representing Complex Shapes](representing-complex-shapes.md)
     * [Signed Distance Fields](sdf-in-vfx-graph.md)
       * [SDF Bake Tool](sdf-bake-tool.md)
@@ -54,8 +56,15 @@
   * [ExposedProperty Helper](ExposedPropertyHelper.md)
   * [Vector Fields](VectorFields.md)
   * [Spawner Callbacks](SpawnerCallbacks.md)
+  * [Realistic smoke lighting](six-way-lighting-landing.md)
+    * [Realistic smoke lighting with six-way lighting](six-way-lighting.md)
+    * [Generate six-way lightmap textures for visual effects](use-tools-generate-six-way-lightmap-textures.md)
+    * [Import six-way lightmap textures into unity](import-six-way-lightmap-textures-unity.md)
+    * [Create a six-way lit particle system in Visual Effect Graph](create-configure-six-way-lit-particle-system.md)
+    * [Customize existing six-way lightmap textures](create-effects-with-six-way-lighting.md)
+    * [Six-way smoke lit reference](six-way-lighting-reference.md)
 * [Node Library](node-library.md)
-  * Context
+  * [Context](Context.md)
     * [Event](Context-Event.md)
     * [GPU Event](Context-GPUEvent.md)
     * [Initialize Particle](Context-Initialize.md)
@@ -72,89 +81,68 @@
     * [Output ShaderGraph Quad](Context-OutputShaderGraphPlanarPrimitive.md)
     * [Ouput Particle ShaderGraph Mesh](Context-OutputShaderGraphMesh.md)
     * [Output ParticleStrip ShaderGraph Quad](Context-OutputShaderGraphStrip.md)
-    * Shared Output Settings
+    * [Shared Output Settings](SharedOutputSettings.md)
       * [Global Settings](Context-OutputSharedSettings.md)
       * [Lit Output Settings](Context-OutputLitSettings.md)
     * [Spawn](Context-Spawn.md)
     * [Update Particle](Context-Update.md)
-  * Block
-    * Attribute
+  * [Block](Block.md)
+    * [Attribute](Attribute.md)
       * [Curve](Block-SetAttributeFromCurve.md)
-      * Derived
-        * [Calculate Mass from Volume](Block-CalculateMassFromVolume.md)
+      * [Derived > Calculate Mass from Volume](Block-CalculateMassFromVolume.md)
       * [Map](Block-SetAttributeFromMap.md)
       * [Set](Block-SetAttribute.md)
-    * Collision
-      * [Collide with AABox](Block-CollideWithAABox.md)
-      * [Collide with Cone](Block-CollideWithCone.md)
-      * [Collide with Depth Buffer](Block-CollideWithDepthBuffer.md)
-      * [Collide with Plane](Block-CollideWithPlane.md)
-      * [Collide with Signed Distance Field](Block-CollideWithSignedDistanceField.md)
-      * [Collide with Sphere](Block-CollideWithSphere.md)
-    * Flipbook
-      * [Flipbook Player](Block-FlipbookPlayer.md)
-    * Force
-      * [Conform to Signed Distance Field](Block-ConformToSignedDistanceField.md)
-      * [Conform to Sphere](Block-ConformToSphere.md)
+    * [Collision](Block-Collision-LandingPage.md)
+      * [Collision Shape](Block-CollisionShape.md)
+      * [Collision Depth Buffer](Block-CollideWithDepthBuffer.md)
+      * [Kill Shape](Block-KillShape.md)
+      * [Trigger Shape](Block-TriggerShape.md)
+    * [Flipbook Player](Block-FlipbookPlayer.md)
+    * [Force](Force.md)
+      * [Attractor Shape Signed Distance Field](Block-ConformToSignedDistanceField.md)
+      * [Attractor Shape Sphere](Block-ConformToSphere.md)
       * [Force](Block-Force.md)
       * [Gravity](Block-Gravity.md)
       * [Linear Drag](Block-LinearDrag.md)
       * [Turbulence](Block-Turbulence.md)
       * [Vector Force Field](Block-VectorForceField.md)
-    * GPU Event
-      * [Trigger Event Always](Block-TriggerEventAlways.md)
-      * [Trigger Event On Die](Block-TriggerEventOnDie.md)
-      * [Trigger Event Rate](Block-TriggerEventRate.md)
-    * HLSL
-      * [Custom HLSL](Block-CustomHLSL.md)
-    * Implicit
+    * [HLSL > Custom HLSL](Block-CustomHLSL.md)
+    * [Implicit](Implicit.md)
       * [Integration : Update Position](Block-UpdatePosition.md)
       * [Integration : Update Rotation](Block-UpdateRotation.md)
-    * Kill
-      * [Kill (AABox)](Block-Kill(AABox).md)
-      * [Kill (Sphere)](Block-Kill(Sphere).md)
-    * Orientation
+    * [Orientation](Orientation.md)
       * [Connect Target](Block-ConnectTarget.md)
       * [Orient](Block-Orient.md)
-    * Output
+    * [Output](Output.md)
       * [Camera Fade](Block-CameraFade.md)
       * [Subpixel Anti-Aliasing](Block-SubpixelAntiAliasing.md)
-    * Position
+    * [Position Shape](Block-SetPositionShape-LandingPage.md)
       * [Set Position (Depth)](Block-SetPosition(Depth).md)
-      * [Position (Mesh)](Block-SetPosition(Mesh).md)
-      * [Position (Signed Distance Field)](Block-SetPosition(SignedDistanceField).md)
-      * [Position (Skinned Mesh)](Block-SetPosition(SkinnedMesh).md)
-      * [Set Position (Sequential : Circle)](Block-SetPosition(Sequential).md)
-      * [Set Position (Sequential : Line)](Block-SetPosition(Sequential).md)
-      * [Set Position (Sequential : ThreeDimensional)](Block-SetPosition(Sequential).md)
-      * [Set Position (Shape : AABox)](Block-SetPosition(AABox).md)
-      * [Set Position (Shape : Circle)](Block-SetPosition(Circle).md)
-      * [Set Position (Shape : Cone)](Block-SetPosition(Cone).md)
-      * [Set Position (Shape : Line)](Block-SetPosition(Line).md)
-      * [Set Position (Shape : Sphere)](Block-SetPosition(Sphere).md)
+      * [Set Position (Mesh)](Block-SetPosition(Mesh).md)
+      * [Set Position (Skinned Mesh)](Block-SetPosition(SkinnedMesh).md)
+      * [Set Position Shape](Block-SetPositionShape.md)
       * [Set Position (Sequential)](Block-SetPosition(Sequential).md)
       * [Tile/Warp Positions](Block-TileWarpPositions.md)
-    * Size
-      * [Screen Space Size](Block-ScreenSpaceSize.md)
-    * Spawn
+    * [Size > Screen Space Size](Block-ScreenSpaceSize.md)
+    * [Spawn](Spawn.md)
       * [Constant Spawn Rate](Block-ConstantRate.md)
       * [Periodic Burst](Block-Burst.md)
       * [Single  Burst](Block-Burst.md)
       * [Variable Spawn Rate](Block-VariableRate.md)
-      * Attribute
-        * [Set Spawn Event \<attribute>](Block-SetSpawnEvent.md)
-      * Custom
+      * [Attribute > Set Spawn Event \<attribute>](Block-SetSpawnEvent.md)
+      * [Custom Spawn Blocks](CustomSpawn.md)
         * [Increment Strip Index On Start](Block-IncrementStripIndexOnStart.md)
         * [Set Spawn Time](Block-SetSpawnTime.md)
         * [Spawn Over Distance](Block-SpawnOverDistance.md)
-    * Velocity
+    * [Trigger Event Block reference](Block-Trigger-Event.md)
+    * [Velocity](Velocity.md)
       * [Velocity from Direction & Speed (Change Speed)](Block-VelocityFromDirectionAndSpeed(ChangeSpeed).md)
       * [Velocity from Direction & Speed (New Direction)](Block-VelocityFromDirectionAndSpeed(NewDirection).md)
       * [Velocity from Direction & Speed (Random Direction)](Block-VelocityFromDirectionAndSpeed(RandomDirection).md)
       * [Velocity from Direction & Speed (Spherical)](Block-VelocityFromDirectionAndSpeed(Spherical).md)
       * [Velocity from Direction & Speed (Tangent)](Block-VelocityFromDirectionAndSpeed(Tangent).md)
-  * Operator
-    * Attribute
+  * [Operator](Operator.md)
+    * [Attribute](OperatorAttribute.md)
       * [Age Over Lifetime](Operator-AgeOverLifetime.md)
       * [Get Attribute: age](Operator-GetAttributeAge.md)
       * [Get Attribute: alive](Operator-GetAttributeAlive.md)
@@ -184,31 +172,30 @@
       * [Get Attribute: texIndex](Operator-GetAttributeTexIndex.md)
       * [Get Attribute: velocity](Operator-GetAttributeVelocity.md)
       * [Get Custom Attribute](Operator-GetCustomAttribute.md)
-    * Bitwise
+    * [Bitwise](Bitwise.md)
       * [And](Operator-BitwiseAnd.md)
       * [Complement](Operator-BitwiseComplement.md)
       * [Left Shift](Operator-BitwiseLeftShift.md)
       * [Or](Operator-BitwiseOr.md)
       * [Right Shift](Operator-BitwiseRightShift.md)
       * [Xor](Operator-BitwiseXor.md)
-    * Builtin
+    * [Built-in](Builtin.md)
       * [Delta Time](Operator-DeltaTime.md)
       * [Frame Index](Operator-FrameIndex.md)
       * [Local to World](Operator-LocalToWorld.md)
-      * [Main Camera](Operator-MainCamera.md)
       * [System Seed](Operator-SystemSeed.md)
       * [Total Time](Operator-TotalTime.md)
       * [World to Local](Operator-WorldToLocal.md)
-    * Camera
+    * [Camera](Camera.md)
+      * [Main Camera](Operator-MainCamera.md)
       * [Viewport to World Point](Operator-ViewportToWorldPoint.md)
       * [World to Viewport Point](Operator-WorldToViewportPoint.md)
-    * Color
+    * [Color](Color.md)
       * [Color Luma](Operator-ColorLuma.md)
       * [HSV to RGB](Operator-HSVToRGB.md)
       * [RBG to HSV](Operator-RGBToHSV.md)
-    * HLSL
-      * [Custom HLSL](Operator-CustomHLSL.md)
-    * Inline
+    * [HLSL > Custom HLSL](Operator-CustomHLSL.md)
+    * [Inline](Inline.md)
       * [AABox](Operator-InlineAABox.md)
       * [AnimationCurve](Operator-InlineAnimationCurve.md)
       * [ArcCircle](Operator-InlineArcCircle.md)
@@ -246,7 +233,7 @@
       * [Vector2](Operator-InlineVector2.md)
       * [Vector3](Operator-InlineVector3.md)
       * [Vector4](Operator-InlineVector4.md)
-    * Logic
+    * [Logic](Logic.md)
       * [And](Operator-LogicAnd.md)
       * [Branch](Operator-Branch.md)
       * [Compare](Operator-Compare.md)
@@ -255,8 +242,8 @@
       * [Not](Operator-LogicNot.md)
       * [Or](Operator-LogicOr.md)
       * [Switch](Operator-Switch.md)
-    * Math
-      * Arithmetic
+    * [Math](Math.md)
+      * [Arithmetic](Arithmetic.md)
         * [Absolute](Operator-Absolute.md)
         * [Add](Operator-Add.md)
         * [Divide](Operator-Divide.md)
@@ -274,7 +261,7 @@
         * [Square Root](Operator-SquareRoot.md)
         * [Step](Operator-Step.md)
         * [Subtract](Operator-Subtract.md)
-      * Clamp
+      * [Clamp](Clamp.md)
         * [Ceiling](Operator-Ceiling.md)
         * [Clamp](Operator-Clamp.md)
         * [Discretize](Operator-Discretize.md)
@@ -283,17 +270,16 @@
         * [Minimum](Operator-Minimum.md)
         * [Round](Operator-Round.md)
         * [Saturate](Operator-Saturate.md)
-      * Constants
+      * [Constants](Constants.md)
         * [Epsilon](Operator-Epsilon.md)
         * [Pi](Operator-Pi.md)
-      * Coordinates
+      * [Coordinates](Coordinates.md)
         * [Polar to Rectangular](Operator-PolarToRectangular.md)
         * [Rectangular to Polar](Operator-RectangularToPolar.md)
         * [Rectangular to Spherical](Operator-RectangularToSpherical.md)
         * [Spherical to Rectangular](Operator-SphericalToRectangular.md)
-      * Exp
-        * [Exp](Operator-Exp.md)
-      * Geometry
+      * [Exp](Operator-Exp.md)
+      * [Geometry](Geometry.md)
         * [Area (Circle)](Operator-Area(Circle).md)
         * [Change Space](Operator-ChangeSpace.md)
         * [Distance (Line)](Operator-Distance(Line).md)
@@ -312,13 +298,12 @@
         * [Volume (Oriented Box)](Operator-Volume(OrientedBox).md)
         * [Volume (Sphere)](Operator-Volume(Sphere).md)
         * [Volume (Torus)](Operator-Volume(Torus).md)
-      * Log
-        * [Log](Operator-Log.md)
-      * Remap
+      * [Log](Operator-Log.md)
+      * [Remap](Remap.md)
         * [Remap](Operator-Remap.md)
         * [Remap [0..1] => [-1..1]](Operator-Remap(-11).md)
         * [Remap [-1..1] => [0..1]](Operator-Remap(01).md)
-      * Trigonometry
+      * [Trigonometry](Trigonometry.md)
         * [Acos](Operator-Acos.md)
         * [Asin](Operator-Asin.md)
         * [Atan](Operator-Atan.md)
@@ -326,7 +311,7 @@
         * [Cosine](Operator-Cosine.md)
         * [Sine](Operator-Sine.md)
         * [Tangent](Operator-Tangent.md)
-      * Vector
+      * [Vector](Vector.md)
         * [Append Vector](Operator-AppendVector.md)
         * [Construct Matrix](Operator-ConstructMatrix.md)
         * [Cross Product](Operator-CrossProduct.md)
@@ -341,22 +326,22 @@
         * [Squared Distance](Operator-SquaredDistance.md)
         * [Squared Length](Operator-SquaredLength.md)
         * [Swizzle](Operator-Swizzle.md)
-      * Wave
+      * [Wave](Wave.md)
         * [Sawtooth Wave](Operator-SawtoothWave.md)
         * [Sine Wave](Operator-SineWave.md)
         * [Square Wave](Operator-SquareWave.md)
         * [Triangle Wave](Operator-TriangleWave.md)
-    * Noise
+    * [Noise](Noise.md)
       * [Cellular Curl Noise](Operator-CellularCurlNoise.md)
       * [Cellular Noise](Operator-CellularNoise.md)
       * [Perlin Curl Noise](Operator-PerlinCurlNoise.md)
       * [Perlin Noise](Operator-PerlinNoise.md)
       * [Value Curl Noise](Operator-ValueCurlNoise.md)
       * [Value Noise](Operator-ValueNoise.md)
-    * Random
+    * [Random](Random.md)
       * [Random Number](Operator-RandomNumber.md)
-	  * [Random Selector](Operator-RandomSelectorWeighted.md)
-    * Sampling
+      * [Random Selector](Operator-RandomSelectorWeighted.md)
+    * [Sampling](Sampling.md)
       * [Buffer Count](Operator-BufferCount.md)
       * [Get Mesh Index Count](Operator-MeshIndexCount.md)
       * [Get Mesh Triangle Count](Operator-MeshTriangleCount.md)
@@ -387,13 +372,10 @@
       * [Sample TextureCube](Operator-SampleTextureCube.md)
       * [Sample TextureCubeArray](Operator-SampleTextureCubeArray.md)
       * [Sample Attribute Map](Operator-SampleAttributeMap.md)
-    * Spawn
-      * [Spawn State](Operator-SpawnState.md)
-    * Utility
-      * [Point Cache](Operator-PointCache.md)
-* Performance and Optimization
-  * [Profiling and Debug Panels](performance-debug-panel.md)
-* Reference
+    * [Spawn > Spawn State](Operator-SpawnState.md)
+    * [Utility > Point Cache](Operator-PointCache.md)
+* [Performance and optimization](performance-debug-panel.md)
+* [Reference](Reference.md)
   * [Standard Attributes](Reference-Attributes.md)
   * [Types](VisualEffectGraphTypeReference.md)
     * [AABox](Type-AABox.md)

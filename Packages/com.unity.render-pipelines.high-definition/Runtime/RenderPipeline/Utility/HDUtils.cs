@@ -23,11 +23,11 @@ namespace UnityEngine.Rendering.HighDefinition
 
         /// <summary>Returns the render configuration for baked static lighting, this value can be used in a RendererListDesc call to render Lit objects.</summary>
         /// <returns></returns>
-        [Obsolete("Use GetRendererConfiguration() instead. #from(23.2).")]
+        [Obsolete("Use GetRendererConfiguration() instead. #from(2023.2).")]
         public static PerObjectData GetBakedLightingRenderConfig() => PerObjectData.LightProbe | PerObjectData.Lightmaps | PerObjectData.LightProbeProxyVolume;
         /// <summary>Returns the render configuration for baked static lighting with shadow masks, this value can be used in a RendererListDesc call to render Lit objects when shadow masks are enabled.</summary>
         /// <returns></returns>
-        [Obsolete("Use GetRendererConfiguration() instead. #from(23.2).")]
+        [Obsolete("Use GetRendererConfiguration() instead. #from(2023.2).")]
         public static PerObjectData GetBakedLightingWithShadowMaskRenderConfig() => GetBakedLightingRenderConfig() | PerObjectData.OcclusionProbe | PerObjectData.OcclusionProbeProxyVolume | PerObjectData.ShadowMask;
 
         /// <summary>
@@ -810,6 +810,9 @@ namespace UnityEngine.Rendering.HighDefinition
             if (graphicDevice == GraphicsDeviceType.Switch) // Switch support only enabled when forced by env variable for CI
                 return Environment.GetEnvironmentVariable("ENABLE_HDRP_SWITCH_SUPPORT") != null || Application.platform == RuntimePlatform.Switch;
 
+            if (graphicDevice == GraphicsDeviceType.Switch2) // Switch2 support only enabled when forced by env variable for CI
+                return Environment.GetEnvironmentVariable("ENABLE_HDRP_SWITCH2_SUPPORT") != null || Application.platform == RuntimePlatform.Switch2;
+
             return (graphicDevice == GraphicsDeviceType.Direct3D11 ||
                 graphicDevice == GraphicsDeviceType.Direct3D12 ||
                 graphicDevice == GraphicsDeviceType.PlayStation4 ||
@@ -820,7 +823,9 @@ namespace UnityEngine.Rendering.HighDefinition
                 graphicDevice == GraphicsDeviceType.GameCoreXboxOne ||
                 graphicDevice == GraphicsDeviceType.GameCoreXboxSeries ||
                 graphicDevice == GraphicsDeviceType.Metal ||
-                graphicDevice == GraphicsDeviceType.Vulkan);
+                graphicDevice == GraphicsDeviceType.Vulkan
+                // || graphicDevice == GraphicsDeviceType.Switch2
+                );
         }
 
         internal static bool IsHardwareDynamicResolutionSupportedByDevice(GraphicsDeviceType deviceType)
@@ -838,6 +843,8 @@ namespace UnityEngine.Rendering.HighDefinition
         {
             if (buildTarget == UnityEditor.BuildTarget.Switch) // Switch support only enabled when forced by env variable for CI
                 return Environment.GetEnvironmentVariable("ENABLE_HDRP_SWITCH_SUPPORT") != null;
+            if (buildTarget == UnityEditor.BuildTarget.Switch2) // Switch2 support only enabled when forced by env variable for CI
+                return Environment.GetEnvironmentVariable("ENABLE_HDRP_SWITCH2_SUPPORT") != null;
             return (buildTarget == UnityEditor.BuildTarget.StandaloneWindows ||
                 buildTarget == UnityEditor.BuildTarget.StandaloneWindows64 ||
                 buildTarget == UnityEditor.BuildTarget.StandaloneLinux64 ||
@@ -846,6 +853,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 buildTarget == UnityEditor.BuildTarget.XboxOne ||
                 buildTarget == UnityEditor.BuildTarget.GameCoreXboxOne ||
                 buildTarget == UnityEditor.BuildTarget.GameCoreXboxSeries  ||
+                buildTarget == UnityEditor.BuildTarget.Switch2  ||
                 buildTarget == UnityEditor.BuildTarget.PS4 ||
                 buildTarget == UnityEditor.BuildTarget.PS5 ||
                 // buildTarget == UnityEditor.BuildTarget.iOS || // IOS isn't supported
@@ -1078,7 +1086,7 @@ namespace UnityEngine.Rendering.HighDefinition
         /// <param name="renderContext">Current Scriptable Render Context.</param>
         /// <param name="cmd">Command Buffer used for rendering.</param>
         /// <param name="rendererList">Renderer List to render.</param>
-        [Obsolete("Please use CoreUtils.DrawRendererList instead.")]
+        [Obsolete("Please use CoreUtils.DrawRendererList instead. #from(2021.1)")]
         public static void DrawRendererList(ScriptableRenderContext renderContext, CommandBuffer cmd, UnityEngine.Rendering.RendererList rendererList)
         {
             CoreUtils.DrawRendererList(renderContext, cmd, rendererList);
@@ -1168,7 +1176,6 @@ namespace UnityEngine.Rendering.HighDefinition
             if (camera.scene.IsValid())
                 return EditorSceneManager.GetSceneCullingMask(camera.scene);
 
-#if UNITY_2020_1_OR_NEWER
             switch (camera.cameraType)
             {
                 case CameraType.SceneView:
@@ -1176,9 +1183,6 @@ namespace UnityEngine.Rendering.HighDefinition
                 default:
                     return SceneCullingMasks.GameViewObjects;
             }
-#else
-            return 0;
-#endif
 #else
             return 0;
 #endif
@@ -1271,7 +1275,21 @@ namespace UnityEngine.Rendering.HighDefinition
             if (isSupportedBuildTarget)
                 msg = "Platform " + currentPlatform + " with graphics API " + graphicAPI + " is not supported with HDRP";
             else
+            {
                 msg = "Platform " + currentPlatform + " is not supported with HDRP";
+
+#if UNITY_EDITOR
+                if (buildTarget == UnityEditor.BuildTarget.Switch2)
+                {
+                    msg += ". (For testing purpose only, un-hide by defining environment variable ENABLE_HDRP_SWITCH2_SUPPORT)";
+                }
+#else
+                if (currentPlatform == "Switch2 OS")
+                {
+                    msg += ". (For testing purpose only, un-hide by defining environment variable ENABLE_HDRP_SWITCH2_SUPPORT)";
+                }
+#endif
+            }
 
             // Display more information to the users when it should have use Metal instead of OpenGL
             if (graphicAPI.StartsWith("OpenGL"))

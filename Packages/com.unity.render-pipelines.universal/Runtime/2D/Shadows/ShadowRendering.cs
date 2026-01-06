@@ -45,34 +45,6 @@ namespace UnityEngine.Rendering.Universal
         private static readonly Color k_ShadowColorLookup = new Color(0, 0, 1, 0);
         private static readonly Color k_UnshadowColorLookup = new Color(0, 1, 0, 0);
 
-        private static RTHandle[] m_RenderTargets = null;
-        private static int[] m_RenderTargetIds = null;
-        private static RenderTargetIdentifier[] m_LightInputTextures = null;
-        private static readonly ProfilingSampler[] m_ProfilingSamplerShadowColorsLookup = new ProfilingSampler[4] { m_ProfilingSamplerShadowsA, m_ProfilingSamplerShadowsB, m_ProfilingSamplerShadowsG, m_ProfilingSamplerShadowsR };
-
-        public static uint maxTextureCount { get; private set; }
-        public static RenderTargetIdentifier[] lightInputTextures { get { return m_LightInputTextures; } }
-        internal static void InitializeBudget(uint maxTextureCount)
-        {
-            if (m_RenderTargets == null || m_RenderTargets.Length != maxTextureCount)
-            {
-                m_RenderTargets = new RTHandle[maxTextureCount];
-                m_RenderTargetIds = new int[maxTextureCount];
-                ShadowRendering.maxTextureCount = maxTextureCount;
-
-                for (int i = 0; i < maxTextureCount; i++)
-                {
-                    m_RenderTargetIds[i] = Shader.PropertyToID($"ShadowTex_{i}");
-                    m_RenderTargets[i] = RTHandles.Alloc(m_RenderTargetIds[i], $"ShadowTex_{i}");
-                }
-            }
-
-            if (m_LightInputTextures == null || m_LightInputTextures.Length != maxTextureCount)
-            {
-                m_LightInputTextures = new RenderTargetIdentifier[maxTextureCount];
-            }
-        }
-
         private static Material CreateMaterial(Shader shader, int offset, int pass)
         {
             Material material = CoreUtils.CreateEngineMaterial(shader);
@@ -221,18 +193,14 @@ namespace UnityEngine.Rendering.Universal
             Vector3 maxCorner = new Vector3(float.MinValue, float.MinValue, float.MinValue);
             for (int i = 0; i < k_Corners; i++)
             {
-                maxCorner = Vector3.Max(maxCorner, nearCorners[i]);
-                maxCorner = Vector3.Max(maxCorner, farCorners[i]);
-                minCorner = Vector3.Min(minCorner, nearCorners[i]);
-                minCorner = Vector3.Min(minCorner, farCorners[i]);
+                maxCorner = Vector3.Max(maxCorner, camera.transform.TransformPoint(nearCorners[i]));
+                maxCorner = Vector3.Max(maxCorner, camera.transform.TransformPoint(farCorners[i]));
+                minCorner = Vector3.Min(minCorner, camera.transform.TransformPoint(nearCorners[i]));
+                minCorner = Vector3.Min(minCorner, camera.transform.TransformPoint(farCorners[i]));
             }
 
             nearCorners.Dispose();
             farCorners.Dispose();
-
-            // Transform the point from camera space to world space
-            maxCorner = camera.transform.TransformPoint(maxCorner);
-            minCorner = camera.transform.TransformPoint(minCorner);
 
             // TODO: Iterate through the lights
             for (int i = 0; i < cullResult.visibleLights.Count; i++)
@@ -275,54 +243,9 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
-        private static void CreateShadowRenderTexture(IRenderPass2D pass, RenderingData renderingData, CommandBuffer cmdBuffer, int shadowIndex)
-        {
-            CreateShadowRenderTexture(pass, m_RenderTargetIds[shadowIndex], renderingData, cmdBuffer);
-        }
-
         internal static void PrerenderShadows(UnsafeCommandBuffer cmdBuffer, Renderer2DData rendererData, ref LayerBatch layer, Light2D light, int shadowIndex, float shadowIntensity)
         {
             RenderShadows(cmdBuffer, rendererData, ref layer, light);
-        }
-
-        internal static bool PrerenderShadows(this IRenderPass2D pass, RenderingData renderingData, CommandBuffer cmdBuffer, ref LayerBatch layer, Light2D light, int shadowIndex, float shadowIntensity)
-        {
-            ShadowRendering.CreateShadowRenderTexture(pass, renderingData, cmdBuffer, shadowIndex);
-
-            bool hadShadowsToRender = layer.shadowCasters.Count != 0;
-
-            if (hadShadowsToRender)
-            {
-                cmdBuffer.SetRenderTarget(m_RenderTargets[shadowIndex].nameID, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.DontCare);
-                cmdBuffer.ClearRenderTarget(RTClearFlags.All, Color.clear, 1, 0);
-                RenderShadows(CommandBufferHelpers.GetUnsafeCommandBuffer(cmdBuffer), pass.rendererData, ref layer, light);
-            }
-
-            m_LightInputTextures[shadowIndex] = m_RenderTargets[shadowIndex].nameID;
-
-            return hadShadowsToRender;
-        }
-
-        private static void CreateShadowRenderTexture(IRenderPass2D pass, int handleId, RenderingData renderingData, CommandBuffer cmdBuffer)
-        {
-            var renderTextureScale = Mathf.Clamp(pass.rendererData.lightRenderTextureScale, 0.01f, 1.0f);
-            var width = (int)(renderingData.cameraData.cameraTargetDescriptor.width * renderTextureScale);
-            var height = (int)(renderingData.cameraData.cameraTargetDescriptor.height * renderTextureScale);
-
-            var descriptor = new RenderTextureDescriptor(width, height);
-            descriptor.useMipMap = false;
-            descriptor.autoGenerateMips = false;
-            descriptor.depthStencilFormat = GraphicsFormatUtility.GetDepthStencilFormat(24);
-            descriptor.graphicsFormat = GraphicsFormat.B10G11R11_UFloatPack32;
-            descriptor.msaaSamples = 1;
-            descriptor.dimension = TextureDimension.Tex2D;
-
-            cmdBuffer.GetTemporaryRT(handleId, descriptor, FilterMode.Bilinear);
-        }
-
-        internal static void ReleaseShadowRenderTexture(CommandBuffer cmdBuffer, int shadowIndex)
-        {
-            cmdBuffer.ReleaseTemporaryRT(m_RenderTargetIds[shadowIndex]);
         }
 
         private static void SetShadowProjectionGlobals(UnsafeCommandBuffer cmdBuffer, ShadowCaster2D shadowCaster, Light2D light)
@@ -338,15 +261,6 @@ namespace UnityEngine.Rendering.Universal
                 cmdBuffer.SetGlobalFloat(k_ShadowContractionDistanceID, 0f);
         }
 
-        internal static void SetGlobalShadowTexture(CommandBuffer cmdBuffer, Light2D light, int shadowIndex)
-        {
-            var textureIndex = shadowIndex;
-
-            cmdBuffer.SetGlobalTexture("_ShadowTex", m_LightInputTextures[textureIndex]);
-            cmdBuffer.SetGlobalColor(k_ShadowShadowColorID, k_ShadowColorLookup);
-            cmdBuffer.SetGlobalColor(k_ShadowUnshadowColorID, k_UnshadowColorLookup);
-        }
-
         internal static void SetGlobalShadowProp(IRasterCommandBuffer cmdBuffer)
         {
             cmdBuffer.SetGlobalColor(k_ShadowShadowColorID, k_ShadowColorLookup);
@@ -356,9 +270,9 @@ namespace UnityEngine.Rendering.Universal
         static bool ShadowCasterIsVisible(ShadowCaster2D shadowCaster)
         {
 #if UNITY_EDITOR
-            return SceneVisibilityManager.instance == null ? true : !SceneVisibilityManager.instance.IsHidden(shadowCaster.gameObject);
+            return SceneVisibilityManager.instance == null || !SceneVisibilityManager.instance.IsHidden(shadowCaster.gameObject);
 #else
-                return true;
+            return true;
 #endif
         }
 

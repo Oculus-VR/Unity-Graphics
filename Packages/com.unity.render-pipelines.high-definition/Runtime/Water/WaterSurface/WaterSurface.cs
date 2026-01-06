@@ -329,9 +329,9 @@ namespace UnityEngine.Rendering.HighDefinition
         }
 
         /// <summary>
-        /// Specifies the resolution at which the water caustics are rendered (simulation only).
+        /// Specifies the resolution at which the water caustics texture is rendered.
         /// </summary>
-        [Tooltip("Specifies the resolution at which the water caustics are rendered (simulation only).")]
+        [Tooltip("Specifies the resolution at which the water caustics texture is rendered. For better definition, you can also change the Caustics Mesh Resolution in the water settings asset.")]
         public WaterCausticsResolution causticsResolution = WaterCausticsResolution.Caustics256;
 
         /// <summary>
@@ -436,13 +436,13 @@ namespace UnityEngine.Rendering.HighDefinition
         /// <summary>
         /// Sets the contribution of the ambient probe luminance when multiplied by the underwater scattering color.
         /// </summary>
-        [Obsolete("Will be removed in the next version.")]
+        [Obsolete("Will be removed in the next version. #from(6000.0)")]
         public float underWaterAmbientProbeContribution = 1.0f;
 
         /// <summary>
         /// Controls how the scattering color is evaluated for the underwater scenario.
         /// </summary>
-        [Obsolete("Will be removed in the next version.")]
+        [Obsolete("Will be removed in the next version. #from(6000.0)")]
         public enum UnderWaterScatteringColorMode
         {
             /// <summary>
@@ -459,14 +459,14 @@ namespace UnityEngine.Rendering.HighDefinition
         /// <summary>
         /// Sets how the underwater scattering color is specified.
         /// </summary>
-        [Obsolete("Will be removed in the next version.")]
+        [Obsolete("Will be removed in the next version. #from(6000.0)")]
         public UnderWaterScatteringColorMode underWaterScatteringColorMode = UnderWaterScatteringColorMode.ScatteringColor;
 
         /// <summary>
         /// Sets the color that is used to simulate the scattering when the camera is under-water.
         /// </summary>
         [ColorUsage(false)]
-        [Obsolete("Will be removed in the next version.")]
+        [Obsolete("Will be removed in the next version. #from(6000.0)")]
         public Color underWaterScatteringColor = new Color(0.0f, 0.27f, 0.23f);
 
         /// <summary>

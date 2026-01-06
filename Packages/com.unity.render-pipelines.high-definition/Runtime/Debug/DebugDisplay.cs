@@ -302,7 +302,7 @@ namespace UnityEngine.Rendering.HighDefinition
             /// <summary>Index of the light used for contact shadows display.</summary>
             public int fullScreenContactShadowLightIndex = 0;
             /// <summary>XR single pass test mode.</summary>
-            [Obsolete]
+            [Obsolete("#from(2022.2)")]
             public bool xrSinglePassTestMode = false;
             /// <summary>Whether to display the average timings every second.</summary>
             public bool averageProfilerTimingsOverASecond = false;
@@ -323,7 +323,7 @@ namespace UnityEngine.Rendering.HighDefinition
             public FalseColorDebugSettings falseColorDebugSettings = new FalseColorDebugSettings();
 
             /// <summary>Current decals debug settings.</summary>
-            [Obsolete("decalsDebugSettings has been deprecated, please use HDDebugDisplaySettings.Instance.decalSettings instead", false)]
+            [Obsolete("decalsDebugSettings has been deprecated, please use HDDebugDisplaySettings.Instance.decalSettings instead. #from(2023.1)")]
             public DecalsDebugSettings decalsDebugSettings = HDDebugDisplaySettings.Instance.decalSettings.m_Data;
 
             /// <summary>Current transparency debug settings.</summary>
@@ -335,7 +335,7 @@ namespace UnityEngine.Rendering.HighDefinition
             /// <summary>Max vertex density for vertex density display.</summary>
             public uint maxVertexDensity = 10;
             /// <summary>Display ray tracing ray count per frame.</summary>
-            [Obsolete("Obsolete, moved to HDDebugDisplayStats", false)]
+            [Obsolete("Obsolete, moved to HDDebugDisplayStats. #from(2023.1)")]
             public bool countRays = false;
             /// <summary>Display Show Lens Flare Data Driven Only.</summary>
             public bool showLensFlareDataDrivenOnly = false;
@@ -482,7 +482,7 @@ namespace UnityEngine.Rendering.HighDefinition
             FillMipmapDebugMaterialTextureSlotArrays(ref s_RenderingMipmapDebugMaterialTextureSlotStrings, ref s_RenderingMipmapDebugMaterialTextureSlotValues);
 
             var device = SystemInfo.graphicsDeviceType;
-            if (device == GraphicsDeviceType.Metal || device == GraphicsDeviceType.PlayStation4 || device == GraphicsDeviceType.PlayStation5 || device == GraphicsDeviceType.PlayStation5NGGC)
+            if (device == GraphicsDeviceType.Metal || device == GraphicsDeviceType.PlayStation4 || device == GraphicsDeviceType.PlayStation5 || device == GraphicsDeviceType.PlayStation5NGGC || device == GraphicsDeviceType.Switch2)
             {
                 s_RenderingFullScreenDebugStrings = s_RenderingFullScreenDebugStrings.Where((val, idx) => (idx + FullScreenDebugMode.MinRenderingFullScreenDebug) != FullScreenDebugMode.VertexDensity).ToArray();
                 s_RenderingFullScreenDebugValues = s_RenderingFullScreenDebugValues.Where((val, idx) => (idx + FullScreenDebugMode.MinRenderingFullScreenDebug) != FullScreenDebugMode.VertexDensity).ToArray();
@@ -2125,6 +2125,11 @@ namespace UnityEngine.Rendering.HighDefinition
 
         internal void RegisterDebug()
         {
+#if UNITY_EDITOR
+            if (UnityEditor.BuildPipeline.isBuildingPlayer)
+                return;
+#endif
+            
             RegisterMaterialDebug();
             RegisterLightingDebug();
             RegisterRenderingDebug();
@@ -2142,6 +2147,9 @@ namespace UnityEngine.Rendering.HighDefinition
 
         void UnregisterDebugItems(string panelName, DebugUI.Widget[] items)
         {
+            if (items == null || items.Length == 0)
+                return;
+            
             var panel = DebugManager.instance.GetPanel(panelName);
             if (panel != null)
                 panel.children.Remove(items);

@@ -131,13 +131,11 @@ namespace UnityEngine.Rendering.RenderGraphModule
         public bool shared;
         public bool sharedExplicitRelease;
         public bool requestFallBack;
-        public bool forceRelease;
         public uint writeCount;
         public uint readCount;
         public int cachedHash;
         public int transientPassIndex;
         public int sharedResourceLastFrameUsed;
-        public int version;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public virtual void Reset(IRenderGraphResourcePool _ = null)
@@ -149,10 +147,8 @@ namespace UnityEngine.Rendering.RenderGraphModule
             transientPassIndex = -1;
             sharedResourceLastFrameUsed = -1;
             requestFallBack = false;
-            forceRelease = false;
             writeCount = 0;
             readCount = 0;
-            version = 0;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -168,9 +164,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public virtual void IncrementWriteCount()
+        public virtual uint IncrementWriteCount()
         {
             writeCount++;
+            return writeCount;
         }
 
         // readCount is currently not used in the HDRP Compiler.
@@ -178,13 +175,6 @@ namespace UnityEngine.Rendering.RenderGraphModule
         public virtual void IncrementReadCount()
         {
             readCount++;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public virtual int NewVersion()
-        {
-            version++;
-            return version;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -198,8 +188,6 @@ namespace UnityEngine.Rendering.RenderGraphModule
         public virtual void UpdateGraphicsResource() { }
         public virtual void ReleasePooledGraphicsResource(int frameIndex) { }
         public virtual void ReleaseGraphicsResource() { }
-        public virtual void LogCreation(RenderGraphLogger logger) { }
-        public virtual void LogRelease(RenderGraphLogger logger) { }
         public virtual int GetSortIndex() { return 0; }
         public virtual int GetDescHashCode() { return 0; }
     }

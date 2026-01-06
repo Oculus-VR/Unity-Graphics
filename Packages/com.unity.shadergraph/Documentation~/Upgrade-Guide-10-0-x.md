@@ -1,5 +1,7 @@
 # Upgrade to version 10.0.x of Shader Graph
 
+Upgrade your project to make it compatible with Shader Graph 10.0 or later.
+
 ## Renamed Vector 1 property and Float precision
 
 Shader Graph has renamed the **Vector 1** property as **Float** in both the Vector 1 node and the exposed parameter list. The **Float** precision was also renamed as **Single**. Behavior is exactly the same, and only the names have changed.
@@ -19,7 +21,7 @@ Shader Graph has removed the Master Nodes and introduced a more flexible [Master
 
 If your graph only has one Master Node, Shader Graph automatically upgrades all of the data from that Master Node to a Master Stack output, as described in this section.
 
-Shader Graph automatically adds the correct [Targets](Graph-Target.md) to the [**Graph Settings**](Graph-Settings-Menu.md) tab of the [**Graph Inspector**](Internal-Inspector.md). It also copies all settings from the Master Node settings menu (gear icon) that describe surface options from the Master Node to the **Target Settings**.
+Shader Graph automatically adds the correct [Targets](Graph-Target.md) to the [**Graph Settings**](Graph-Settings-Tab.md) tab of the [**Graph Inspector**](Internal-Inspector.md). It also copies all settings from the Master Node settings menu (gear icon) that describe surface options from the Master Node to the **Target Settings**.
 
 Shader Graph then adds a [Block](Block-Node.md) node for each port on the Master Node to the Master Stack. It connects any nodes that you connected to the Master Node ports to the corresponding Block node. Also, Shader Graph copies any values that you entered into the default value inputs of the Master Node ports to the corresponding Block node.
 

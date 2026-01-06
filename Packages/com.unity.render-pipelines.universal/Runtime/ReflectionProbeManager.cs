@@ -12,16 +12,17 @@ namespace UnityEngine.Rendering.Universal
         RenderTexture m_AtlasTexture1;
         RTHandle m_AtlasTexture0Handle;
         BuddyAllocator m_AtlasAllocator;
-        Dictionary<int, CachedProbe> m_Cache;
-        Dictionary<int, int> m_WarningCache;
-        List<int> m_NeedsUpdate;
-        List<int> m_NeedsRemove;
+        Dictionary<EntityId, CachedProbe> m_Cache;
+        Dictionary<EntityId, int> m_WarningCache;
+        List<EntityId> m_NeedsUpdate;
+        List<EntityId> m_NeedsRemove;
 
         // Pre-allocated arrays for filling constant buffers
         Vector4[] m_BoxMax;
         Vector4[] m_BoxMin;
         Vector4[] m_ProbePosition;
         Vector4[] m_MipScaleOffset;
+        Vector4[] m_Rotations;
 
         // There is a global max of 7 mips in Unity.
         const int k_MaxMipCount = 7;
@@ -49,6 +50,7 @@ namespace UnityEngine.Rendering.Universal
             public static readonly int MipScaleOffset = Shader.PropertyToID("urp_ReflProbes_MipScaleOffset");
             public static readonly int Count = Shader.PropertyToID("urp_ReflProbes_Count");
             public static readonly int Atlas = Shader.PropertyToID("urp_ReflProbes_Atlas");
+            public static readonly int Rotation = Shader.PropertyToID("urp_ReflProbes_Rotation");
         }
 
         public RenderTexture atlasRT => m_AtlasTexture0;
@@ -93,15 +95,16 @@ namespace UnityEngine.Rendering.Universal
             // The smallest allocatable resolution we want is 4x4. We calculate the number of levels as:
             // log2(max) - log2(4) = log2(max) - 2
             m_AtlasAllocator = new BuddyAllocator(math.floorlog2(SystemInfo.maxTextureSize) - 2, 2);
-            m_Cache = new Dictionary<int, CachedProbe>(maxProbes);
-            m_WarningCache = new Dictionary<int, int>(maxProbes);
-            m_NeedsUpdate = new List<int>(maxProbes);
-            m_NeedsRemove = new List<int>(maxProbes);
+            m_Cache = new Dictionary<EntityId, CachedProbe>(maxProbes);
+            m_WarningCache = new Dictionary<EntityId, int>(maxProbes);
+            m_NeedsUpdate = new List<EntityId>(maxProbes);
+            m_NeedsRemove = new List<EntityId>(maxProbes);
 
             m_BoxMax = new Vector4[maxProbes];
             m_BoxMin = new Vector4[maxProbes];
             m_ProbePosition = new Vector4[maxProbes];
             m_MipScaleOffset = new Vector4[maxProbes * 7];
+            m_Rotations = new Vector4[maxProbes];
         }
 
         public unsafe void UpdateGpuData(CommandBuffer cmd, ref CullingResults cullResults)
@@ -156,8 +159,10 @@ namespace UnityEngine.Rendering.Universal
                 var probe = probes[probeIndex];
 
                 var texture = probe.texture;
-                var id = probe.reflectionProbe.GetInstanceID();
+                var id = probe.reflectionProbe.GetEntityId();
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                 var wasCached = m_Cache.TryGetValue(id, out var cachedProbe);
+#pragma warning restore 618
 
                 if (!texture)
                 {
@@ -190,8 +195,10 @@ namespace UnityEngine.Rendering.Universal
                     // Check if we ran out of space in the atlas.
                     if (mip < cachedProbe.mipCount)
                     {
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                         if (!m_WarningCache.ContainsKey(id)) showFullWarning = true;
                         m_WarningCache[id] = frameIndex;
+#pragma warning restore 618
                         for (var i = 0; i < mip; i++) m_AtlasAllocator.Free(new BuddyAllocation(cachedProbe.levels[i], cachedProbe.dataIndices[i]));
                         for (var i = 0; i < k_MaxMipCount; i++) cachedProbe.dataIndices[i] = -1;
                         continue;
@@ -215,7 +222,9 @@ namespace UnityEngine.Rendering.Universal
 #if UNITY_EDITOR
                     cachedProbe.imageContentsHash = texture.imageContentsHash;
 #endif
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                     m_NeedsUpdate.Add(id);
+#pragma warning restore 618
                 }
 
                 // If the probe is set to be updated every frame, we assign the last used frame to -1 so it's evicted in next frame.
@@ -223,9 +232,11 @@ namespace UnityEngine.Rendering.Universal
                     cachedProbe.lastUsed = -1;
                 else
                     cachedProbe.lastUsed = frameIndex;
-                
+
                 cachedProbe.hdrData = probe.hdrData;
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                 m_Cache[id] = cachedProbe;
+#pragma warning restore 618
             }
 
             // Grow the atlas if it's not big enough to contain the current allocations.
@@ -260,9 +271,11 @@ namespace UnityEngine.Rendering.Universal
             for (var probeIndex = 0; probeIndex < probeCount; probeIndex++)
             {
                 var probe = probes[probeIndex];
-                var id = probe.reflectionProbe.GetInstanceID();
+                var id = probe.reflectionProbe.GetEntityId();
                 var dataIndex = probeIndex - skipCount;
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                 if (!m_Cache.TryGetValue(id, out var cachedProbe) || !probe.texture)
+#pragma warning restore 618
                 {
                     skipCount++;
                     continue;
@@ -271,6 +284,8 @@ namespace UnityEngine.Rendering.Universal
                 m_BoxMin[dataIndex] = new Vector4(probe.bounds.min.x, probe.bounds.min.y, probe.bounds.min.z, probe.importance);
                 m_ProbePosition[dataIndex] = new Vector4(probe.localToWorldMatrix.m03, probe.localToWorldMatrix.m13, probe.localToWorldMatrix.m23, (probe.isBoxProjection ? 1 : -1) * (cachedProbe.mipCount));
                 for (var i = 0; i < cachedProbe.mipCount; i++) m_MipScaleOffset[dataIndex * k_MaxMipCount + i] = GetScaleOffset(cachedProbe.levels[i], cachedProbe.dataIndices[i], false, false);
+                var rot = Quaternion.Inverse(probe.reflectionProbe.transform.rotation);
+                m_Rotations[dataIndex] = new Vector4(rot.x, rot.y, rot.z, rot.w);
             }
 
             if (showFullWarning)
@@ -290,7 +305,7 @@ namespace UnityEngine.Rendering.Universal
                         var level = cachedProbe.levels[mip];
                         var dataIndex = cachedProbe.dataIndices[mip];
                         // If we need to y-flip we will instead flip the atlas since that is updated less frequent and then the lookup should be correct.
-                        // By doing this we won't have to y-flip the lookup in the shader code. 
+                        // By doing this we won't have to y-flip the lookup in the shader code.
                         var scaleBias = GetScaleOffset(level, dataIndex, true, !SystemInfo.graphicsUVStartsAtTop);
                         var sizeWithoutPadding = (1 << (m_AtlasAllocator.levelCount + 1 - level)) - 2;
                         Blitter.BlitCubeToOctahedral2DQuadWithPadding(cmd, cachedProbe.texture, new Vector2(sizeWithoutPadding, sizeWithoutPadding), scaleBias, mip, true, 2, cachedProbe.hdrData);
@@ -301,6 +316,7 @@ namespace UnityEngine.Rendering.Universal
                 cmd.SetGlobalVectorArray(ShaderProperties.BoxMax, m_BoxMax);
                 cmd.SetGlobalVectorArray(ShaderProperties.ProbePosition, m_ProbePosition);
                 cmd.SetGlobalVectorArray(ShaderProperties.MipScaleOffset, m_MipScaleOffset);
+                cmd.SetGlobalVectorArray(ShaderProperties.Rotation, m_Rotations);
                 cmd.SetGlobalFloat(ShaderProperties.Count, probeCount - skipCount);
                 cmd.SetGlobalTexture(ShaderProperties.Atlas, m_AtlasTexture0);
             }
@@ -329,10 +345,11 @@ namespace UnityEngine.Rendering.Universal
                 m_AtlasTexture0.Release();
                 m_AtlasTexture0Handle.Release();
             }
+            m_AtlasAllocator.Dispose();
 
             Object.DestroyImmediate(m_AtlasTexture0);
             Object.DestroyImmediate(m_AtlasTexture1);
-            
+
             this = default;
         }
     }

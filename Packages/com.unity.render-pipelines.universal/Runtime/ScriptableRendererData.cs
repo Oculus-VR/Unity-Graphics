@@ -39,7 +39,6 @@ namespace UnityEngine.Rendering.Universal
 
         [SerializeField] internal List<ScriptableRendererFeature> m_RendererFeatures = new List<ScriptableRendererFeature>(10);
         [SerializeField] internal List<long> m_RendererFeatureMap = new List<long>(10);
-        [SerializeField] bool m_UseNativeRenderPass = false;
         [NonSerialized]
         bool m_StripShadowsOffVariants = false;
         [NonSerialized]
@@ -88,19 +87,6 @@ namespace UnityEngine.Rendering.Universal
         protected virtual void OnEnable()
         {
             SetDirty();
-        }
-
-        /// <summary>
-        /// Specifies whether the renderer should use Native Render Pass.
-        /// </summary>
-        public bool useNativeRenderPass
-        {
-            get => m_UseNativeRenderPass;
-            set
-            {
-                SetDirty();
-                m_UseNativeRenderPass = value;
-            }
         }
 
         /// <summary>
@@ -192,6 +178,25 @@ namespace UnityEngine.Rendering.Universal
 
             Debug.LogError($"{name} is missing RendererFeatures\nThis could be due to missing scripts or compile error.", this);
             return false;
+        }
+
+        internal void RemoveMissingRendererFeatures()
+        {
+            string path = AssetDatabase.GetAssetPath(this);
+
+            for (int i = m_RendererFeatures.Count - 1; i >= 0; i--)
+            {
+                if (m_RendererFeatures[i] == null)
+                {
+                    m_RendererFeatures.RemoveAt(i);
+                    m_RendererFeatureMap.RemoveAt(i);
+                }
+            }
+
+            AssetDatabase.RemoveScriptableObjectsWithMissingScript(path);
+            EditorUtility.SetDirty(this);
+            AssetDatabase.SaveAssetIfDirty(this);
+            AssetDatabase.Refresh();
         }
 
         internal bool DuplicateFeatureCheck(Type type)

@@ -3,57 +3,36 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEditorInternal;
 using System.Reflection;
+using UnityEditor.EditorTools;
+using UnityEditor.Experimental.Rendering;
 using UnityEngine;
 using UnityEngine.Rendering.HighDefinition;
 using UnityEngine.Rendering;
-using UnityEditor.Experimental.Rendering;
+using Object = UnityEngine.Object;
+
+using UnityEditor.Rendering.Utilities;
 
 namespace UnityEditor.Rendering.HighDefinition
 {
     static partial class HDProbeUI
     {
-        [Flags]
-        internal enum ToolBar
-        {
-            None = 0,
-            InfluenceShape = 1 << 0,
-            Blend = 1 << 1,
-            NormalBlend = 1 << 2,
-            CapturePosition = 1 << 3,
-            MirrorPosition = 1 << 4,
-            MirrorRotation = 1 << 5,
-            ShowChromeGizmo = 1 << 6, //not really an edit mode. Should be move later to contextual tool overlay
-        }
-
         internal interface IProbeUISettingsProvider
         {
             ProbeSettingsOverride displayedCaptureSettings { get; }
             ProbeSettingsOverride displayedAdvancedCaptureSettings { get; }
             ProbeSettingsOverride displayedCustomSettings { get; }
             Type customTextureType { get; }
-            ToolBar[] toolbars { get; }
-            Dictionary<KeyCode, ToolBar> shortcuts { get; }
         }
 
         // Constants
-        const EditMode.SceneViewEditMode EditBaseShape = (EditMode.SceneViewEditMode)100;
-        const EditMode.SceneViewEditMode EditInfluenceShape = (EditMode.SceneViewEditMode)101;
-        const EditMode.SceneViewEditMode EditInfluenceNormalShape = (EditMode.SceneViewEditMode)102;
-        const EditMode.SceneViewEditMode EditCapturePosition = (EditMode.SceneViewEditMode)103;
-        const EditMode.SceneViewEditMode EditMirrorPosition = (EditMode.SceneViewEditMode)104;
-        const EditMode.SceneViewEditMode EditMirrorRotation = (EditMode.SceneViewEditMode)105;
+        internal const EditMode.SceneViewEditMode EditBaseShape = (EditMode.SceneViewEditMode)100;
+        internal const EditMode.SceneViewEditMode EditInfluenceShape = (EditMode.SceneViewEditMode)101;
+        internal const EditMode.SceneViewEditMode EditInfluenceNormalShape = (EditMode.SceneViewEditMode)102;
+        internal const EditMode.SceneViewEditMode EditCapturePosition = (EditMode.SceneViewEditMode)103;
+        internal const EditMode.SceneViewEditMode EditMirrorPosition = (EditMode.SceneViewEditMode)104;
+        internal const EditMode.SceneViewEditMode EditMirrorRotation = (EditMode.SceneViewEditMode)105;
         //Note: EditMode.SceneViewEditMode.ReflectionProbeOrigin is still used
         //by legacy reflection probe and have its own mecanism that we don't want
-
-        static readonly Dictionary<ToolBar, EditMode.SceneViewEditMode> k_ToolbarMode = new Dictionary<ToolBar, EditMode.SceneViewEditMode>
-        {
-            { ToolBar.InfluenceShape, EditBaseShape },
-            { ToolBar.Blend, EditInfluenceShape },
-            { ToolBar.NormalBlend, EditInfluenceNormalShape },
-            { ToolBar.CapturePosition, EditCapturePosition },
-            { ToolBar.MirrorPosition, EditMirrorPosition },
-            { ToolBar.MirrorRotation, EditMirrorRotation }
-        };
 
         // Probe Setting Mode cache
         static readonly GUIContent[] k_ModeContents = { new GUIContent("Baked"), new GUIContent("Custom"), new GUIContent("Realtime") };
@@ -62,112 +41,6 @@ namespace UnityEditor.Rendering.HighDefinition
         internal struct Drawer<TProvider>
             where TProvider : struct, IProbeUISettingsProvider, InfluenceVolumeUI.IInfluenceUISettingsProvider
         {
-            // Toolbar content cache
-            static readonly EditMode.SceneViewEditMode[][] k_ListModes;
-            static readonly GUIContent[][] k_ListContent;
-
-            static Drawer()
-            {
-                var provider = new TProvider();
-
-                // Build toolbar content cache
-                var toolbars = provider.toolbars;
-                k_ListContent = new GUIContent[toolbars.Length][];
-                k_ListModes = new EditMode.SceneViewEditMode[toolbars.Length][];
-
-                var listMode = new List<EditMode.SceneViewEditMode>();
-                var listContent = new List<GUIContent>();
-                for (int i = 0; i < toolbars.Length; ++i)
-                {
-                    listMode.Clear();
-                    listContent.Clear();
-
-                    var toolBar = toolbars[i];
-                    for (int j = 0; j < sizeof(int) * 8; ++j)
-                    {
-                        var toolbarJ = (ToolBar)(1 << j);
-                        if ((toolBar & toolbarJ) > 0)
-                        {
-                            if (toolBar == ToolBar.ShowChromeGizmo)
-                            {
-                                listContent.Add(k_ToolbarContents[toolbarJ]);
-                            }
-                            else
-                            {
-                                listMode.Add(k_ToolbarMode[toolbarJ]);
-                                listContent.Add(k_ToolbarContents[toolbarJ]);
-                            }
-                        }
-                    }
-                    k_ListContent[i] = listContent.ToArray();
-                    k_ListModes[i] = listMode.ToArray();
-                }
-            }
-
-            // Tool bars
-            public static void DrawToolbars(SerializedHDProbe serialized, Editor owner)
-            {
-                var provider = new TProvider();
-
-                GUILayout.BeginHorizontal();
-                GUILayout.FlexibleSpace();
-                GUI.changed = false;
-
-                for (int i = 0; i < k_ListModes.Length - 1; ++i)
-                    EditMode.DoInspectorToolbar(k_ListModes[i], k_ListContent[i], HDEditorUtils.GetBoundsGetter(owner), owner);
-
-                //Special case: show chrome gizmo should be mouved to overlay tool.
-                //meanwhile, display it as an option of toolbar
-                EditorGUI.BeginChangeCheck();
-                IHDProbeEditor probeEditor = owner as IHDProbeEditor;
-                int selected = probeEditor.showChromeGizmo ? 0 : -1;
-                int newSelected = GUILayout.Toolbar(selected, new[] { k_ListContent[k_ListModes.Length - 1][0] }, GUILayout.Height(20), GUILayout.Width(30));
-                if (EditorGUI.EndChangeCheck())
-                {
-                    //allow deselection
-                    if (selected >= 0 && newSelected == selected)
-                        selected = -1;
-                    else
-                        selected = newSelected;
-                    probeEditor.showChromeGizmo = selected == 0;
-                    SceneView.RepaintAll();
-                }
-
-                GUILayout.FlexibleSpace();
-                GUILayout.EndHorizontal();
-            }
-
-            public static void DoToolbarShortcutKey(Editor owner)
-            {
-                var provider = new TProvider();
-                var toolbars = provider.toolbars;
-                var shortcuts = provider.shortcuts;
-
-                var evt = Event.current;
-                if (evt.type != EventType.KeyDown || !evt.shift)
-                    return;
-
-                if (shortcuts.TryGetValue(evt.keyCode, out ToolBar toolbar))
-                {
-                    bool used = false;
-                    foreach (ToolBar t in toolbars)
-                    {
-                        if ((t & toolbar) > 0)
-                        {
-                            used = true;
-                            break;
-                        }
-                    }
-                    if (!used)
-                        return;
-
-                    var targetMode = k_ToolbarMode[toolbar];
-                    var mode = EditMode.editMode == targetMode ? EditMode.SceneViewEditMode.None : targetMode;
-                    EditorApplication.delayCall += () => EditMode.ChangeEditMode(mode, HDEditorUtils.GetBoundsGetter(owner)(), owner);
-                    evt.Use();
-                }
-            }
-
             // Drawers
             public static void DrawPrimarySettings(SerializedHDProbe serialized, Editor owner)
             {
@@ -388,9 +261,16 @@ namespace UnityEditor.Rendering.HighDefinition
                                     },
                                     GUILayout.ExpandWidth(true)))
                             {
-                                HDBakedReflectionSystem.BakeProbes(serialized.serializedObject.targetObjects
+                                if (HDBakedReflectionSystem.AreAllOpenedSceneSaved())
+                                {
+                                    HDBakedReflectionSystem.BakeProbes(serialized.serializedObject.targetObjects
                                     .OfType<HDProbe>().ToArray());
-                                GUIUtility.ExitGUI();
+                                    GUIUtility.ExitGUI();
+                                }
+                                else
+                                {
+                                    Debug.LogError($"Opened scenes are not saved. Please save before baking.");
+                                }
                             }
 
                             GUI.enabled = true;
@@ -555,11 +435,87 @@ namespace UnityEditor.Rendering.HighDefinition
 
             return highestTierInCurrent;
         }
-
-        static internal void Drawer_ToolBarButton(
-            ToolBar button, Editor owner,
-            params GUILayoutOption[] options
-        )
-            => HDEditorUtils.DrawToolBarButton(button, owner, k_ToolbarMode, k_ToolbarContents, options);
     }
+
+    [EditorTool(Description, typeof(PlanarReflectionProbe), toolPriority = (int)Mode)]
+    internal class PlanarReflectionProbeModifyBaseShapeTool : GenericEditorTool<PlanarReflectionProbe>
+    {
+        private const string Description = "Modify the base shape.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditBaseShape;
+        private const string IconName = "EditShape";
+
+        public PlanarReflectionProbeModifyBaseShapeTool() : base(Description, Mode, IconName) { }
+    }
+
+    [EditorTool(Description, typeof(PlanarReflectionProbe), toolPriority = (int)Mode)]
+    internal class PlanarReflectionProbeModifyMirrorPositionTool : GenericEditorTool<PlanarReflectionProbe>
+    {
+        private const string Description = "Change the mirror position.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditMirrorPosition;
+        private const string IconName = "MoveTool";
+
+        public PlanarReflectionProbeModifyMirrorPositionTool() : base(Description, Mode, IconName) { }
+    }
+
+    [EditorTool(Description, typeof(PlanarReflectionProbe), toolPriority = (int)Mode)]
+    internal class PlanarReflectionProbeModifyMirrorRotationTool : GenericEditorTool<PlanarReflectionProbe>
+    {
+        private const string Description = "Change the mirror rotation.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditMirrorRotation;
+        private const string IconName = "RotateTool";
+
+        public PlanarReflectionProbeModifyMirrorRotationTool() : base(Description, Mode, IconName) { }
+    }
+
+    [EditorTool(Description, typeof(PlanarReflectionProbe), toolPriority = (int)Mode)]
+    internal class PlanarReflectionProbeModifyEditInfluenceShapeTool : GenericEditorTool<PlanarReflectionProbe>
+    {
+        private const string Description = "Modify the influence volume blend distance.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditInfluenceShape;
+        private const string IconName = "BlendDistance";
+
+        public PlanarReflectionProbeModifyEditInfluenceShapeTool() : base(Description, Mode, IconName) { }
+    }
+
+    [EditorTool(Description, typeof(ReflectionProbe), toolPriority = (int)Mode)]
+    internal class ReflectionProbeModifyBaseShapeTool : GenericEditorTool<ReflectionProbe>
+    {
+        private const string Description = "Modify the base shape.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditBaseShape;
+        private const string IconName = "EditShape";
+
+        public ReflectionProbeModifyBaseShapeTool() : base(Description, Mode, IconName) {}
+    }
+
+    [EditorTool(Description, typeof(ReflectionProbe), toolPriority = (int)Mode)]
+    internal class ReflectionProbeModifyEditInfluenceShapeTool : GenericEditorTool<ReflectionProbe>
+    {
+        private const string Description = "Modify the influence volume blend distance.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditInfluenceShape;
+        private const string IconName = "BlendDistance";
+
+        public ReflectionProbeModifyEditInfluenceShapeTool() : base(Description, Mode, IconName) { }
+    }
+
+    [EditorTool(Description, typeof(ReflectionProbe), toolPriority = (int)Mode)]
+    internal class ReflectionProbeModifyInfluenceNormalShapeTool : GenericEditorTool<ReflectionProbe>
+    {
+        private const string Description = "Modify the influence volume normal blend distance.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditInfluenceNormalShape;
+        private const string IconName = "NormalBlendDistance";
+
+        public ReflectionProbeModifyInfluenceNormalShapeTool() : base(Description, Mode, IconName) { }
+    }
+
+    [EditorTool(Description, typeof(ReflectionProbe), toolPriority = (int)Mode)]
+    internal class ReflectionProbeModifyCapturePositionTool : GenericEditorTool<ReflectionProbe>
+    {
+        private const string Description = "Change the capture position.";
+        private const EditMode.SceneViewEditMode Mode = HDProbeUI.EditCapturePosition;
+        private const string IconName = "CapturePosition";
+
+        protected ReflectionProbeModifyCapturePositionTool() : base(Description, Mode, IconName) { }
+    }
+
+   
 }

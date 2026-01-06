@@ -1,8 +1,6 @@
 using System;
 using System.Runtime.CompilerServices;
 using System.Diagnostics;
-using System.Linq;
-using System.Reflection;
 using System.Diagnostics.CodeAnalysis;
 #if UNITY_EDITOR
 using PackageInfo = UnityEditor.PackageManager.PackageInfo;
@@ -49,7 +47,7 @@ namespace UnityEngine.Rendering
     /// Use this attribute to define documentation url for the current Render Pipeline.
     /// </summary>
     /// <example>
-    /// [CoreRPHelpURLAttribute("Volume")]
+    /// [CurrentPipelineHelpURLAttribute("Volume")]
     /// public class Volume : MonoBehaviour
     /// </example>
     [Conditional("UNITY_EDITOR")]
@@ -79,10 +77,80 @@ namespace UnityEngine.Rendering
             get
             {
 #if UNITY_EDITOR
-                if (DocumentationUtils.TryGetPackageInfoForType(GraphicsSettings.currentRenderPipeline?.GetType() ?? typeof(DocumentationInfo), out var package, out var version))
+                if (!GraphicsSettings.isScriptableRenderPipelineEnabled)
+                    return string.Empty;
+
+                if (DocumentationUtils.TryGetPackageInfoForType(GraphicsSettings.currentRenderPipelineAssetType, out var package, out var version))
                 {
                     return DocumentationInfo.GetPackageLink(package, version, pageName, pageHash);
                 }
+#endif
+                return string.Empty;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Use this attribute to define a documentation URL that is only active when a specific Render Pipeline is in use.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// [PipelineHelpURL("HDRenderPipelineAsset", "hdrp-page-name")]
+    /// [PipelineHelpURL("UniversalRenderPipelineAsset", "urp-page-name")]
+    /// public class MyHDRPComponent : MonoBehaviour { /* ... */ }
+    /// </code>
+    /// </example>
+    /// <remarks>
+    /// The URL will only be generated if the active Scriptable Render Pipeline Asset's type name exactly matches the <c>pipelineName</c> provided.
+    /// </remarks>
+    /// <seealso cref="HelpURLAttribute"/>
+    [Conditional("UNITY_EDITOR")]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Enum, AllowMultiple = true)]
+    public class PipelineHelpURLAttribute : HelpURLAttribute
+    {
+        private string pipelineName { get; }
+
+        private string pageName { get; }
+        
+        private string pageHash { get; }
+        
+        /// <summary>
+        /// Initializes the attribute to link to a specific documentation page for a named Render Pipeline.
+        /// </summary>
+        /// <param name="pipelineName">The exact Type name of the Render Pipeline Asset (e.g., "UniversalRenderPipelineAsset", "HDRenderPipelineAsset") for which this URL is valid.</param>
+        /// <param name="pageName">The name of the documentation page.</param>
+        /// <param name="pageHash">Optional. The specific section anchor (#) on the documentation page.</param>
+        public PipelineHelpURLAttribute(string pipelineName, string pageName, string pageHash = "")
+            : base(null)
+        {
+            this.pipelineName = pipelineName;
+            this.pageName = pageName;
+            this.pageHash = pageHash;
+        }
+
+        /// <summary>
+        /// Returns the URL to the specified page within the documentation for the designated Render Pipeline,
+        /// but only if that pipeline is currently active.
+        /// </summary>
+        /// <remarks>
+        /// Checks if a Scriptable Render Pipeline is enabled and if its asset type name matches the <c>pipelineName</c>
+        /// provided in the constructor. If conditions are met and package info is found, constructs the URL.
+        /// Otherwise, returns an empty string.
+        /// </remarks>
+        public override string URL
+        {
+            get
+            {
+#if UNITY_EDITOR
+                if (string.IsNullOrEmpty(pipelineName) || !GraphicsSettings.isScriptableRenderPipelineEnabled)
+                    return string.Empty;
+
+                var pipelineType = GraphicsSettings.currentRenderPipelineAssetType;
+                if (pipelineType.Name != pipelineName)
+                    return string.Empty;
+                
+                if (DocumentationUtils.TryGetPackageInfoForType(pipelineType, out var package, out var version))
+                    return DocumentationInfo.GetPackageLink(package, version, pageName, pageHash);
 #endif
                 return string.Empty;
             }
@@ -190,12 +258,11 @@ namespace UnityEngine.Rendering
         public static string GetHelpURL<TEnum>(TEnum mask = default)
             where TEnum : struct, IConvertible
         {
-            var helpURLAttribute = (HelpURLAttribute)mask
+            var helpURLAttributes = mask
                 .GetType()
-                .GetCustomAttributes(typeof(HelpURLAttribute), false)
-                .FirstOrDefault();
+                .GetCustomAttributes(typeof(HelpURLAttribute), false);
 
-            return helpURLAttribute == null ? string.Empty : $"{helpURLAttribute.URL}#{mask}";
+            return helpURLAttributes.Length == 0 ? string.Empty : $"{((HelpURLAttribute)helpURLAttributes[0]).URL}#{mask}";
         }
 
         /// <summary>
@@ -206,9 +273,19 @@ namespace UnityEngine.Rendering
         /// <returns>Returns true if the attribute is present, and false otherwise.</returns>
         public static bool TryGetHelpURL(Type type, out string url)
         {
-            var attribute = type.GetCustomAttribute<HelpURLAttribute>(false);
-            url = attribute?.URL;
-            return attribute != null;
+            var helpURLAttributes = type.GetCustomAttributes(typeof(HelpURLAttribute), true);
+            for (int i = 0; i < helpURLAttributes.Length; i++)
+            {
+                var attr = (HelpURLAttribute)helpURLAttributes[i];
+                var attributeUrl = attr.URL;
+                if (string.IsNullOrEmpty(attributeUrl))
+                    continue;
+
+                url = attributeUrl;
+                return true;
+            }
+            url = null;
+            return false;
         }
 
 #if UNITY_EDITOR

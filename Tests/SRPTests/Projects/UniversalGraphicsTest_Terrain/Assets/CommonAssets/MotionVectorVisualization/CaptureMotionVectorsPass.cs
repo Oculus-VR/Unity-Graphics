@@ -22,21 +22,6 @@ namespace UnityEngine.Rendering.Universal
             m_intensity = intensity;
         }
 
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            //Todo: test code is not working for XR
-            CommandBuffer cmd = CommandBufferPool.Get();
-
-            bool isGameCamera = renderingData.cameraData.camera.cameraType == CameraType.Game;
-            ExecutePass(renderingData.cameraData.renderer.cameraColorTargetHandle, cmd, isGameCamera, m_Material, m_intensity);
-
-            context.ExecuteCommandBuffer(cmd);
-            cmd.Clear();
-
-            CommandBufferPool.Release(cmd);
-        }
-
-
         static void ExecutePass(RTHandle targetHandle, CommandBuffer cmd, bool isGameCamera, Material material, float motionIntensity)
         {
             if (!isGameCamera)
@@ -64,17 +49,18 @@ namespace UnityEngine.Rendering.Universal
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
 
-            using (var builder = renderGraph.AddRenderPass<PassData>("Capture Motion Vector Pass", out var passData, s_ProfilingSampler))
+            using (var builder = renderGraph.AddUnsafePass<PassData>("Capture Motion Vector Pass", out var passData, s_ProfilingSampler))
             {
-                TextureHandle color = resourceData.activeColorTexture;
-                passData.target = builder.UseColorBuffer(color, 0);
+                passData.target = resourceData.activeColorTexture;
+                builder.SetRenderAttachment(passData.target, 0);
                 passData.isGameCamera = cameraData.camera.cameraType == CameraType.Game;
                 passData.material = m_Material;
                 passData.intensity = m_intensity;
 
-                builder.SetRenderFunc((PassData data, RenderGraphContext rgContext) =>
+                builder.SetRenderFunc((PassData data, UnsafeGraphContext rgContext) =>
                 {
-                    ExecutePass(data.target, rgContext.cmd, data.isGameCamera, data.material, data.intensity);
+                    var nativeCmd = CommandBufferHelpers.GetNativeCommandBuffer(rgContext.cmd);
+                    ExecutePass(data.target, nativeCmd, data.isGameCamera, data.material, data.intensity);
                 });
             }
         }

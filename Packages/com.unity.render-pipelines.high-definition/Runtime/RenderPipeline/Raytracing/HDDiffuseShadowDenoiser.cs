@@ -86,15 +86,12 @@ namespace UnityEngine.Rendering.HighDefinition
         }
 
         public TextureHandle DenoiseBufferDirectional(RenderGraph renderGraph, HDCamera hdCamera,
-            TextureHandle depthBuffer, TextureHandle normalBuffer,
-            TextureHandle noisyBuffer, TextureHandle distanceBuffer,
+            TextureHandle depthBuffer, in TextureHandle normalBuffer,
+            TextureHandle noisyBuffer, in TextureHandle distanceBuffer,
             int kernelSize, float angularDiameter, bool singleChannel = true)
         {
-            using (var builder = renderGraph.AddRenderPass<DiffuseShadowDenoiserDirectionalPassData>("TemporalDenoiser", out var passData, ProfilingSampler.Get(HDProfileId.DiffuseFilter)))
+            using (var builder = renderGraph.AddUnsafePass<DiffuseShadowDenoiserDirectionalPassData>("TemporalDenoiser", out var passData, ProfilingSampler.Get(HDProfileId.DiffuseFilter)))
             {
-                // Cannot run in async
-                builder.EnableAsyncCompute(false);
-
                 // Fetch all the resources
                 // Set the camera parameters
                 passData.texWidth = hdCamera.actualWidth;
@@ -115,22 +112,27 @@ namespace UnityEngine.Rendering.HighDefinition
                 passData.diffuseShadowDenoiserCS = m_ShadowDenoiser;
 
                 // Input buffers
-                passData.depthStencilBuffer = builder.UseDepthBuffer(depthBuffer, DepthAccess.Read);
-                passData.normalBuffer = builder.ReadTexture(normalBuffer);
-                passData.distanceBuffer = builder.ReadTexture(distanceBuffer);
-                passData.noisyBuffer = builder.ReadTexture(noisyBuffer);
+                passData.depthStencilBuffer = depthBuffer;
+                builder.UseTexture(depthBuffer, AccessFlags.Read);
+                passData.normalBuffer = normalBuffer;
+                builder.UseTexture(passData.normalBuffer, AccessFlags.Read);
+                passData.distanceBuffer = distanceBuffer;
+                builder.UseTexture(passData.distanceBuffer, AccessFlags.Read);
+                passData.noisyBuffer = noisyBuffer;
+                builder.UseTexture(passData.noisyBuffer, AccessFlags.Read);
 
                 // Temporary buffers
                 passData.intermediateBuffer = builder.CreateTransientTexture(new TextureDesc(Vector2.one, true, true)
                 { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Intermediate buffer" });
 
                 // Output buffer
-                passData.outputBuffer = builder.ReadWriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Denoised Buffer" }));
+                passData.outputBuffer = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
+                { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Denoised Buffer" });
+                builder.UseTexture(passData.outputBuffer, AccessFlags.ReadWrite);
 
 
                 builder.SetRenderFunc(
-                    (DiffuseShadowDenoiserDirectionalPassData data, RenderGraphContext ctx) =>
+                    static (DiffuseShadowDenoiserDirectionalPassData data, UnsafeGraphContext ctx) =>
                     {
                         // Raise the distance based denoiser keyword
                         CoreUtils.SetKeyword(ctx.cmd, "DISTANCE_BASED_DENOISER", true);
@@ -204,15 +206,12 @@ namespace UnityEngine.Rendering.HighDefinition
         }
 
         public TextureHandle DenoiseBufferSphere(RenderGraph renderGraph, HDCamera hdCamera,
-            TextureHandle depthBuffer, TextureHandle normalBuffer,
-            TextureHandle noisyBuffer, TextureHandle distanceBuffer,
+            TextureHandle depthBuffer, in TextureHandle normalBuffer,
+            TextureHandle noisyBuffer, in TextureHandle distanceBuffer,
             PunctualShadowProperties properties)
         {
-            using (var builder = renderGraph.AddRenderPass<DiffuseShadowDenoiserSpherePassData>("DiffuseDenoiser", out var passData, ProfilingSampler.Get(HDProfileId.DiffuseFilter)))
+            using (var builder = renderGraph.AddUnsafePass<DiffuseShadowDenoiserSpherePassData>("DiffuseDenoiser", out var passData, ProfilingSampler.Get(HDProfileId.DiffuseFilter)))
             {
-                // Cannot run in async
-                builder.EnableAsyncCompute(false);
-
                 // Set the camera parameters
                 passData.texWidth = hdCamera.actualWidth;
                 passData.texHeight = hdCamera.actualHeight;
@@ -261,23 +260,30 @@ namespace UnityEngine.Rendering.HighDefinition
                 passData.diffuseShadowDenoiserCS = m_ShadowDenoiser;
 
                 // Input buffers
-                passData.depthStencilBuffer = builder.UseDepthBuffer(depthBuffer, DepthAccess.Read);
-                passData.normalBuffer = builder.ReadTexture(normalBuffer);
+                passData.depthStencilBuffer = depthBuffer;
+                builder.UseTexture(passData.depthStencilBuffer, AccessFlags.Read);
+                passData.normalBuffer = normalBuffer;
+                builder.UseTexture(passData.normalBuffer, AccessFlags.Read);
                 if (properties.distanceBasedDenoiser)
-                    passData.distanceBuffer = builder.ReadTexture(distanceBuffer);
-                passData.noisyBuffer = builder.ReadTexture(noisyBuffer);
+                {
+                    passData.distanceBuffer = distanceBuffer;
+                    builder.UseTexture(passData.distanceBuffer, AccessFlags.Read);
+                }
+                passData.noisyBuffer = noisyBuffer;
+                builder.UseTexture(passData.noisyBuffer, AccessFlags.Read);
 
                 // Temporary buffers
                 passData.intermediateBuffer = builder.CreateTransientTexture(new TextureDesc(Vector2.one, true, true)
                 { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Intermediate buffer" });
 
                 // Output buffer
-                passData.outputBuffer = builder.ReadWriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Denoised Buffer" }));
+                passData.outputBuffer = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
+                { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Denoised Buffer" });
+                builder.UseTexture(passData.outputBuffer, AccessFlags.ReadWrite);
 
 
                 builder.SetRenderFunc(
-                    (DiffuseShadowDenoiserSpherePassData data, RenderGraphContext ctx) =>
+                    static (DiffuseShadowDenoiserSpherePassData data, UnsafeGraphContext ctx) =>
                     {
                         // Evaluate the dispatch parameters
                         int shadowTileSize = 8;
@@ -289,7 +295,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
                         // Bind input uniforms for both dispatches
                         ctx.cmd.SetComputeIntParam(data.diffuseShadowDenoiserCS, HDShaderIDs._RaytracingTargetLight, data.properties.lightIndex);
-                        switch(properties.lightType)
+                        switch(data.properties.lightType)
                         {
                             case GPULightType.Spot:
                             {

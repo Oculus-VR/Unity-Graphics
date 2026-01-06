@@ -10,13 +10,15 @@
 
 #define DECLARE_TERRAIN_LAYER_PROPS(n)  \
     float4 _Splat##n##_ST;              \
+    float4 _Splat##n##_TexelSize;       \
     float _Metallic##n;                 \
     float _Smoothness##n;               \
     float _NormalScale##n;              \
     float4 _DiffuseRemapScale##n;       \
     float4 _MaskMapRemapOffset##n;      \
     float4 _MaskMapRemapScale##n;       \
-    float _LayerHasMask##n;
+    float _LayerHasMask##n;             \
+    float _SmoothnessSource##n;
 
 #define DECLARE_TERRAIN_LAYER_PROPS_FIRST_4 \
     DECLARE_TERRAIN_LAYER_PROPS(0)          \
@@ -34,28 +36,22 @@
         DECLARE_TERRAIN_LAYER_PROPS(7)      \
         float4 _Control1_TexelSize;         \
         float _HeightTransition;
+        uint _NumLayersCount;
 #else
     #define UNITY_TERRAIN_CB_VARS \
         DECLARE_TERRAIN_LAYER_PROPS_FIRST_4 \
         float _HeightTransition;
+        uint _NumLayersCount;
 #endif
 
 #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/DebugMipmapStreamingMacros.hlsl"
 #define UNITY_TERRAIN_CB_DEBUG_VARS \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Control0); \
-    float4 _Splat0_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat0);   \
-    float4 _Splat1_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat1);   \
-    float4 _Splat2_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat2);   \
-    float4 _Splat3_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat3);   \
-    float4 _Splat4_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat4);   \
-    float4 _Splat5_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat5);   \
-    float4 _Splat6_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat6);   \
-    float4 _Splat7_TexelSize;                                 \
     UNITY_TEXTURE_STREAMING_DEBUG_VARS_FOR_TEX(_Splat7);

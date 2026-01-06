@@ -268,15 +268,15 @@ namespace UnityEngine.Rendering
         }
     }
 
-    class BakingBatch
+    class BakingBatch : IDisposable
     {
         public Dictionary<int, HashSet<string>> cellIndex2SceneReferences = new ();
         public List<BakingCell> cells = new ();
         // Used to retrieve probe data from it's position in order to fix seams
-        public Dictionary<int, int> positionToIndex = new ();
+        public NativeHashMap<int, int> positionToIndex;
         // Allow to get a mapping to subdiv level with the unique positions. It stores the minimum subdiv level found for a given position.
         // Can be probably done cleaner.
-        public Dictionary<int, int> uniqueBrickSubdiv = new ();
+        public NativeHashMap<int, int> uniqueBrickSubdiv;
         // Mapping for explicit invalidation, whether it comes from the auto finding of occluders or from the touch up volumes
         // TODO: This is not used yet. Will soon.
         public Dictionary<Vector3, bool> invalidatedPositions = new ();
@@ -301,11 +301,24 @@ namespace UnityEngine.Rendering
 
         private BakingBatch() { }
 
-        public BakingBatch(Vector3Int cellCount)
+        public BakingBatch(Vector3Int cellCount, ProbeReferenceVolume refVolume)
         {
-            maxBrickCount = cellCount * ProbeReferenceVolume.CellSize(ProbeReferenceVolume.instance.GetMaxSubdivision());
-            inverseScale = ProbeBrickPool.kBrickCellCount / ProbeReferenceVolume.instance.MinBrickSize();
-            offset = ProbeReferenceVolume.instance.ProbeOffset();
+            maxBrickCount = cellCount * ProbeReferenceVolume.CellSize(refVolume.GetMaxSubdivision());
+            inverseScale = ProbeBrickPool.kBrickCellCount / refVolume.MinBrickSize();
+            offset = refVolume.ProbeOffset();
+            
+            // Initialize NativeHashMaps with reasonable initial capacity
+            // Using a larger capacity to reduce allocations during baking
+            positionToIndex = new NativeHashMap<int, int>(100000, Allocator.Persistent);
+            uniqueBrickSubdiv = new NativeHashMap<int, int>(100000, Allocator.Persistent);
+        }
+        
+        public void Dispose()
+        {
+            if (positionToIndex.IsCreated)
+                positionToIndex.Dispose();
+            if (uniqueBrickSubdiv.IsCreated)
+                uniqueBrickSubdiv.Dispose();
         }
 
         public int GetProbePositionHash(Vector3 position)
@@ -647,7 +660,12 @@ namespace UnityEngine.Rendering
 
         static bool m_IsInit = false;
         static BakingBatch m_BakingBatch;
-        static ProbeVolumeBakingSet m_BakingSet = null;
+        static ProbeVolumeBakingSetWeakReference m_BakingSetReference = new();
+        static ProbeVolumeBakingSet m_BakingSet
+        {
+            get => m_BakingSetReference.Get();
+            set => m_BakingSetReference.Set(value);
+        }
         static TouchupVolumeWithBoundsList s_AdjustmentVolumes;
 
         static Bounds globalBounds = new Bounds();
@@ -754,8 +772,7 @@ namespace UnityEngine.Rendering
             for (int i = 0; i < perSceneData.Count; ++i)
             {
                 var data = perSceneData[i];
-                var scene = data.gameObject.scene;
-                var sceneGUID = scene.GetGUID();
+                var sceneGUID = data.sceneGUID;
                 var bakingSet = ProbeVolumeBakingSet.GetBakingSetForScene(sceneGUID);
 
                 if (bakingSet == null)
@@ -763,7 +780,8 @@ namespace UnityEngine.Rendering
                     if (isBakingSingleScene)
                         continue;
 
-                    Debug.LogError($"Scene '{scene.name}' does not belong to any Baking Set. Please add it to a Baking Set in the Adaptive Probe Volumes tab of the Lighting Window.");
+                    var sceneName = data.gameObject.scene.name;
+                    Debug.LogError($"Scene '{sceneName}' does not belong to any Baking Set. Please add it to a Baking Set in the Adaptive Probe Volumes tab of the Lighting Window.");
                     return false;
                 }
 
@@ -922,7 +940,7 @@ namespace UnityEngine.Rendering
                 bool canceledByUser = false;
                 // Note: this could be executed in the baking delegate to be non blocking
                 using (new BakingSetupProfiling(BakingSetupProfiling.Stages.PlaceProbes))
-                    positions = RunPlacement(ref canceledByUser);
+                    positions = RunPlacement(m_ProfileInfo, ProbeReferenceVolume.instance, ref canceledByUser);
 
                 if (positions.Length == 0 || canceledByUser)
                 {
@@ -945,8 +963,11 @@ namespace UnityEngine.Rendering
 
         static bool InitializeBake()
         {
-            if (ProbeVolumeLightingTab.instance?.PrepareAPVBake() == false) return false;
-            if (!ProbeReferenceVolume.instance.isInitialized || !ProbeReferenceVolume.instance.enabledBySRP) return false;
+            if (ProbeVolumeLightingTab.instance?.PrepareAPVBake(ProbeReferenceVolume.instance) == false)
+                return false;
+
+            if (!ProbeReferenceVolume.instance.isInitialized || !ProbeReferenceVolume.instance.enabledBySRP)
+                return false;
 
             using var scope = new BakingSetupProfiling(BakingSetupProfiling.Stages.PrepareWorldSubdivision);
 
@@ -961,13 +982,16 @@ namespace UnityEngine.Rendering
                 }
             }
 
-            if (ProbeReferenceVolume.instance.perSceneDataList.Count == 0) return false;
+            if (ProbeReferenceVolume.instance.perSceneDataList.Count == 0)
+                return false;
 
             var sceneDataList = GetPerSceneDataList();
-            if (sceneDataList.Count == 0) return false;
+            if (sceneDataList.Count == 0)
+                return false;
 
             var pvList = GetProbeVolumeList();
-            if (pvList.Count == 0) return false; // We have no probe volumes.
+            if (pvList.Count == 0)
+                return false; // We have no probe volumes.
 
             CachePVHashes(pvList);
 
@@ -1138,6 +1162,21 @@ namespace UnityEngine.Rendering
             }
         }
 
+        // Required by native side.
+        [Scripting.Preserve]
+        static bool CurrentSceneHasBakedData()
+        {
+            if (!ProbeReferenceVolume.instance.isInitialized || !ProbeReferenceVolume.instance.enabledBySRP)
+                return false;
+
+            string sceneGUID = SceneManager.GetActiveScene().GetGUID();
+            ProbeReferenceVolume.instance.TryGetPerSceneData(sceneGUID, out var sceneData);
+            if (sceneData == null || sceneData.bakingSet == null)
+                return false;
+
+            return sceneData.bakingSet.HasBeenBaked();
+        }
+
         static void FinalizeBake(bool cleanup = true)
         {
             using (new BakingCompleteProfiling(BakingCompleteProfiling.Stages.FinalizingBake))
@@ -1191,6 +1230,7 @@ namespace UnityEngine.Rendering
         static void CleanBakeData()
         {
             s_BakeData.Dispose();
+            m_BakingBatch?.Dispose();
             m_BakingBatch = null;
             s_AdjustmentVolumes = null;
 
@@ -1467,6 +1507,15 @@ namespace UnityEngine.Rendering
             // Use the globalBounds we just computed, as the one in probeRefVolume doesn't include scenes that have never been baked
             probeRefVolume.globalBounds = globalBounds;
 
+            // Validate baking cells size before any state modifications
+            var bakingCellsArray = m_BakedCells.Values.ToArray();
+            var chunkSizeInProbes = ProbeBrickPool.GetChunkSizeInProbeCount();
+            var hasVirtualOffsets = m_BakingSet.settings.virtualOffsetSettings.useVirtualOffset;
+            var hasRenderingLayers = m_BakingSet.useRenderingLayers;
+            
+            if (!ValidateBakingCellsSize(bakingCellsArray, chunkSizeInProbes, hasVirtualOffsets, hasRenderingLayers))
+                return; // Early exit if validation fails
+
             PrepareCellsForWriting(isBakingSceneSubset);
 
             m_BakingSet.chunkSizeInBricks = ProbeBrickPool.GetChunkSizeInBrickCount();
@@ -1477,9 +1526,13 @@ namespace UnityEngine.Rendering
 
             m_BakingSet.scenarios.TryAdd(m_BakingSet.lightingScenario, new ProbeVolumeBakingSet.PerScenarioDataInfo());
 
-            // Convert baking cells to runtime cells
+            // Attempt to convert baking cells to runtime cells
+            bool succeededWritingBakingCells;
             using (new BakingCompleteProfiling(BakingCompleteProfiling.Stages.WriteBakedData))
-                WriteBakingCells(m_BakedCells.Values.ToArray());
+                succeededWritingBakingCells = WriteBakingCells(m_BakedCells.Values.ToArray());
+
+            if (!succeededWritingBakingCells)
+                return;
 
             // Reset internal structures depending on current bake.
             Debug.Assert(probeRefVolume.EnsureCurrentBakingSet(m_BakingSet));
@@ -1491,11 +1544,14 @@ namespace UnityEngine.Rendering
             if (m_BakingSet.hasDilation)
             {
                 // This subsequent block needs to happen AFTER we call WriteBakingCells.
-                // Otherwise in cases where we change the spacing between probes, we end up loading cells with a certain layout in ForceSHBand
+                // Otherwise, in cases where we change the spacing between probes, we end up loading cells with a certain layout in ForceSHBand
                 // And then we unload cells using the wrong layout in PerformDilation (after WriteBakingCells updates the baking set object) which leads to a broken internal state.
 
                 // Don't use Disk streaming to avoid having to wait for it when doing dilation.
                 probeRefVolume.ForceNoDiskStreaming(true);
+                // Increase the memory budget to make sure we can fit the current cell and all its neighbors when doing dilation.
+                var prevMemoryBudget = probeRefVolume.memoryBudget;
+                probeRefVolume.ForceMemoryBudget(ProbeVolumeTextureMemoryBudget.MemoryBudgetHigh);
                 // Force maximum sh bands to perform baking, we need to store what sh bands was selected from the settings as we need to restore it after.
                 var prevSHBands = probeRefVolume.shBands;
                 probeRefVolume.ForceSHBand(ProbeVolumeSHBands.SphericalHarmonicsL2);
@@ -1506,8 +1562,9 @@ namespace UnityEngine.Rendering
                 using (new BakingCompleteProfiling(BakingCompleteProfiling.Stages.PerformDilation))
                     PerformDilation();
 
-                // Need to restore the original state
+                // Restore the original state.
                 probeRefVolume.ForceNoDiskStreaming(false);
+                probeRefVolume.ForceMemoryBudget(prevMemoryBudget);
                 probeRefVolume.ForceSHBand(prevSHBands);
             }
             else
@@ -1519,6 +1576,7 @@ namespace UnityEngine.Rendering
             }
 
             // Mark stuff as up to date
+            m_BakingBatch?.Dispose();
             m_BakingBatch = null;
             foreach (var probeVolume in GetProbeVolumeList())
                 probeVolume.OnBakeCompleted();
@@ -1585,13 +1643,15 @@ namespace UnityEngine.Rendering
         /// Request additional bake request manager to recompute baked data for an array of requests
         /// </summary>
         /// <param name="probeInstanceIDs">Array of instance IDs of the probes doing the request.</param>
-        public static void BakeAdditionalRequests(int[] probeInstanceIDs)
+        public static void BakeAdditionalRequests(EntityId[] probeInstanceIDs)
         {
-            List<int> validProbeInstanceIDs = new List<int>();
+            List<EntityId> validProbeInstanceIDs = new List<EntityId>();
             List<Vector3> positions = new List<Vector3>();
             foreach (var probeInstanceID in probeInstanceIDs)
             {
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                 if (AdditionalGIBakeRequestsManager.GetPositionForRequest(probeInstanceID, out var position))
+#pragma warning restore 618
                 {
                     validProbeInstanceIDs.Add(probeInstanceID);
                     positions.Add(position);
@@ -1609,7 +1669,9 @@ namespace UnityEngine.Rendering
 
                 for (int probeIndex = 0; probeIndex < numValidProbes; ++probeIndex)
                 {
+#pragma warning disable 618 // Todo(@daniel.andersen): Remove deprecated API usage
                     AdditionalGIBakeRequestsManager.SetSHCoefficients(validProbeInstanceIDs[probeIndex], sh[probeIndex], validity[probeIndex]);
+#pragma warning restore 618
                 }
             }
         }
@@ -1617,13 +1679,37 @@ namespace UnityEngine.Rendering
         /// <summary>
         /// Request additional bake request manager to recompute baked data for a given request
         /// </summary>
+        /// <param name="probeEntityId">The instance ID of the probe doing the request.</param>
+        public static void BakeAdditionalRequest(EntityId probeEntityId)
+        {
+            EntityId[] probeEntityIds = new EntityId[1];
+            probeEntityIds[0] = probeEntityId;
+
+            BakeAdditionalRequests(probeEntityIds);
+        }
+
+        // Obsolete wrapper methods for backward compatibility
+        /// <summary>
+        /// Request additional bake request manager to recompute baked data for an array of requests
+        /// </summary>
+        /// <param name="probeInstanceIDs">Array of instance IDs of the probes doing the request.</param>
+        [System.Obsolete("Use BakeAdditionalRequests(EntityId[]) instead. This method will be removed in a future version.")]
+        public static void BakeAdditionalRequests(int[] probeInstanceIDs)
+        {
+            var entityIds = new EntityId[probeInstanceIDs.Length];
+            for (int i = 0; i < probeInstanceIDs.Length; i++)
+                entityIds[i] = probeInstanceIDs[i];
+            BakeAdditionalRequests(entityIds);
+        }
+
+        /// <summary>
+        /// Request additional bake request manager to recompute baked data for a given request
+        /// </summary>
         /// <param name="probeInstanceID">The instance ID of the probe doing the request.</param>
+        [System.Obsolete("Use BakeAdditionalRequest(EntityId) instead. This method will be removed in a future version.")]
         public static void BakeAdditionalRequest(int probeInstanceID)
         {
-            int[] probeInstanceIDs = new int[1];
-            probeInstanceIDs[0] = probeInstanceID;
-
-            BakeAdditionalRequests(probeInstanceIDs);
+            BakeAdditionalRequest((EntityId)probeInstanceID);
         }
 
         static RenderingLayerBaker renderingLayerOverride = null;

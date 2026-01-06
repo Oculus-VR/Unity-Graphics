@@ -15,6 +15,7 @@ namespace UnityEditor.Rendering.HighDefinition
         protected ShaderKeyword m_ProbeVolumesL1 = new ShaderKeyword("PROBE_VOLUMES_L1");
         protected ShaderKeyword m_ProbeVolumesL2 = new ShaderKeyword("PROBE_VOLUMES_L2");
         protected ShaderKeyword m_WaterAbsorption = new ShaderKeyword("SUPPORT_WATER_ABSORPTION");
+        protected ShaderKeyword m_AreaShadowHigh = new ShaderKeyword("AREA_SHADOW_HIGH");
 
         protected HDRenderPipelineRuntimeShaders m_Shaders;
 
@@ -111,13 +112,21 @@ namespace UnityEditor.Rendering.HighDefinition
                 }
             }
 
-            foreach (var areaShadowVariant in m_ShadowKeywords.AreaShadowVariants)
+
+            if (ShaderConfig.s_AreaLights == 1)
             {
-                if (areaShadowVariant.Key != shadowInitParams.areaShadowFilteringQuality)
+                foreach (var areaShadowVariant in m_ShadowKeywords.AreaShadowVariants)
                 {
-                    if (inputData.shaderKeywordSet.IsEnabled(areaShadowVariant.Value))
-                        return true;
+                    if (areaShadowVariant.Key != shadowInitParams.areaShadowFilteringQuality)
+                        if (inputData.shaderKeywordSet.IsEnabled(areaShadowVariant.Value))
+                            return true;
                 }
+            }
+            else
+            {
+                // Strip only AREA_SHADOW_HIGH variant, because HDRP enables AREA_SHADOW_MEDIUM if area light is disabled in ShaderConfig
+                if (inputData.shaderKeywordSet.IsEnabled(m_AreaShadowHigh))
+                    return true;
             }
 
             // Screen space shadow variant is exclusive, either we have a variant with dynamic if that support screen space shadow or not
@@ -185,7 +194,7 @@ namespace UnityEditor.Rendering.HighDefinition
         public bool SkipShader([DisallowNull] ComputeShader shader, string shaderVariant)
         {
             // Discard any compute shader use for raytracing if none of the RP asset required it
-            if (!HDRPBuildData.instance.playerNeedRaytracing && HDRPBuildData.instance.rayTracingComputeShaderCache.ContainsKey(shader.GetInstanceID()))
+            if (!HDRPBuildData.instance.playerNeedRaytracing && HDRPBuildData.instance.rayTracingComputeShaderCache.ContainsKey(shader.GetEntityId()))
                 return true;
 
             return false;

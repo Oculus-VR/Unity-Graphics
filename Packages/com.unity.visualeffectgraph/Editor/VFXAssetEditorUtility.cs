@@ -118,7 +118,7 @@ VisualEffectResource:
                     var texture = EditorGUIUtility.FindTexture(typeof(VisualEffectAsset));
                     var action = ScriptableObject.CreateInstance<DoCreateNewVFX>();
                     action.templatePath = templateFilePath;
-                    ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, action, "New VFX.vfx", texture, null);
+                    ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, action, "New VFX.vfx", texture, null);
                 }
             }
 
@@ -145,7 +145,8 @@ VisualEffectResource:
         public static void CreateHLSLFileAsset()
         {
             var action = ScriptableObject.CreateInstance<DoCreateHLSLFile>();
-            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, action, "New custom node.hlsl", null, null);
+            var icon = EditorGUIUtility.FindTexture(typeof(TextAsset));
+            ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, action, "New custom node.hlsl", icon, null);
         }
 
         public static void CreateTemplateAsset(string pathName, string templateFilePath)
@@ -171,39 +172,39 @@ VisualEffectResource:
             AssetDatabase.ImportAsset(pathName);
         }
 
-        internal class DoCreateNewVFX : EndNameEditAction
+        internal class DoCreateNewVFX : AssetCreationEndAction
         {
             public string templatePath { get; set; }
 
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 CreateTemplateAsset(pathName, templatePath);
                 var resource = VisualEffectResource.GetResourceAtPath(pathName);
-                ProjectWindowUtil.FrameObjectInProjectWindow(resource.asset.GetInstanceID());
+                ProjectWindowUtil.FrameObjectInProjectWindow(resource.asset.GetEntityId());
             }
         }
 
-        internal class DoCreateNewSubgraphOperator : EndNameEditAction
+        internal class DoCreateNewSubgraphOperator : AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var sg = CreateNew<VisualEffectSubgraphOperator>(pathName);
-                ProjectWindowUtil.FrameObjectInProjectWindow(sg.GetInstanceID());
+                ProjectWindowUtil.FrameObjectInProjectWindow(sg.GetEntityId());
             }
         }
 
-        internal class DoCreateNewSubgraphBlock : EndNameEditAction
+        internal class DoCreateNewSubgraphBlock : AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 var sg = CreateNew<VisualEffectSubgraphBlock>(pathName);
-                ProjectWindowUtil.FrameObjectInProjectWindow(sg.GetInstanceID());
+                ProjectWindowUtil.FrameObjectInProjectWindow(sg.GetEntityId());
             }
         }
 
-        internal class DoCreateHLSLFile : EndNameEditAction
+        internal class DoCreateHLSLFile : AssetCreationEndAction
         {
-            public override void Action(int instanceId, string pathName, string resourceFile)
+            public override void Action(EntityId entityId, string pathName, string resourceFile)
             {
                 File.Create(pathName).Close();
 
@@ -211,7 +212,7 @@ VisualEffectResource:
 
                 var asset = AssetDatabase.LoadAssetAtPath<TextAsset>(pathName);
 
-                ProjectWindowUtil.FrameObjectInProjectWindow(asset.GetInstanceID());
+                ProjectWindowUtil.FrameObjectInProjectWindow(asset.GetEntityId());
             }
         }
 
@@ -232,7 +233,7 @@ VisualEffectResource:
             CreateVisualEffectSubgraph<VisualEffectSubgraphBlock, DoCreateNewSubgraphBlock>(fileName, templateBlockSubgraphAssetName);
         }
 
-        public static void CreateVisualEffectSubgraph<T, U>(string fileName, string templateName) where U : EndNameEditAction
+        public static void CreateVisualEffectSubgraph<T, U>(string fileName, string templateName) where U : AssetCreationEndAction
         {
             string templateString = "";
 
@@ -241,14 +242,14 @@ VisualEffectResource:
             {
                 templateString = System.IO.File.ReadAllText(templatePath + templateName);
 
-                ProjectWindowUtil.CreateAssetWithContent(fileName, templateString, texture);
+                ProjectWindowUtil.CreateAssetWithTextContent(fileName, templateString, texture);
             }
             catch (System.Exception e)
             {
                 Debug.LogError("Couldn't read template for new visual effect subgraph : " + e.Message);
                 var action = ScriptableObject.CreateInstance<U>();
 
-                ProjectWindowUtil.StartNameEditingIfProjectWindowExists(0, action, fileName, texture, null);
+                ProjectWindowUtil.StartNameEditingIfProjectWindowExists(EntityId.None, action, fileName, texture, null);
 
                 return;
             }

@@ -1171,61 +1171,6 @@ namespace UnityEditor.VFX.Test
             Assert.IsTrue(uniqueSystemNames.Count() == count, "Some GPU systems have the same name or are null or empty.");
         }
 
-        [Test]
-        public void ConvertToSubgraph()
-        {
-            //Create a new vfx based on the usual template
-            var templateString = System.IO.File.ReadAllText(VFXTestCommon.simpleParticleSystemPath);
-            System.IO.File.WriteAllText(testSubgraphAssetName, templateString);
-
-            VFXViewWindow window = VFXViewWindow.GetWindow<VFXViewWindow>();
-            window.LoadAsset(AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(testAssetName), null);
-
-            VFXConvertSubgraph.ConvertToSubgraphContext(window.graphView, window.graphView.Query<VFXContextUI>().ToList().Where(t => !(t.controller.model is VFXBasicSpawner)).Select(t => t.controller).Cast<Controller>(), Rect.zero, testSubgraphSubAssetName);
-
-            window.graphView.controller = null;
-        }
-
-        [Test]
-        public void Subgraph_Event_Link_To_Spawn()
-        {
-            VFXViewWindow window = VFXViewWindow.GetWindow<VFXViewWindow>();
-            window.LoadAsset(AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(testAssetName), null);
-
-            //Create Spawner in subgraph
-            {
-                var spawner = ScriptableObject.CreateInstance<VFXBasicSpawner>();
-                m_ViewController.graph.AddChild(spawner);
-                m_ViewController.LightApplyChanges();
-
-                var controller = window.graphView.Query<VFXContextUI>().ToList().Select(t => t.controller).Cast<Controller>();
-                Assert.AreEqual(1, controller.Count());
-                VFXConvertSubgraph.ConvertToSubgraphContext(window.graphView, controller, Rect.zero, testSubgraphSubAssetName);
-            }
-
-            var subGraphController = m_ViewController.allChildren.OfType<VFXContextController>().FirstOrDefault(o => o.model is VFXSubgraphContext);
-            Assert.IsNotNull(subGraphController);
-
-            //Create Event Context & Link the two input flow
-            var subGraphContext = subGraphController.model;
-            var eventContext = ScriptableObject.CreateInstance<VFXBasicEvent>();
-
-            Assert.IsTrue(VFXContext.CanLink(eventContext, subGraphContext, 0, 0));
-            Assert.IsTrue(VFXContext.CanLink(eventContext, subGraphContext, 0, 1));
-
-            eventContext.LinkTo(subGraphContext, 0, 0);
-            eventContext.LinkTo(subGraphContext, 0, 1);
-
-            var flow = eventContext.outputFlowSlot.First().link;
-            Assert.AreEqual(2, flow.Count());
-            Assert.IsTrue(flow.All(o => o.context == subGraphContext));
-            Assert.IsTrue(flow.Any(o => o.slotIndex == 0));
-            Assert.IsTrue(flow.Any(o => o.slotIndex == 1));
-
-            window.graphView.controller = null;
-        }
-
-
         //Regression test for case 1345426
         [UnityTest]
         public IEnumerator ConvertToSubGraphOperator()
@@ -1428,6 +1373,70 @@ namespace UnityEditor.VFX.Test
             window.graphView.controller = null;
         }
 
+        [UnityTest]
+        public IEnumerator ConvertToSubGraphBlock_Nested()
+        {
+            string vfxPath;
+            {
+                var vfxGraph = VFXTestCommon.CreateGraph_And_System();
+                vfxPath = AssetDatabase.GetAssetPath(vfxGraph);
+                var update = vfxGraph.children.OfType<VFXBasicUpdate>().Single();
+                var gravityDesc = VFXLibrary.GetBlocks().First(o => o.modelType == typeof(Gravity));
+                var gravity = gravityDesc.CreateInstance();
+                update.AddChild(gravity);
+                AssetDatabase.ImportAsset(vfxPath);
+            }
+
+            var asset = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(vfxPath);
+            Assert.IsTrue(VisualEffectAssetEditor.OnOpenVFX(asset.GetInstanceID(), 0));
+
+            var window = VFXViewWindow.GetWindow(asset);
+            window.LoadAsset(asset, null);
+            var viewController = window.graphView.controller;
+            Assert.IsNotNull(viewController);
+
+            var firstSubgraphBlockPath = vfxPath + "block";
+            var secondSubgraphBlockPath = firstSubgraphBlockPath.Replace(".vfxblock", "_bis.vfxblock");
+
+            {
+                var update = viewController.graph.children.OfType<VFXBasicUpdate>().Single();
+                var gravityBlock = update.children.OfType<Gravity>().First();
+                var controller = viewController.GetNodeController(gravityBlock, 0);
+                VFXConvertSubgraph.ConvertToSubgraphBlock(window.graphView, new[] { controller }, Rect.zero, firstSubgraphBlockPath);
+                viewController.ApplyChanges();
+            }
+
+            yield return null;
+
+            {
+                var update = viewController.graph.children.OfType<VFXBasicUpdate>().Single();
+                var subgraphBlock = update.children.OfType<VFXSubgraphBlock>().First();
+                var controller = viewController.GetNodeController(subgraphBlock, 0);
+                VFXConvertSubgraph.ConvertToSubgraphBlock(window.graphView, new[] { controller }, Rect.zero, secondSubgraphBlockPath);
+                viewController.ApplyChanges();
+            }
+
+            yield return null;
+
+            //Basic check on expected shader generation output
+            AssetDatabase.ImportAsset(vfxPath);
+            var graph = asset.GetOrCreateResource();
+            bool foundGravityInSource = false;
+            for (int shaderIndex = 0; shaderIndex < graph.GetShaderSourceCount(); ++shaderIndex)
+            {
+                if (!graph.GetShaderSourceName(shaderIndex).Contains("Update"))
+                    continue;
+
+                var source = graph.GetShaderSource(shaderIndex);
+                if (source.Contains("Gravity"))
+                {
+                    foundGravityInSource = true;
+                    break;
+                }
+            }
+            Assert.IsTrue(foundGravityInSource);
+        }
+
         [UnityTest][Description("(Non regression test for FB case #1419176")]
         public IEnumerator Rename_Asset_Dont_Lose_Subgraph()
         {
@@ -1602,6 +1611,61 @@ namespace UnityEditor.VFX.Test
             //A failure would log "Expression graph was marked as dirty after compiling context for UI. Discard to avoid infinite compilation loop." is logged
             window.Close();
             yield return null;
+        }
+
+        [UnityTest, Description("Repro from UUM-113869")]
+        public IEnumerator Group_Selection_No_Delete_Empty_Groups()
+        {
+            //Prepare Asset
+            var vfxGraph = VFXTestCommon.CreateGraph_And_System();
+            var vfxPath = AssetDatabase.GetAssetPath(vfxGraph);
+
+            AssetDatabase.ImportAsset(vfxPath);
+            yield return null;
+
+            //Prepare Controller
+            var asset = AssetDatabase.LoadAssetAtPath<VisualEffectAsset>(vfxPath);
+            Assert.IsNotNull(asset);
+            Assert.IsTrue(VisualEffectAssetEditor.OnOpenVFX(asset.GetInstanceID(), 0));
+
+            var window = VFXViewWindow.GetWindow(asset);
+            window.LoadAsset(asset, null);
+            var controller = window.graphView.controller;
+
+            controller.AddStickyNote(Vector2.one * 400, null);
+            controller.AddGroupNode(500 * Vector2.right);
+
+            for (int i = 0; i < 4; i++)
+                yield return null;
+
+            var stickyNoteController = controller.stickyNotes.Single(); // This will confirm there's only one sticky note
+            controller.GroupNodes(Array.Empty<VFXNodeController>(), new[] { stickyNoteController });
+            yield return null;
+
+            Assert.AreEqual(2, controller.groupNodes.Count);
+        }
+
+        [Test]
+        public void CheckMinMaxRangeParameter()
+        {
+            // Arrange
+            var rangeParameter = m_ViewController.AddVFXParameter(Vector2.zero, VFXLibrary.GetParameters().First(t => t.modelType == typeof(uint)).variant);
+            m_ViewController.LightApplyChanges();
+            var rangeParameterController = m_ViewController.GetParameterController(rangeParameter);
+            rangeParameterController.valueFilter = VFXValueFilter.Range;
+
+            rangeParameterController.minValue = 0u;
+            rangeParameterController.maxValue = 100u;
+            rangeParameterController.value = 1u;
+            m_ViewController.LightApplyChanges();
+
+            // Act
+            rangeParameterController.minValue = 200u;
+
+            // Assert
+            Assert.AreEqual(0, rangeParameterController.minValue);
+            Assert.AreEqual(1, rangeParameterController.value);
+            Assert.AreEqual(100, rangeParameterController.maxValue);
         }
     }
 }

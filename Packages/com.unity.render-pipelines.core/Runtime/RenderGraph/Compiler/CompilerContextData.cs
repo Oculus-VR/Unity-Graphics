@@ -41,7 +41,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
 
     // Note pass=node in the graph, both are sometimes mixed up here
     // Datastructure that contains passes and dependencies and allow you to iterate and reason on them more like a graph
-    internal class CompilerContextData : IDisposable, RenderGraph.ICompiledGraph
+    internal class CompilerContextData : IDisposable
     {
         public CompilerContextData()
         {
@@ -58,9 +58,11 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                 // These are risky heuristics that only work because we purposely estimate a very high number of passes
                 // We need to fix this with a proper size computation
                 passData = new NativeList<PassData>(estimatedNumPasses, AllocatorManager.Persistent);
+                compactedNonCulledRasterPasses = new NativeList<PassData>(0, AllocatorManager.Persistent); // Will be resized during the compilation
                 inputData = new NativeList<PassInputData>(estimatedNumPasses * 2, AllocatorManager.Persistent);
                 outputData = new NativeList<PassOutputData>(estimatedNumPasses * 2, AllocatorManager.Persistent);
                 fragmentData = new NativeList<PassFragmentData>(estimatedNumPasses * 4, AllocatorManager.Persistent);
+                sampledData = new NativeList<ResourceHandle>(estimatedNumPasses * 2, AllocatorManager.Persistent);
                 randomAccessResourceData = new NativeList<PassRandomWriteData>(4, AllocatorManager.Persistent); // We assume not a lot of passes use random write
                 nativePassData = new NativeList<NativePassData>(estimatedNumPasses, AllocatorManager.Persistent);// assume nothing gets merged
                 nativeSubPassData = new NativeList<SubPassDescriptor>(estimatedNumPasses, AllocatorManager.Persistent);// there should "never" be more subpasses than graph passes
@@ -86,10 +88,12 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             if (m_AreNativeListsAllocated)
             {
                 passData.Clear();
+                compactedNonCulledRasterPasses.Clear();
                 fences.Clear();
                 inputData.Clear();
                 outputData.Clear();
                 fragmentData.Clear();
+                sampledData.Clear();
                 randomAccessResourceData.Clear();
                 nativePassData.Clear();
                 nativeSubPassData.Clear();
@@ -101,20 +105,20 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         public ResourcesData resources;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref ResourceUnversionedData UnversionedResourceData(ResourceHandle h)
+        public ref ResourceUnversionedData UnversionedResourceData(in ResourceHandle h)
         {
             return ref resources.unversionedData[h.iType].ElementAt(h.index);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref ResourceVersionedData VersionedResourceData(ResourceHandle h)
+        public ref ResourceVersionedData VersionedResourceData(in ResourceHandle h)
         {
             return ref resources[h];
         }
 
         // Iterate over all the readers of a particular resource
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<ResourceReaderData> Readers(ResourceHandle h)
+        public ReadOnlySpan<ResourceReaderData> Readers(in ResourceHandle h)
         {
             int firstReader = resources.IndexReader(h, 0);
             int numReaders = resources[h].numReaders;
@@ -123,7 +127,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
 
         // Get the i'th reader of a resource
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref ResourceReaderData ResourceReader(ResourceHandle h, int i)
+        public ref ResourceReaderData ResourceReader(in ResourceHandle h, int i)
         {
             int numReaders = resources[h].numReaders;
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
@@ -137,6 +141,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
 
         // Data per graph level renderpass
         public NativeList<PassData> passData;
+        public NativeList<PassData> compactedNonCulledRasterPasses;
         public Dictionary<int, GraphicsFence> fences;
         public DynamicArray<Name> passNames;
 
@@ -144,6 +149,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         public NativeList<PassInputData> inputData;
         public NativeList<PassOutputData> outputData;
         public NativeList<PassFragmentData> fragmentData;
+        public NativeList<ResourceHandle> sampledData;
         public NativeList<ResourceHandle> createData;
         public NativeList<ResourceHandle> destroyData;
         public NativeList<PassRandomWriteData> randomAccessResourceData;
@@ -153,10 +159,15 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         public NativeList<SubPassDescriptor> nativeSubPassData; //Tighty packed list of per nrp subpasses
 
         // resources can be added as fragment both as input and output so make sure not to add them twice (return true upon new addition)
-        public bool AddToFragmentList(TextureAccess access, int listFirstIndex, int numItems)
+        public bool TryAddToFragmentList(in TextureAccess access, int listFirstIndex, int numItems, out string errorMessage)
         {
+            errorMessage = null;
 #if DEVELOPMENT_BUILD || UNITY_EDITOR
-            if (access.textureHandle.handle.type != RenderGraphResourceType.Texture) new Exception("Only textures can be used as a fragment attachment.");
+            if (access.textureHandle.handle.type != RenderGraphResourceType.Texture)
+            {
+                errorMessage = RenderGraph.RenderGraphExceptionMessages.k_NonTextureAsAttachmentError;
+                return false;
+            }
 #endif
             for (var i = listFirstIndex; i < listFirstIndex + numItems; ++i)
             {
@@ -168,15 +179,15 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                     {
                         //this would mean you're trying to attach say both v1 and v2 of a resource to the same pass as an attachment
                         //this is not allowed
-                        throw new Exception("Trying to UseFragment two versions of the same resource");
+                        errorMessage = RenderGraph.RenderGraphExceptionMessages.k_OneResourceTwoVersionsError;
                     }
 #endif
                     return false;
                 }
             }
 
-            // Validate that we're correctly building up the fragment lists we can only append to the last list
-            // not int the middle of lists
+            // Validate that we're correctly building up the fragment lists, we can only append to the last list
+            // not in the middle of the other lists
             Debug.Assert(listFirstIndex + numItems == fragmentData.Length);
 
             fragmentData.Add(new PassFragmentData(
@@ -195,14 +206,15 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         public string GetPassName(int passId) => passNames[passId].name;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public string GetResourceName(ResourceHandle h) => resources.resourceNames[h.iType][h.index].name;
+        public string GetResourceName(in ResourceHandle h) => resources.resourceNames[h.iType][h.index].name;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public string GetResourceVersionedName(ResourceHandle h) => GetResourceName(h) + " V" + h.version;
+        public string GetResourceVersionedName(in ResourceHandle h) => GetResourceName(h) + " V" + h.version;
 
         // resources can be added as fragment both as input and output so make sure not to add them twice (return true upon new addition)
-        public bool AddToRandomAccessResourceList(ResourceHandle h, int randomWriteSlotIndex, bool preserveCounterValue, int listFirstIndex, int numItems)
+        public bool TryAddToRandomAccessResourceList(in ResourceHandle h, int randomWriteSlotIndex, bool preserveCounterValue, int listFirstIndex, int numItems, out string errorMessage)
         {
+            errorMessage = null;
             for (var i = listFirstIndex; i < listFirstIndex + numItems; ++i)
             {
                 if (randomAccessResourceData[i].resource.index == h.index && randomAccessResourceData[i].resource.type == h.type)
@@ -211,7 +223,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                     {
                         //this would mean you're trying to attach say both v1 and v2 of a resource to the same pass as an attachment
                         //this is not allowed
-                        throw new Exception("Trying to UseTextureRandomWrite two versions of the same resource");
+                        errorMessage = RenderGraph.RenderGraphExceptionMessages.k_UseTextureRandWriteTwoVersionsError;
                     }
                     return false;
                 }
@@ -239,6 +251,59 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             {
                 passData.ElementAt(passId).culled = isCulled;
             }
+        }
+
+        public TextureUVOrigin GetTextureUVOrigin(in TextureHandle targetHandle)
+        {
+            if (targetHandle.handle.IsValid())
+            {
+                ref readonly ResourceUnversionedData unversionedData = ref UnversionedResourceData(targetHandle.handle);
+                return unversionedData.textureUVOrigin == TextureUVOriginSelection.TopLeft ? TextureUVOrigin.TopLeft : TextureUVOrigin.BottomLeft;
+            }
+            else
+            {
+                return TextureUVOrigin.BottomLeft;
+            }
+        }
+
+        #region Helpers For Testing Only
+
+        // Helper to loop over render graph passes
+        public ref struct PassIterator
+        {
+            readonly CompilerContextData m_Ctx;
+            int m_Index;
+
+            public PassIterator(CompilerContextData ctx)
+            {
+                m_Ctx = ctx;
+                m_Index = -1;
+            }
+
+            public ref readonly PassData Current => ref m_Ctx.passData.ElementAt(m_Index);
+
+            public bool MoveNext()
+            {
+                return ++m_Index < m_Ctx.passData.Length;
+            }
+
+            public PassIterator GetEnumerator()
+            {
+                return this;
+            }
+        }
+
+        public PassIterator Passes => new PassIterator(this);
+
+        // Use for testing only
+        internal List<PassData> GetPasses()
+        {
+            var result = new List<PassData>();
+            foreach (ref readonly var pass in Passes)
+            {
+                result.Add(pass);
+            }
+            return result;
         }
 
         // Helper to loop over native passes
@@ -276,7 +341,6 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         // the list may contain empty dummy entries after merging
         public NativePassIterator NativePasses => new NativePassIterator(this);
 
-
         // Use for testing only
         internal List<NativePassData> GetNativePasses()
         {
@@ -287,6 +351,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             }
             return result;
         }
+        #endregion
 
         // IDisposable implementation
 
@@ -307,9 +372,11 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
             if (m_AreNativeListsAllocated)
             {
                 passData.Dispose();
+                compactedNonCulledRasterPasses.Dispose();
                 inputData.Dispose();
                 outputData.Dispose();
                 fragmentData.Dispose();
+                sampledData.Dispose();
                 createData.Dispose();
                 destroyData.Dispose();
                 randomAccessResourceData.Dispose();

@@ -15,9 +15,6 @@ namespace UnityEngine.Rendering.Universal
             DebugViewPass = 1
         }
 
-        PassDataCIExy m_PassDataCIExy;
-        PassDataDebugView m_PassDataDebugView;
-        RTHandle m_CIExyTarget;     // xyBuffer;
         RTHandle m_PassthroughRT;
         Material m_material;
 
@@ -30,12 +27,7 @@ namespace UnityEngine.Rendering.Universal
         {
             profilingSampler = new ProfilingSampler("Blit HDR Debug Data");
             renderPassEvent = RenderPassEvent.AfterRendering + 3;
-            m_PassDataCIExy = new PassDataCIExy() { material = mat };
-            m_PassDataDebugView = new PassDataDebugView() { material = mat };
             m_material = mat;
-
-            // Disabling native render passes (for non-RG) because it renders to 2 different render targets
-            useNativeRenderPass = false;
         }
 
         // Common to RenderGraph and non-RenderGraph paths
@@ -54,7 +46,6 @@ namespace UnityEngine.Rendering.Universal
             internal HDRDebugMode hdrDebugMode;
             internal UniversalCameraData cameraData;
             internal Vector4 luminanceParameters;
-            internal TextureHandle overlayUITexture;
             internal TextureHandle xyBuffer;
             internal TextureHandle srcColor;
             internal TextureHandle dstColor;
@@ -105,7 +96,7 @@ namespace UnityEngine.Rendering.Universal
             cmd.ClearRandomWriteTargets();
         }
 
-        private static void ExecuteHDRDebugViewFinalPass(RasterCommandBuffer cmd, PassDataDebugView data, RTHandle sourceTexture, RTHandle destination, RTHandle xyTarget)
+        private static void ExecuteHDRDebugViewFinalPass(RasterCommandBuffer cmd, in PassDataDebugView data, RTHandle source, Vector4 scaleBias, RTHandle destination, RTHandle xyTarget)
         {
             if (data.cameraData.isHDROutputActive)
             {
@@ -118,9 +109,7 @@ namespace UnityEngine.Rendering.Universal
             Vector4 debugParameters = new Vector4(ShaderConstants._SizeOfHDRXYMapping, ShaderConstants._SizeOfHDRXYMapping, 0, 0);
             data.material.SetVector(ShaderConstants._HDRDebugParamsId, debugParameters);
             data.material.SetVector(ShaderPropertyId.hdrOutputLuminanceParams, data.luminanceParameters);
-            data.material.SetInteger(ShaderConstants._DebugHDRModeId, (int)data.hdrDebugMode);
-
-            Vector4 scaleBias = RenderingUtils.GetFinalBlitScaleBias(sourceTexture, destination, data.cameraData);
+            data.material.SetInteger(ShaderConstants._DebugHDRModeId, (int)data.hdrDebugMode);            
 
             RenderTargetIdentifier cameraTarget = BuiltinRenderTextureType.CameraTarget;
             #if ENABLE_VR && ENABLE_XR_MODULE
@@ -131,13 +120,12 @@ namespace UnityEngine.Rendering.Universal
             if (destination.nameID == cameraTarget || data.cameraData.targetTexture != null)
                 cmd.SetViewport(data.cameraData.pixelRect);
 
-            Blitter.BlitTexture(cmd, sourceTexture, scaleBias, data.material, 1);            
+            Blitter.BlitTexture(cmd, source, scaleBias, data.material, 1);            
         }
 
         // Non-RenderGraph path
         public void Dispose()
         {
-            m_CIExyTarget?.Release();
             m_PassthroughRT?.Release();
         }
 
@@ -148,71 +136,12 @@ namespace UnityEngine.Rendering.Universal
         /// <param name="hdrdebugMode">Active DebugMode for HDR.</param>
         public void Setup(UniversalCameraData cameraData, HDRDebugMode hdrdebugMode)
         {
-            m_PassDataDebugView.hdrDebugMode = hdrdebugMode;
-
             RenderTextureDescriptor descriptor = cameraData.cameraTargetDescriptor;
             DebugHandler.ConfigureColorDescriptorForDebugScreen(ref descriptor, cameraData.pixelWidth, cameraData.pixelHeight);
             RenderingUtils.ReAllocateHandleIfNeeded(ref m_PassthroughRT, descriptor, name: "_HDRDebugDummyRT");
-
-            RenderTextureDescriptor descriptorCIE = cameraData.cameraTargetDescriptor;
-            HDRDebugViewPass.ConfigureDescriptorForCIEPrepass(ref descriptorCIE);
-            RenderingUtils.ReAllocateHandleIfNeeded(ref m_CIExyTarget, descriptorCIE, name: "_xyBuffer");
         }
 
-        /// <inheritdoc/>
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            UniversalCameraData cameraData = renderingData.frameData.Get<UniversalCameraData>();
-            var cmd = renderingData.commandBuffer;
-            m_PassDataCIExy.luminanceParameters = m_PassDataDebugView.luminanceParameters = GetLuminanceParameters(cameraData);
-            m_PassDataDebugView.cameraData = cameraData;
-
-            var sourceTexture = renderingData.cameraData.renderer.cameraColorTargetHandle;
-
-            var cameraTarget = RenderingUtils.GetCameraTargetIdentifier(ref renderingData);
-            // Get RTHandle alias to use RTHandle apis
-            RTHandleStaticHelpers.SetRTHandleStaticWrapper(cameraTarget);
-            var cameraTargetHandle = RTHandleStaticHelpers.s_RTHandleWrapper;
-
-            m_material.enabledKeywords = null;
-            GetActiveDebugHandler(cameraData)?.UpdateShaderGlobalPropertiesForFinalValidationPass(cmd, cameraData, true);
-
-            CoreUtils.SetRenderTarget(cmd, m_CIExyTarget, ClearFlag.Color, Color.clear);
-
-            ExecutePass(cmd, m_PassDataCIExy, m_PassDataDebugView, sourceTexture, m_CIExyTarget, cameraTargetHandle);
-        }
-
-        private void ExecutePass(CommandBuffer cmd, PassDataCIExy dataCIExy, PassDataDebugView dataDebugView, RTHandle sourceTexture, RTHandle xyTarget, RTHandle destTexture)
-        {
-            RasterCommandBuffer rasterCmd = CommandBufferHelpers.GetRasterCommandBuffer(cmd);
-
-            //CIExyPrepass
-            bool requiresCIExyData = dataDebugView.hdrDebugMode != HDRDebugMode.ValuesAbovePaperWhite;
-            if (requiresCIExyData)
-            {
-                using (new ProfilingScope(cmd, profilingSampler))
-                {
-                    ExecuteCIExyPrepass(cmd, dataCIExy, sourceTexture, xyTarget, m_PassthroughRT);
-                }
-            }
-
-            //HDR DebugView - should always be the last stack of the camera
-            CoreUtils.SetRenderTarget(cmd, destTexture, RenderBufferLoadAction.DontCare, RenderBufferStoreAction.Store, ClearFlag.None, Color.clear);
-
-            using (new ProfilingScope(cmd, profilingSampler))
-            {
-                ExecuteHDRDebugViewFinalPass(rasterCmd, dataDebugView, sourceTexture, destTexture, xyTarget);
-            }
-
-            // Disable obsolete warning for internal usage
-            #pragma warning disable CS0618
-            dataDebugView.cameraData.renderer.ConfigureCameraTarget(destTexture, destTexture);
-            #pragma warning restore CS0618
-        }
-
-        //RenderGraph path
-        internal void RenderHDRDebug(RenderGraph renderGraph, UniversalCameraData cameraData, TextureHandle srcColor, TextureHandle overlayUITexture, TextureHandle dstColor, HDRDebugMode hdrDebugMode)
+        internal void RenderHDRDebug(RenderGraph renderGraph, UniversalCameraData cameraData, in TextureHandle srcColor, in TextureHandle overlayUITexture, in TextureHandle dstColor, HDRDebugMode hdrDebugMode)
         {
             bool requiresCIExyData = hdrDebugMode != HDRDebugMode.ValuesAbovePaperWhite;
             Vector4 luminanceParameters = GetLuminanceParameters(cameraData);
@@ -242,7 +171,7 @@ namespace UnityEngine.Rendering.Universal
                     passData.passThrough = intermediateRT;
                     builder.UseTexture(intermediateRT, AccessFlags.Write);
 
-                    builder.SetRenderFunc((PassDataCIExy data, UnsafeGraphContext context) =>
+                    builder.SetRenderFunc(static (PassDataCIExy data, UnsafeGraphContext context) =>
                     {
                         ExecuteCIExyPrepass(CommandBufferHelpers.GetNativeCommandBuffer(context.cmd), data, data.srcColor, data.xyBuffer, data.passThrough);
                     });
@@ -269,14 +198,14 @@ namespace UnityEngine.Rendering.Universal
 
                 if (overlayUITexture.IsValid())
                 {
-                    passData.overlayUITexture = overlayUITexture;
                     builder.UseTexture(overlayUITexture);
                 }
 
-                builder.SetRenderFunc((PassDataDebugView data, RasterGraphContext context) =>
+                builder.SetRenderFunc(static (PassDataDebugView data, RasterGraphContext context) =>
                 {
                     data.material.enabledKeywords = null;
-                    ExecuteHDRDebugViewFinalPass(context.cmd, data, data.srcColor, data.dstColor, data.xyBuffer);
+                    Vector4 scaleBias = RenderingUtils.GetFinalBlitScaleBias(in context, in data.srcColor, in data.dstColor);
+                    ExecuteHDRDebugViewFinalPass(context.cmd, in data, data.srcColor, scaleBias, data.dstColor,  data.xyBuffer);
                 });
             }
         }

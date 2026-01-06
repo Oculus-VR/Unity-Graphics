@@ -11,8 +11,6 @@ namespace UnityEngine.Rendering.Universal
         private List<ShaderTagId> m_ShaderTagIdList;
         private ProfilingSampler m_ProfilingSampler;
 
-        private PassData m_PassData;
-
         public DecalPreviewPass()
         {
             renderPassEvent = RenderPassEvent.AfterRenderingOpaques;
@@ -23,26 +21,6 @@ namespace UnityEngine.Rendering.Universal
 
             m_ShaderTagIdList = new List<ShaderTagId>();
             m_ShaderTagIdList.Add(new ShaderTagId(DecalShaderPassNames.DecalScreenSpaceMesh));
-
-            m_PassData = new PassData();
-        }
-
-        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            UniversalRenderingData universalRenderingData = renderingData.frameData.Get<UniversalRenderingData>();
-            UniversalCameraData cameraData = renderingData.frameData.Get<UniversalCameraData>();
-            UniversalLightData lightData = renderingData.frameData.Get<UniversalLightData>();
-
-
-            SortingCriteria sortingCriteria = cameraData.defaultOpaqueSortFlags;
-            DrawingSettings drawingSettings = RenderingUtils.CreateDrawingSettings(m_ShaderTagIdList, universalRenderingData, cameraData, lightData, sortingCriteria);
-            var param = new RendererListParams(universalRenderingData.cullResults, drawingSettings, m_FilteringSettings);
-            var rendererList = context.CreateRendererList(ref param);
-            using (new ProfilingScope(universalRenderingData.commandBuffer, m_ProfilingSampler))
-            {
-                ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(universalRenderingData.commandBuffer), m_PassData, rendererList);
-            }
         }
 
         private static void ExecutePass(RasterCommandBuffer cmd, PassData passData, RendererList rendererList)
@@ -77,7 +55,7 @@ namespace UnityEngine.Rendering.Universal
                 passData.rendererList = renderGraph.CreateRendererList(param);
                 builder.UseRendererList(passData.rendererList);
 
-                builder.SetRenderFunc((PassData data, RasterGraphContext rgContext) =>
+                builder.SetRenderFunc(static (PassData data, RasterGraphContext rgContext) =>
                 {
                     ExecutePass(rgContext.cmd, data, data.rendererList);
                 });

@@ -9,19 +9,14 @@ namespace UnityEditor.Rendering.HighDefinition
     internal class SerializedHDLight : ISerializedLight
     {
         // HDRP specific properties
-        public SerializedProperty spotInnerPercent;
         public SerializedProperty spotIESCutoffPercent;
         public SerializedProperty lightDimmer;
         public SerializedProperty fadeDistance;
         public SerializedProperty affectDiffuse;
         public SerializedProperty affectSpecular;
         public SerializedProperty nonLightmappedOnly;
-        public SerializedProperty shapeWidth;
-        public SerializedProperty shapeHeight;
         public SerializedProperty barnDoorAngle;
         public SerializedProperty barnDoorLength;
-        public SerializedProperty aspectRatio;
-        public SerializedProperty shapeRadius;
         public SerializedProperty maxSmoothness;
         public SerializedProperty applyRangeAttenuation;
         public SerializedProperty volumetricDimmer;
@@ -55,7 +50,6 @@ namespace UnityEditor.Rendering.HighDefinition
         public SerializedProperty filterTracedShadow;
         public SerializedProperty filterSizeTraced;
         public SerializedProperty sunLightConeAngle;
-        public SerializedProperty lightShadowRadius;
         public SerializedProperty semiTransparentShadow;
         public SerializedProperty colorShadow;
         public SerializedProperty distanceBasedFiltering;
@@ -122,7 +116,7 @@ namespace UnityEditor.Rendering.HighDefinition
         public SerializedProperty slopeBias;
         public SerializedProperty normalBias;
 
-        [Obsolete("This property has been deprecated. Use SerializedHDLight.settings.intensity instead.")]
+        [Obsolete("This property has been deprecated. Use SerializedHDLight.settings.intensity instead. #from(2023.3)")]
         public SerializedProperty intensity => settings.intensity;
 
         private GameObject[] emissiveMeshes;
@@ -253,7 +247,6 @@ namespace UnityEditor.Rendering.HighDefinition
 
             using (var o = new PropertyFetcher<HDAdditionalLightData>(serializedObject))
             {
-                spotInnerPercent = o.Find("m_InnerSpotPercent");
                 spotIESCutoffPercent = o.Find("m_SpotIESCutoffPercent");
                 lightDimmer = o.Find("m_LightDimmer");
                 volumetricDimmer = o.Find("m_VolumetricDimmer");
@@ -263,12 +256,8 @@ namespace UnityEditor.Rendering.HighDefinition
                 affectDiffuse = o.Find("m_AffectDiffuse");
                 affectSpecular = o.Find("m_AffectSpecular");
                 nonLightmappedOnly = o.Find("m_NonLightmappedOnly");
-                shapeWidth = o.Find("m_ShapeWidth");
-                shapeHeight = o.Find("m_ShapeHeight");
                 barnDoorAngle = o.Find("m_BarnDoorAngle");
                 barnDoorLength = o.Find("m_BarnDoorLength");
-                aspectRatio = o.Find("m_AspectRatio");
-                shapeRadius = o.Find("m_ShapeRadius");
                 maxSmoothness = o.Find("m_MaxSmoothness");
                 applyRangeAttenuation = o.Find("m_ApplyRangeAttenuation");
                 shadowNearPlane = o.Find("m_ShadowNearPlane");
@@ -292,7 +281,6 @@ namespace UnityEditor.Rendering.HighDefinition
                 filterTracedShadow = o.Find("m_FilterTracedShadow");
                 filterSizeTraced = o.Find("m_FilterSizeTraced");
                 sunLightConeAngle = o.Find("m_SunLightConeAngle");
-                lightShadowRadius = o.Find("m_LightShadowRadius");
                 semiTransparentShadow = o.Find("m_SemiTransparentShadow");
                 colorShadow = o.Find("m_ColorShadow");
                 distanceBasedFiltering = o.Find("m_DistanceBasedFiltering");
