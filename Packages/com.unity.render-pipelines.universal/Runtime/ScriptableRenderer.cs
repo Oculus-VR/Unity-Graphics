@@ -1972,8 +1972,7 @@ namespace UnityEngine.Rendering.Universal
                         {
                             // SetRenderTarget might alter the internal device state(winding order).
                             // Non-stereo buffer is already updated internally when switching render target. We update stereo buffers here to keep the consistency.
-                            int xrTargetIndex = RenderingUtils.IndexOf(renderPass.colorAttachmentHandles, cameraData.xr.renderTarget);
-                            bool renderIntoTexture = xrTargetIndex == -1;
+                            bool renderIntoTexture = !RenderingUtils.ContainsXRTarget(renderPass.colorAttachmentHandles, cameraData.xr);
                             cameraData.PushBuiltinShaderConstantsXR(CommandBufferHelpers.GetRasterCommandBuffer(cmd), renderIntoTexture);
                             XRSystemUniversal.MarkShaderProperties(CommandBufferHelpers.GetRasterCommandBuffer(cmd), cameraData.xrUniversal, renderIntoTexture);
                         }
@@ -2098,7 +2097,7 @@ namespace UnityEngine.Rendering.Universal
                         {
                             // SetRenderTarget might alter the internal device state(winding order).
                             // Non-stereo buffer is already updated internally when switching render target. We update stereo buffers here to keep the consistency.
-                            bool renderIntoTexture = passColorAttachment.nameID != cameraData.xr.renderTarget;
+                            bool renderIntoTexture = !cameraData.xr.IsXRTarget(passColorAttachment.nameID);
                             cameraData.PushBuiltinShaderConstantsXR(CommandBufferHelpers.GetRasterCommandBuffer(cmd), renderIntoTexture);
                             XRSystemUniversal.MarkShaderProperties(CommandBufferHelpers.GetRasterCommandBuffer(cmd), cameraData.xrUniversal, renderIntoTexture);
                         }

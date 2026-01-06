@@ -396,6 +396,12 @@ namespace UnityEngine.Experimental.Rendering
             StopSinglePass(cmd.m_WrappedCommandBuffer);
         }
 
+        public bool IsXRTarget(RenderTargetIdentifier targetID)
+        {
+            return new RenderTargetIdentifier(renderTarget, 0) == new RenderTargetIdentifier(targetID, 0) ||
+                   new RenderTargetIdentifier(motionVectorRenderTarget, 0) == new RenderTargetIdentifier(targetID, 0);
+        }
+
         /// <summary>
         /// Returns true if the pass was setup with expected mesh and material.
         /// </summary>

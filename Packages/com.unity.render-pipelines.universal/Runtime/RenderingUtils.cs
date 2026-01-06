@@ -253,8 +253,8 @@ namespace UnityEngine.Rendering.Universal
         {
             bool isRenderToBackBufferTarget = !cameraData.isSceneViewCamera;
 #if ENABLE_VR && ENABLE_XR_MODULE
-                if (cameraData.xr.enabled)
-                    isRenderToBackBufferTarget = new RenderTargetIdentifier(destination.nameID, 0, CubemapFace.Unknown, -1) == new RenderTargetIdentifier(cameraData.xr.renderTarget, 0, CubemapFace.Unknown, -1);
+            if (cameraData.xr.enabled)
+                isRenderToBackBufferTarget = cameraData.xr.IsXRTarget(destination);
 #endif
 
             Vector2 viewportScale = source.useScaling ? new Vector2(source.rtHandleProperties.rtHandleScale.x, source.rtHandleProperties.rtHandleScale.y) : Vector2.one;
@@ -598,6 +598,17 @@ namespace UnityEngine.Rendering.Universal
                     return false;
 
             return true;
+        }
+
+        internal static bool ContainsXRTarget(RTHandle[] source, in XRPass xr)
+        {
+            for (int i = 0; i < source.Length; ++i)
+            {
+                if (source[i] != null && xr.IsXRTarget(source[i].nameID))
+                    return true;
+            }
+
+            return false;
         }
 
         internal static bool MultisampleDepthResolveSupported()
