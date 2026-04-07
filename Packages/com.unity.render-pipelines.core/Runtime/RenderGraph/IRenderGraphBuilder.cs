@@ -381,6 +381,15 @@ namespace UnityEngine.Rendering.RenderGraphModule
         public void SetExtendedFeatureFlags(ExtendedFeatureFlags extendedFeatureFlags);
 
         /// <summary>
+        /// Specify the pre-render function to use for this pass.
+        /// The call happens when a native render pass starts
+        /// </summary>
+        /// <typeparam name="PassData">The Type of the class that provides data to the Render Pass.</typeparam>
+        /// <param name="preRenderFunc">Pre-render function for the pass.</param>
+        public void SetPreRenderFunc<PassData>(BaseRenderFunc<PassData, RasterGraphContext> preRenderFunc)
+            where PassData : class, new();
+
+        /// <summary>
         /// Specify the render function to use for this pass.
         /// A call to this is mandatory for the pass to be valid.
         /// </summary>
