@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 89305aa391d1c5141bbe1628d930a2c5, type: 3}
+  m_Name: Section10_PresentationCountainer
+  m_EditorClassIdentifier: 
+  Modified:
+    m_PersistentCalls:
+      m_Calls: []
+  ParentContainer: {fileID: 11400000, guid: 34f2d71d8dc38a74ca20b735364f9231, type: 2}
+  OrderInView: 0
+  BackgroundImage: {fileID: 2800000, guid: e7ac19439411b5e4b8e9781b2c7107ea, type: 3}
+  Title:
+    m_Untranslated: Presentation
+  Subtitle:
+    m_Untranslated: Discover the 4 Sample Scenes
+  Description:
+    m_Untranslated: This series of tutorials will present you the 4 scenes available
+      in this project.
+  ProjectLayout: {fileID: 102900000, guid: 5e081507e2933e14d9dcaec83a20d2f9, type: 3}
+  Sections:
+  - OrderInView: -1
+    Heading:
+      m_Untranslated: Before you start
+    Text:
+      m_Untranslated: Get familiar with the project
+    Metadata: 
+    Url: 
+    Image: {fileID: 2800000, guid: 947f3220a048a3d4083d266123e9f65d, type: 3}
+    Tutorial: {fileID: 11400000, guid: ebec4973514480040801a2b878ce8bfc, type: 2}
+  - OrderInView: 0
+    Heading:
+      m_Untranslated: Terminal
+    Text:
+      m_Untranslated: A sci-fi environment featuring photorealistic materials
+    Metadata: 
+    Url: 
+    Image: {fileID: 2800000, guid: 571548d743c259b478c975a72b330064, type: 3}
+    Tutorial: {fileID: 11400000, guid: 6151b0345a502ee4caba7d09752982ed, type: 2}
+  - OrderInView: 1
+    Heading:
+      m_Untranslated: Garden
+    Text:
+      m_Untranslated: A stylized scene featuring painterly and organic assets
+    Metadata: 
+    Url: 
+    Image: {fileID: 2800000, guid: 5e41fff35f4eaad43acce8b16f0c709a, type: 3}
+    Tutorial: {fileID: 11400000, guid: 395c738d8d10d924a895af7c943df979, type: 2}
+  - OrderInView: 2
+    Heading:
+      m_Untranslated: Oasis
+    Text:
+      m_Untranslated: A peaceful oasis featuring advanced materials
+    Metadata: 
+    Url: 
+    Image: {fileID: 2800000, guid: 63ea36ede3f5cb242ae510c49357d532, type: 3}
+    Tutorial: {fileID: 11400000, guid: 7c4ac09fb02f1c04c839b236afaed6a3, type: 2}
+  - OrderInView: 3
+    Heading:
+      m_Untranslated: Cockpit
+    Text:
+      m_Untranslated: An exciting space battle featuring custom rendering
+    Metadata: 
+    Url: 
+    Image: {fileID: 2800000, guid: 37dd9b6a6f90338439697b11d194ebd8, type: 3}
+    Tutorial: {fileID: 11400000, guid: 0c5cb71b420307a428a72af081c2b35d, type: 2}

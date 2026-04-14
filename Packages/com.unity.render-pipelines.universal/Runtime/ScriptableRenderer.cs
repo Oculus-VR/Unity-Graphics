@@ -290,7 +290,7 @@ namespace UnityEngine.Rendering.Universal
         }
 #endif
 
-        void SetPerCameraShaderVariables(RasterCommandBuffer cmd, UniversalCameraData cameraData, Vector2Int cameraTargetSizeCopy, bool isTargetFlipped)
+        public void SetPerCameraShaderVariables(RasterCommandBuffer cmd, UniversalCameraData cameraData, Vector2Int cameraTargetSizeCopy, bool isTargetFlipped)
         {
             using var profScope = new ProfilingScope(Profiling.setPerCameraShaderVariables);
 
