@@ -1087,9 +1087,18 @@ namespace UnityEngine.Rendering.Universal
 
                 m_RenderOpaqueForwardPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
                 m_RenderTransparentForwardPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
+                m_DrawSkyboxPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
 #if ENABLE_VR && ENABLE_XR_MODULE
                 m_XROcclusionMeshPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
 #endif
+                // Propagate the back-buffer flag to any user-added RenderObjects passes so they can set the XR viewport correctly in compatibility mode.
+                foreach (var pass in activeRenderPassQueue)
+                {
+                    if (pass is RenderObjectsPass renderObjectsPass)
+                    {
+                        renderObjectsPass.m_IsActiveTargetBackBuffer = !intermediateRenderTexture;
+                    }
+                }
 
                 m_ActiveCameraColorAttachment = createColorTexture ? m_ColorBufferSystem.PeekBackBuffer() : m_TargetColorHandle;
                 m_ActiveCameraDepthAttachment = createDepthTexture ? m_CameraDepthAttachment : m_TargetDepthHandle;
