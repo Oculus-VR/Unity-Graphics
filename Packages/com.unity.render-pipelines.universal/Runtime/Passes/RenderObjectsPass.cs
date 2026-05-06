@@ -12,6 +12,11 @@ namespace UnityEngine.Rendering.Universal
     [MovedFrom(true, "UnityEngine.Experimental.Rendering.Universal")]
     public class RenderObjectsPass : ScriptableRenderPass
     {
+        /// <summary>
+        /// Used to indicate if the active target of the pass is the back buffer
+        /// </summary>
+        public bool m_IsActiveTargetBackBuffer; // TODO: Remove this when we remove non-RG path
+
         RenderQueueType renderQueueType;
         FilteringSettings m_FilteringSettings;
         RenderObjects.CustomCameraSettings m_CameraSettings;
@@ -117,6 +122,7 @@ namespace UnityEngine.Rendering.Universal
             this.overrideMaterialPassIndex = 0;
             this.overrideShader = null;
             this.overrideShaderPassIndex = 0;
+            this.m_IsActiveTargetBackBuffer = false;
             RenderQueueRange renderQueueRange = (renderQueueType == RenderQueueType.Transparent)
                 ? RenderQueueRange.transparent
                 : RenderQueueRange.opaque;
@@ -150,7 +156,7 @@ namespace UnityEngine.Rendering.Universal
 
             using (new ProfilingScope(cmd, profilingSampler))
             {
-                InitPassData(cameraData, ref m_PassData);
+                InitPassData(cameraData, ref m_PassData, m_IsActiveTargetBackBuffer);
                 InitRendererLists(universalRenderingData, lightData, ref m_PassData, context, default(RenderGraph), false);
 
                 ExecutePass(m_PassData, cmd , m_PassData.rendererList, renderingData.cameraData.IsCameraProjectionMatrixFlipped());
@@ -160,6 +166,11 @@ namespace UnityEngine.Rendering.Universal
         private static void ExecutePass(PassData passData, RasterCommandBuffer cmd, RendererList rendererList, bool isYFlipped)
         {
             Camera camera = passData.cameraData.camera;
+
+            if (passData.cameraData.xr.enabled && passData.isActiveTargetBackBuffer)
+            {
+                cmd.SetViewport(passData.cameraData.xr.GetViewport());
+            }
 
             // In case of camera stacking we need to take the viewport rect from base camera
             Rect pixelRect = passData.cameraData.pixelRect;
@@ -211,16 +222,18 @@ namespace UnityEngine.Rendering.Universal
             internal DebugRendererLists debugRendererLists;
 
             internal UniversalCameraData cameraData;
+            internal bool isActiveTargetBackBuffer;
 
             // Required for code sharing purpose between RG and non-RG.
             internal RendererList rendererList;
         }
 
-        private void InitPassData(UniversalCameraData cameraData, ref PassData passData)
+        private void InitPassData(UniversalCameraData cameraData, ref PassData passData, bool isActiveTargetBackBuffer = false)
         {
             passData.cameraSettings = m_CameraSettings;
             passData.renderPassEvent = renderPassEvent;
             passData.cameraData = cameraData;
+            passData.isActiveTargetBackBuffer = isActiveTargetBackBuffer;
         }
 
         private void InitRendererLists(UniversalRenderingData renderingData, UniversalLightData lightData,
@@ -275,7 +288,7 @@ namespace UnityEngine.Rendering.Universal
             {
                 UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
 
-                InitPassData(cameraData, ref passData);
+                InitPassData(cameraData, ref passData, resourceData.isActiveTargetBackBuffer);
 
                 passData.color = resourceData.activeColorTexture;
                 builder.SetRenderAttachment(resourceData.activeColorTexture, 0, AccessFlags.Write);

@@ -13,6 +13,11 @@ namespace UnityEngine.Rendering.Universal
     public class DrawSkyboxPass : ScriptableRenderPass
     {
         /// <summary>
+        /// Used to indicate if the active target of the pass is the back buffer
+        /// </summary>
+        public bool m_IsActiveTargetBackBuffer; // TODO: Remove this when we remove non-RG path
+
+        /// <summary>
         /// Creates a new <c>DrawSkyboxPass</c> instance.
         /// </summary>
         /// <param name="evt">The <c>RenderPassEvent</c> to use.</param>
@@ -21,6 +26,7 @@ namespace UnityEngine.Rendering.Universal
         {
             profilingSampler = ProfilingSampler.Get(URPProfileId.DrawSkybox);
             renderPassEvent = evt;
+            m_IsActiveTargetBackBuffer = false;
         }
 
         /// <inheritdoc/>
@@ -40,7 +46,7 @@ namespace UnityEngine.Rendering.Universal
             }
 
             var skyRendererList = CreateSkyboxRendererList(context, cameraData);
-            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), cameraData.xr, skyRendererList);
+            ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), cameraData.xr, m_IsActiveTargetBackBuffer, skyRendererList);
         }
 
         // For non-RG path
@@ -101,12 +107,15 @@ namespace UnityEngine.Rendering.Universal
             return skyRendererListHandle;
         }
 
-        private static void ExecutePass(RasterCommandBuffer cmd, XRPass xr, RendererList rendererList)
+        private static void ExecutePass(RasterCommandBuffer cmd, XRPass xr, bool isActiveTargetBackBuffer, RendererList rendererList)
         {
 #if ENABLE_VR && ENABLE_XR_MODULE
             if (xr.enabled && xr.singlePassEnabled)
                 cmd.SetSinglePassStereo(SystemInfo.supportsMultiview ? SinglePassStereoMode.Multiview : SinglePassStereoMode.Instancing);
 #endif
+            if (xr.enabled && isActiveTargetBackBuffer)
+                cmd.SetViewport(xr.GetViewport());
+
             cmd.DrawRendererList(rendererList);
 
 #if ENABLE_VR && ENABLE_XR_MODULE
@@ -119,13 +128,15 @@ namespace UnityEngine.Rendering.Universal
         private class PassData
         {
             internal XRPass xr;
+            internal bool isActiveTargetBackBuffer;
             internal RendererListHandle skyRendererListHandle;
             internal Material material;
         }
 
-        private void InitPassData(ref PassData passData, in XRPass xr, in RendererListHandle handle)
+        private void InitPassData(ref PassData passData, in XRPass xr, bool isActiveTargetBackBuffer, in RendererListHandle handle)
         {
             passData.xr = xr;
+            passData.isActiveTargetBackBuffer = isActiveTargetBackBuffer;
             passData.skyRendererListHandle = handle;
         }
 
@@ -148,7 +159,7 @@ namespace UnityEngine.Rendering.Universal
             using (var builder = renderGraph.AddRasterRenderPass<PassData>(passName, out var passData, profilingSampler))
             {
                 var skyRendererListHandle = CreateSkyBoxRendererList(renderGraph, cameraData);
-                InitPassData(ref passData, cameraData.xr, skyRendererListHandle);
+                InitPassData(ref passData, cameraData.xr, resourceData.isActiveTargetBackBuffer, skyRendererListHandle);
                 passData.material = skyboxMaterial;
                 builder.UseRendererList(skyRendererListHandle);
                 builder.SetRenderAttachment(colorTarget, 0, AccessFlags.Write);
@@ -163,7 +174,7 @@ namespace UnityEngine.Rendering.Universal
 
                 builder.SetRenderFunc((PassData data, RasterGraphContext context) =>
                 {
-                    ExecutePass(context.cmd, data.xr, data.skyRendererListHandle);
+                    ExecutePass(context.cmd, data.xr, data.isActiveTargetBackBuffer, data.skyRendererListHandle);
                 });
             }
         }
