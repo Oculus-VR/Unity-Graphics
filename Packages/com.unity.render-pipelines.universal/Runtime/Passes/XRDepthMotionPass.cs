@@ -22,6 +22,9 @@ namespace UnityEngine.Rendering.Universal
         private RTHandle m_XRMotionVectorDepth;
         private TextureHandle xrMotionVectorDepth;
         private bool m_XRSpaceWarpRightHandedNDC;
+#if URP_COMPATIBILITY_MODE
+        private PassData m_PassData;
+#endif
 
         /// <summary>
         /// Creates a new <c>XRDepthMotionPass</c> instance.
@@ -41,6 +44,9 @@ namespace UnityEngine.Rendering.Universal
             m_XRMotionVectorDepth = null;
             m_SubsampleDepthKeyword = new LocalKeyword(xrMotionVector, "_SUBSAMPLE_DEPTH");
             m_ApplicationSpaceWarpMotionKeyword = GlobalKeyword.Create("APPLICATION_SPACE_WARP_MOTION");
+#if URP_COMPATIBILITY_MODE
+            m_PassData = new PassData();
+#endif
         }
 
         private const int k_XRViewCountPerPass = 2;
@@ -55,6 +61,9 @@ namespace UnityEngine.Rendering.Universal
             internal UniversalCameraData cameraData;
             internal bool requiresSubsampleDepth;
             internal LocalKeyword subsampleDepthKeyword;
+#if URP_COMPATIBILITY_MODE
+            internal RendererList objMotionRendererListCompat;
+#endif
         }
 
         ///  View projection data
@@ -67,6 +76,10 @@ namespace UnityEngine.Rendering.Universal
 
         // Motion Vector
         private Material m_XRMotionVectorMaterial;
+
+#if URP_COMPATIBILITY_MODE
+        private RTHandle m_DepthSource;
+#endif
 
         private static DrawingSettings GetObjectMotionDrawingSettings(Camera camera)
         {
@@ -94,8 +107,95 @@ namespace UnityEngine.Rendering.Universal
             filteringSettings.forceAllMotionVectorObjects = forceAllMotionVectorObjects;
             var renderStateBlock = new RenderStateBlock(RenderStateMask.Nothing);
 
+#if URP_COMPATIBILITY_MODE
+            if (!useRenderGraph)
+            {
+                RenderingUtils.CreateRendererListWithRenderStateBlock(context, ref cullResults,
+                    objectMotionDrawingSettings, filteringSettings, renderStateBlock,
+                    ref passData.objMotionRendererListCompat);
+            }
+            else
+#endif
             RenderingUtils.CreateRendererListWithRenderStateBlock(renderGraph, ref cullResults, objectMotionDrawingSettings, filteringSettings, renderStateBlock, ref passData.objMotionRendererList);
         }
+
+#if URP_COMPATIBILITY_MODE
+        public void Setup(in UniversalCameraData cameraData, RTHandle sourceDepth)
+        {
+            // These flags are still required in SRP or the engine won't compute previous model matrices...
+            // If the flag hasn't been set yet on this camera, motion vectors will skip a frame.
+            cameraData.camera.depthTextureMode |= DepthTextureMode.MotionVectors | DepthTextureMode.Depth;
+
+            InitXRMotionColorAndDepthTextures(cameraData);
+            m_DepthSource = sourceDepth;
+        }
+
+        /// <inheritdoc/>
+        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
+        public override void Configure(CommandBuffer cmd, RenderTextureDescriptor cameraTextureDescriptor)
+        {
+            // Disable obsolete warning for internal usage
+#pragma warning disable CS0618
+            ConfigureClear(ClearFlag.All, Color.clear);
+            ConfigureTarget(m_XRMotionVectorColor, m_XRMotionVectorDepth);
+#pragma warning restore CS0618
+        }
+
+        /// <inheritdoc/>
+        [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
+        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
+        {
+            UniversalCameraData cameraData = renderingData.frameData.Get<UniversalCameraData>();
+
+            // XR should be enabled and single pass should be enabled.
+            if (!cameraData.xr.enabled || !cameraData.xr.singlePassEnabled)
+            {
+                Debug.LogWarning("XRDepthMotionPass::Execute is skipped because either XR is not enabled or singlepass rendering is not enabled.");
+                return;
+            }
+
+            // XR motion vector pass should be enabled.
+            if (!cameraData.xr.hasMotionVectorPass)
+            {
+                Debug.LogWarning("XRDepthMotionPass::Execute is skipped because XR motion vector is not enabled for the current XRPass.");
+                return;
+            }
+
+            // Logic to detect if we already has valid XR depth data in the eye texture depth attachment
+            bool hasValidXRDepth = cameraData.xr.copyDepth;
+
+            // In case we don't have valid depth, setup the renderer list to draw both static objects and moving objects to populate color+depth at the same time.
+            bool forceAllMotionVectorObjects = !hasValidXRDepth;
+
+            // Setup RendererList
+            InitObjectMotionRendererLists(ref m_PassData, ref renderingData.cullResults, context, default(RenderGraph), false, cameraData.camera, forceAllMotionVectorObjects);
+            // Setup rest of the passData
+            InitPassData(ref m_PassData, cameraData);
+
+            // Setup the relevant passData fields
+            if (hasValidXRDepth)
+            {
+                // backBufferDepth(eyeTexture depth) has valid data to read from
+                m_PassData.hasValidXRDepth = true;
+
+                // Subsample Depth if the motion vector render target is smaller than the color render target
+                bool subsampleDepth = cameraData.xr.motionVectorRenderTargetDesc.width < cameraData.xr.renderTargetDesc.width;
+                m_PassData.requiresSubsampleDepth = subsampleDepth;
+            }
+
+            using (new ProfilingScope(renderingData.commandBuffer, profilingSampler))
+            {
+                if (hasValidXRDepth)
+                {
+                    renderingData.commandBuffer.SetGlobalTexture(k_XRDepthTextureNameID, m_DepthSource,
+                        RenderTextureSubElement.Depth);
+                    renderingData.commandBuffer.SetGlobalVector(k_XRDepthTextureScaleBiasNameID, GetScaleBias(m_DepthSource, cameraData));
+                }
+
+                ExecutePass(CommandBufferHelpers.GetRasterCommandBuffer(renderingData.commandBuffer), m_PassData, m_PassData.objMotionRendererListCompat, m_XRSpaceWarpRightHandedNDC);
+            }
+        }
+#endif
 
         /// <summary>
         /// Initialize the RenderGraph pass data.
