@@ -247,15 +247,25 @@ namespace ShaderStrippingAndPrefiltering
 
             helper = new TestHelper(shader, ShaderFeatures.None);
             helper.data.stripUnusedXRVariants = false;
-            helper.data.passName = ShaderScriptableStripper.kPassNameXRMotionVectors;
-            helper.IsFalse(helper.stripper.StripUnusedPass_XRMotionVectors(ref helper.data));
-            helper.IsFalse(helper.stripper.StripUnusedPass(ref helper.data));
+            helper.data.passName = ShaderScriptableStripper.kPassNameMotionVectors;
+            TestHelper.s_EnabledKeywords = new System.Collections.Generic.List<string>() { "APPLICATION_SPACE_WARP_MOTION" };
+            helper.IsFalse(helper.stripper.StripInvalidVariants_MotionVectors(ref helper.data));
+            helper.IsFalse(helper.stripper.StripInvalidVariants(ref helper.data));
 
             helper = new TestHelper(shader, ShaderFeatures.None);
             helper.data.stripUnusedXRVariants = true;
-            helper.data.passName = ShaderScriptableStripper.kPassNameXRMotionVectors;
-            helper.IsTrue(helper.stripper.StripUnusedPass_XRMotionVectors(ref helper.data));
-            helper.IsTrue(helper.stripper.StripUnusedPass(ref helper.data));
+            helper.data.passName = ShaderScriptableStripper.kPassNameMotionVectors;
+            TestHelper.s_EnabledKeywords = new System.Collections.Generic.List<string>() { "APPLICATION_SPACE_WARP_MOTION" };
+            helper.IsTrue(helper.stripper.StripInvalidVariants_MotionVectors(ref helper.data));
+            helper.IsTrue(helper.stripper.StripInvalidVariants(ref helper.data));
+
+            // Test with keyword disabled should not strip even if XR variants stripping is enabled
+            helper = new TestHelper(shader, ShaderFeatures.None);
+            helper.data.stripUnusedXRVariants = true;
+            helper.data.passName = ShaderScriptableStripper.kPassNameMotionVectors;
+            TestHelper.s_EnabledKeywords = new System.Collections.Generic.List<string>() { };
+            helper.IsFalse(helper.stripper.StripInvalidVariants_MotionVectors(ref helper.data));
+            helper.IsFalse(helper.stripper.StripInvalidVariants(ref helper.data));
         }
 
         public void TestStripUnusedPass_ShadowCaster(Shader shader)

@@ -435,7 +435,13 @@ namespace UnityEngine.Rendering
 
                 var materialIndex = rendererData.materialIndex[materialsOffset + matIndex];
                 var packedMaterialData = rendererData.packedMaterialData[materialIndex];
+#if UNITY_6000_0_76 || UNITY_6000_0_77 || UNITY_6000_0_78 || UNITY_6000_0_79 || UNITY_6000_0_80 || UNITY_6000_1_OR_NEWER || UNITY_6000_2_OR_NEWER || UNITY_6000_3_OR_NEWER
+                // isIndirectSupported was removed from GPUDrivenPackedMaterialData in 6000.0.76f1 and newer.
+                // Default to true as workaround for local development; proper fix requires engine API update in Graphics repo.
+                supportsIndirect &= true;
+#else
                 supportsIndirect &= packedMaterialData.isIndirectSupported;
+#endif
             }
 
             var rangeKey = new RangeKey
