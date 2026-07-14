@@ -4,7 +4,7 @@
 #include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Common/GeometryPool/GeometryPoolDefs.cs.hlsl"
 #include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Common/GeometryPool/GeometryPool.hlsl"
 
-#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Bindings.hlsl"
+#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/CommonStructs.hlsl"
 
 #define INTERPOLATE_ATTRIBUTE(attr, barCoords) v.attr = v0.attr * (1.0 - barCoords.x - barCoords.y) + v1.attr * barCoords.x + v2.attr * barCoords.y
 

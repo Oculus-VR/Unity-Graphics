@@ -405,17 +405,12 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
                 newSlot.meshChunkTableAlloc = m_MeshChunkTableAllocator.Allocate(mesh.subMeshCount);
                 if (!newSlot.meshChunkTableAlloc.valid)
                 {
-                    var oldChunkCount = m_MeshChunkTableAllocator.capacity;
-                    var newChunkCount = m_MeshChunkTableAllocator.Grow(m_MeshChunkTableAllocator.capacity + mesh.subMeshCount);
-                    var newChunkTableBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, newChunkCount, GetMeshChunkTableEntryByteSize());
+                    newSlot.meshChunkTableAlloc = m_MeshChunkTableAllocator.GrowAndAllocate(mesh.subMeshCount, GraphicsHelpers.MaxGraphicsBufferSizeInBytes / GetMeshChunkTableEntryByteSize(), out int oldCapacity, out int newCapacity);
+                    if (!newSlot.meshChunkTableAlloc.valid)
+                        throw new UnifiedRayTracingException("Can't allocate a GraphicsBuffer bigger than 2GB", UnifiedRayTracingError.GraphicsBufferAllocationFailed);
 
-                    GraphicsHelpers.CopyBuffer(m_CopyShader, m_GlobalMeshChunkTableEntryBuffer, 0, newChunkTableBuffer, 0, DivUp(oldChunkCount * GetMeshChunkTableEntryByteSize(), 4));
-
-                    m_GlobalMeshChunkTableEntryBuffer.Dispose();
-                    m_GlobalMeshChunkTableEntryBuffer = newChunkTableBuffer;
-                    m_MaxMeshChunkTableEntriesCount = newChunkCount;
-                    newSlot.meshChunkTableAlloc = m_MeshChunkTableAllocator.Allocate(mesh.subMeshCount);
-                    Assert.IsTrue(newSlot.meshChunkTableAlloc.valid);
+                    GraphicsHelpers.ReallocateBuffer(m_CopyShader, oldCapacity, newCapacity, GetMeshChunkTableEntryByteSize(), ref m_GlobalMeshChunkTableEntryBuffer);
+                    m_MaxMeshChunkTableEntriesCount = newCapacity;
                 }
 
                 newSlot.meshChunks = new NativeArray<MeshChunk>(mesh.subMeshCount, Allocator.Persistent);
@@ -427,33 +422,23 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
                     newMeshChunk.vertexAlloc = m_VertexAllocator.Allocate(submeshDescriptor.vertexCount);
                     if (!newMeshChunk.vertexAlloc.valid)
                     {
-                        var oldVertexCount = m_VertexAllocator.capacity;
-                        var newVertexCount = m_VertexAllocator.Grow(m_VertexAllocator.capacity + submeshDescriptor.vertexCount);
-                        var newVertexBuffer = new GraphicsBuffer(VertexBufferTarget, DivUp(newVertexCount * GetVertexByteSize(), 4), 4);
+                        newMeshChunk.vertexAlloc = m_VertexAllocator.GrowAndAllocate(submeshDescriptor.vertexCount, GraphicsHelpers.MaxGraphicsBufferSizeInBytes / GetVertexByteSize(), out int oldCapacity, out int newCapacity);
+                        if (!newMeshChunk.vertexAlloc.valid)
+                            throw new UnifiedRayTracingException("Can't allocate a GraphicsBuffer bigger than 2GB", UnifiedRayTracingError.GraphicsBufferAllocationFailed);
 
-                        GraphicsHelpers.CopyBuffer(m_CopyShader, m_GlobalVertexBuffer, 0, newVertexBuffer, 0, DivUp(oldVertexCount * GetVertexByteSize(), 4));
-
-                        m_GlobalVertexBuffer.Dispose();
-                        m_GlobalVertexBuffer = newVertexBuffer;
-                        m_MaxVertCounts = newVertexCount;
-                        newMeshChunk.vertexAlloc = m_VertexAllocator.Allocate(submeshDescriptor.vertexCount);
-                        Assert.IsTrue(newMeshChunk.vertexAlloc.valid);
+                        GraphicsHelpers.ReallocateBuffer(m_CopyShader, oldCapacity, newCapacity, GetVertexByteSize(), ref m_GlobalVertexBuffer);
+                        m_MaxVertCounts = newCapacity;
                     }
 
                     newMeshChunk.indexAlloc = m_IndexAllocator.Allocate(submeshDescriptor.indexCount);
                     if (!newMeshChunk.indexAlloc.valid)
                     {
-                        var oldIndexcount = m_IndexAllocator.capacity;
-                        var newIndexCount = m_IndexAllocator.Grow(m_IndexAllocator.capacity + submeshDescriptor.indexCount);
-                        var newIndexBuffer = new GraphicsBuffer(IndexBufferTarget, newIndexCount, 4);
+                        newMeshChunk.indexAlloc = m_IndexAllocator.GrowAndAllocate(submeshDescriptor.indexCount, GraphicsHelpers.MaxGraphicsBufferSizeInBytes / sizeof(int), out int oldCapacity, out int newCapacity);
+                        if (!newMeshChunk.indexAlloc.valid)
+                            throw new UnifiedRayTracingException("Can't allocate a GraphicsBuffer bigger than 2GB", UnifiedRayTracingError.GraphicsBufferAllocationFailed);
 
-                        GraphicsHelpers.CopyBuffer(m_CopyShader, m_GlobalIndexBuffer, 0, newIndexBuffer, 0, oldIndexcount);
-
-                        m_GlobalIndexBuffer.Dispose();
-                        m_GlobalIndexBuffer = newIndexBuffer;
-                        m_MaxIndexCounts = newIndexCount;
-                        newMeshChunk.indexAlloc = m_IndexAllocator.Allocate(submeshDescriptor.indexCount);
-                        Assert.IsTrue(newMeshChunk.indexAlloc.valid);
+                        GraphicsHelpers.ReallocateBuffer(m_CopyShader, oldCapacity, newCapacity, sizeof(int), ref m_GlobalIndexBuffer);
+                        m_MaxIndexCounts = newCapacity;
                     }
 
                     newSlot.meshChunks[submeshIndex] = newMeshChunk;

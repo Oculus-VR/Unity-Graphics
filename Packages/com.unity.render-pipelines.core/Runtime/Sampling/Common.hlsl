@@ -2,8 +2,10 @@
 #define _SAMPLING_SAMPLING_COMMON_HLSL_
 
 #ifndef PI
-#define PI 3.141592653589f
+#define PI 3.14159265358979323846f
 #endif
+
+#define FLOAT_ONE_MINUS_EPSILON 0.99999994
 
 // Paper: Building an Orthonormal Basis, Revisited.
 // Tom Duff, James Burgess, Per Christensen, Christophe Hery, Andrew Kensler, Max Liani, and Ryusuke Villemin (Pixar).
@@ -111,7 +113,7 @@ float PowerHeuristic(float f, float b)
 
 float UintToFloat01(uint x)
 {
-    return x * 2.3283064365386963e-10; // (1.f / (1ULL << 32));
+    return min(x * 2.3283064365386963e-10, FLOAT_ONE_MINUS_EPSILON); // (1.f / (1ULL << 32));
 }
 
 int Log2Int(uint v)

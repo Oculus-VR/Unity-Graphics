@@ -25,7 +25,7 @@ float GetBNDSequenceSample(uint2 pixelCoord, uint sampleIndex, uint sampleDimens
     value = value ^ uint(scramblingValue * 256.0);
 
     // Convert to float (to avoid the same 1/256th quantization everywhere, we jitter by the pixel scramblingValue)
-    return (max(0.001, scramblingValue) + value) / 256.0;
+    return min((max(0.001, scramblingValue) + value) / 256.0, FLOAT_ONE_MINUS_EPSILON);
 }
 
 #endif // _SAMPLING_SOBOLBLUENOISESAMPLING_HLSL_

@@ -4,7 +4,13 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
 {
     internal static class BackendHelpers
     {
-        internal static string GetFileNameOfShader(RayTracingBackend backend, string fileName)
+        /// <summary>
+        /// Builds a file path with the right extension for the given <see cref="RayTracingBackend"/>.
+        /// </summary>
+        /// <param name="backend">Backend for which the shader will be loaded.</param>
+        /// <param name="fileName">Path to the shader file, without any extension.</param>
+        /// <returns>The file path.</returns>
+        public static string GetFileNameOfShader(RayTracingBackend backend, string fileName)
         {
             string postFix = backend switch
             {
@@ -15,7 +21,12 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
             return $"{fileName}.{postFix}";
         }
 
-        internal static Type GetTypeOfShader(RayTracingBackend backend)
+        /// <summary>
+        /// Returns the <see cref="System.Type"/> of shader used by the given <see cref="RayTracingBackend"/>.
+        /// </summary>
+        /// <param name="backend"></param>
+        /// <returns>The Type of the shader.</returns>
+        public static Type GetTypeOfShader(RayTracingBackend backend)
         {
             Type shaderType = backend switch
             {

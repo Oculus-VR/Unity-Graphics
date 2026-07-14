@@ -173,6 +173,7 @@ namespace UnityEngine.Rendering.RadeonRays
         public bool triangleCullingEnabled;
         public bool invertTriangleCulling;
         public uint userInstanceID;
+        public bool isOpaque;
         public Transform localToWorldTransform;
     }
 
@@ -183,10 +184,10 @@ namespace UnityEngine.Rendering.RadeonRays
         public int instanceMask;
         public int vertexOffset;
         public int indexOffset;
-        public int triangleCullingEnabled;
-        public int invertTriangleCulling;
+        public uint disableTriangleCulling;
+        public uint invertTriangleCulling;
         public uint userInstanceID;
-        public int padding2;
+        public int isOpaque;
         public Transform worldToLocalTransform;
         public Transform localToWorldTransform;
     }
@@ -306,9 +307,10 @@ namespace UnityEngine.Rendering.RadeonRays
                     vertexOffset = (int)instances[i].vertexOffset,
                     indexOffset = (int)instances[i].meshAccelStructLeavesOffset,
                     localToWorldTransform = instances[i].localToWorldTransform,
-                    triangleCullingEnabled = instances[i].triangleCullingEnabled ? 1 : 0,
-                    invertTriangleCulling = instances[i].invertTriangleCulling ? 1 : 0,
-                    userInstanceID = instances[i].userInstanceID
+                    disableTriangleCulling = instances[i].triangleCullingEnabled ? 0 : (1u << 30),
+                    invertTriangleCulling = instances[i].invertTriangleCulling ? (1u << 31) : 0,
+                    userInstanceID = instances[i].userInstanceID,
+                    isOpaque = instances[i].isOpaque ? 1 : 0
                     // worldToLocal computed in the shader
                 };
             }
@@ -344,8 +346,8 @@ namespace UnityEngine.Rendering.RadeonRays
                     vertexOffset = (int)instances[i].vertexOffset,
                     indexOffset = (int)instances[i].meshAccelStructLeavesOffset,
                     localToWorldTransform = instances[i].localToWorldTransform,
-                    triangleCullingEnabled = instances[i].triangleCullingEnabled ? 1 : 0,
-                    invertTriangleCulling = instances[i].invertTriangleCulling ? 1 : 0,
+                    disableTriangleCulling = instances[i].triangleCullingEnabled ? 0 : (1u << 30),
+                    invertTriangleCulling = instances[i].invertTriangleCulling ? (1u << 31) : 0,
                     userInstanceID = instances[i].userInstanceID,
                     worldToLocalTransform = instances[i].localToWorldTransform.Inverse()
                 };

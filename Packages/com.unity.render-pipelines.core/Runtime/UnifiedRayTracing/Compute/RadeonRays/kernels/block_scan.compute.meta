@@ -1,7 +1,7 @@
 fileFormatVersion: 2
-guid: c453356d08264cd419c13dd2ae8d1147
-ShaderIncludeImporter:
+guid: 4d6d5de35fa45ef4a92119397a045cc9
+ComputeShaderImporter:
   externalObjects: {}
   userData: 
-  assetBundleName: 
+  assetBundleName: unifiedraytracing
   assetBundleVariant: 
