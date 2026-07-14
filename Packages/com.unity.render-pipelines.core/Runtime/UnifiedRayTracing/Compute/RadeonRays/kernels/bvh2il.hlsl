@@ -93,10 +93,10 @@ struct InstanceInfo
     int instance_mask;
     int vertex_offset;
     int index_offset;
-    int triangle_culling_enabled;
-    int invert_triangle_culling;
+    uint disable_triangle_culling;
+    uint invert_triangle_culling;
     uint user_instance_id;
-    int padding2;
+    int is_opaque;
     Transform world_to_local_transform;
     Transform local_to_world_transform;
 };

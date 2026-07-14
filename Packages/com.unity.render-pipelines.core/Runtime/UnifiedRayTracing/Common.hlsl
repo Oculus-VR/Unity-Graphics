@@ -8,9 +8,12 @@
 #ifndef FLT_EPSILON
 #define FLT_EPSILON             1.192092896e-07F
 #endif
+
 #ifndef FLT_MAX
 #define FLT_MAX 3.402823e+38
 #endif
+
+#define K_T_MAX                 400000
 
 float Max3(float3 val)
 {

@@ -140,4 +140,9 @@ uint4 Pcg4d(uint4 v)
     return v;
 }
 
+uint PixelHash(uint2 pixelCoord, uint seed = 0)
+{
+    return LowBiasHash32((pixelCoord.x & 0xFFFF) | (pixelCoord.y << 16), seed);
+}
+
 #endif // _SAMPLING_HASHES_HLSL_

@@ -57,7 +57,7 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
             _objectHandleToInstances.Clear();
         }
 
-        public void AddInstance(int objectHandle, Component meshRendererOrTerrain, Span<uint> perSubMeshMask, Span<uint> perSubMeshMaterialIDs, uint renderingLayerMask)
+        public void AddInstance(int objectHandle, Component meshRendererOrTerrain, Span<uint> perSubMeshMask, Span<uint> perSubMeshMaterialIDs, Span<bool> perSubMeshIsOpaque, uint renderingLayerMask)
         {
             if (meshRendererOrTerrain is Terrain terrain)
             {
@@ -78,11 +78,11 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
                 Debug.Assert(meshRenderer.enabled, "Mesh renderers are expected to be enabled.");
                 Debug.Assert(!meshRenderer.isPartOfStaticBatch, "Mesh renderers are expected to not be part of static batch.");
                 var mesh = meshRenderer.GetComponent<MeshFilter>().sharedMesh;
-                AddInstance(objectHandle, mesh, meshRenderer.transform.localToWorldMatrix, perSubMeshMask, perSubMeshMaterialIDs, renderingLayerMask);
+				AddInstance(objectHandle, mesh, meshRenderer.transform.localToWorldMatrix, perSubMeshMask, perSubMeshMaterialIDs, perSubMeshIsOpaque, renderingLayerMask);
             }
         }
 
-        public void AddInstance(int objectHandle, Mesh mesh, Matrix4x4 localToWorldMatrix, Span<uint> perSubMeshMask, Span<uint> perSubMeshMaterialIDs, uint renderingLayerMask)
+        public void AddInstance(int objectHandle, Mesh mesh, Matrix4x4 localToWorldMatrix, Span<uint> perSubMeshMask, Span<uint> perSubMeshMaterialIDs, Span<bool> perSubMeshIsOpaque, uint renderingLayerMask)
         {
             int subMeshCount = mesh.subMeshCount;
 
@@ -93,6 +93,7 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
                 {
                     localToWorldMatrix = localToWorldMatrix,
                     mask = perSubMeshMask[i],
+                    opaqueGeometry = perSubMeshIsOpaque[i]
                 };
 
                 instances[i].InstanceID = _instances.AddInstance(instanceDesc, perSubMeshMaterialIDs[i], renderingLayerMask);

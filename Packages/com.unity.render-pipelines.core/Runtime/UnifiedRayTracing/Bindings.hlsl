@@ -1,7 +1,11 @@
 #ifndef _UNIFIEDRAYTRACING_BINDINGS_HLSL_
 #define _UNIFIEDRAYTRACING_BINDINGS_HLSL_
 
+#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/CommonStructs.hlsl"
+
 #if defined(UNIFIED_RT_BACKEND_COMPUTE)
+#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Compute/RadeonRays/kernels/transform.hlsl"
+#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Compute/RadeonRays/kernels/intersector_common.hlsl"
 
 #ifndef UNIFIED_RT_GROUP_SIZE_X
 #define UNIFIED_RT_GROUP_SIZE_X 16
@@ -15,61 +19,16 @@
 #define UNIFIED_RT_GROUP_SIZE_Z 1
 #endif
 
-#define GROUP_SIZE (UNIFIED_RT_GROUP_SIZE_X*UNIFIED_RT_GROUP_SIZE_Y)
-#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Compute/RadeonRays/kernels/trace_ray.hlsl"
 #endif
-
-
 namespace UnifiedRT {
 
-struct Ray
+struct EmptyPayload
 {
-    float3 origin;
-    float  tMin;
-    float3 direction;
-    float  tMax;
+
 };
-
-struct Hit
-{
-    uint instanceID;
-    uint primitiveIndex;
-    float2 uvBarycentrics;
-    float hitDistance;
-    bool isFrontFace;
-
-    bool IsValid()
-    {
-        return instanceID != -1;
-    }
-
-    static Hit Invalid()
-    {
-        Hit hit = (Hit)0;
-        hit.instanceID = -1;
-        return hit;
-    }
-};
-
-
-struct InstanceData
-{
-    float4x4 localToWorld;
-    float4x4 previousLocalToWorld;
-    float4x4 localToWorldNormals;
-    uint renderingLayerMask;
-    uint instanceMask;
-    uint userMaterialID;
-    uint geometryIndex;
-};
-
-struct DispatchInfo
-{
-    uint3 dispatchThreadID;
-    uint localThreadIndex;
-    uint3 dispatchDimensionsInThreads;
-    uint globalThreadIndex;
-};
+#ifndef UNIFIED_RT_PAYLOAD
+#define UNIFIED_RT_PAYLOAD EmptyPayload
+#endif
 
 struct RayTracingAccelStruct
 {
@@ -81,7 +40,6 @@ struct RayTracingAccelStruct
     StructuredBuffer<uint4> bottom_bvh_leaves;
     StructuredBuffer<InstanceInfo> instance_infos;
     StructuredBuffer<uint> vertexBuffer;
-    int vertexStride;
 
 #else
     #pragma message("Error, you must define either UNIFIED_RT_BACKEND_HARDWARE or UNIFIED_RT_BACKEND_COMPUTE")
@@ -106,8 +64,7 @@ RayTracingAccelStruct GetAccelStruct(
     StructuredBuffer<BvhNode> bottomBvhs,
     StructuredBuffer<uint4> bottomBvhLeaves,
     StructuredBuffer<InstanceInfo> instanceInfos,
-    StructuredBuffer<uint> vertexBuffer,
-    int vertexStride)
+    StructuredBuffer<uint> vertexBuffer)
 {
     RayTracingAccelStruct res;
     res.bvh = bvh;
@@ -115,19 +72,15 @@ RayTracingAccelStruct GetAccelStruct(
     res.bottom_bvh_leaves = bottomBvhLeaves;
     res.instance_infos = instanceInfos;
     res.vertexBuffer = vertexBuffer;
-    res.vertexStride = vertexStride;
     return res;
 }
 
-#define UNIFIED_RT_DECLARE_ACCEL_STRUCT(name) StructuredBuffer<BvhNode> name##bvh; StructuredBuffer<BvhNode> name##bottomBvhs; StructuredBuffer<uint4> name##bottomBvhLeaves; StructuredBuffer<InstanceInfo> name##instanceInfos; StructuredBuffer<uint> name##vertexBuffer; int name##vertexStride
-#define UNIFIED_RT_GET_ACCEL_STRUCT(name) UnifiedRT::GetAccelStruct(name##bvh, name##bottomBvhs, name##bottomBvhLeaves, name##instanceInfos, name##vertexBuffer, name##vertexStride)
+#define UNIFIED_RT_DECLARE_ACCEL_STRUCT(name) StructuredBuffer<BvhNode> name##bvh; StructuredBuffer<BvhNode> name##bottomBvhs; StructuredBuffer<uint4> name##bottomBvhLeaves; StructuredBuffer<InstanceInfo> name##instanceInfos; StructuredBuffer<uint> name##vertexBuffer
+#define UNIFIED_RT_GET_ACCEL_STRUCT(name) UnifiedRT::GetAccelStruct(name##bvh, name##bottomBvhs, name##bottomBvhLeaves, name##instanceInfos, name##vertexBuffer)
 
 #endif
 
 } // namespace UnifiedRT
 
-#if defined(UNIFIED_RT_BACKEND_COMPUTE)
-RWStructuredBuffer<uint> g_stack;
-#endif
 
 #endif // UNIFIEDRAYTRACING_BINDINGS_HLSL

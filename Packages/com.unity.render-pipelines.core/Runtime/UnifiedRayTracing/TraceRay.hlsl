@@ -2,16 +2,74 @@
 #define _UNIFIEDRAYTRACING_TRACERAY_HLSL_
 
 #include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Bindings.hlsl"
+#if defined(UNIFIED_RT_BACKEND_COMPUTE)
+#include "Packages/com.unity.render-pipelines.core/Runtime/UnifiedRayTracing/Compute/RayQuerySoftware.hlsl"
+#endif
 
-namespace UnifiedRT {
-
-static const uint kRayFlagNone = 0x0;
-static const uint kRayFlagCullBackFacingTriangles = 0x10;
-static const uint kRayFlagCullFrontFacingTriangles = 0x20;
+namespace UnifiedRT
+{
 
 #if defined(UNIFIED_RT_BACKEND_HARDWARE)
 
-Hit TraceRayClosestHit(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStruct, uint instanceMask, Ray ray, uint rayFlags)
+float3 _WorldRayOrigin() { return WorldRayOrigin(); }
+float3 _WorldRayDirection() { return WorldRayDirection(); }
+float _RayTMin() { return RayTMin(); }
+float _RayTCurrent() { return RayTCurrent(); }
+uint _InstanceID() { return InstanceID(); }
+uint _InstanceIndex() { return InstanceIndex(); }
+uint _PrimitiveIndex() { return PrimitiveIndex(); }
+
+struct HitContext
+{
+    float2 barycentrics;
+
+    float3 WorldRayOrigin()
+    {
+        return _WorldRayOrigin();
+    }
+
+    float3 WorldRayDirection()
+    {
+        return _WorldRayDirection();
+    }
+
+    float RayTMin()
+    {
+        return _RayTMin();
+    }
+
+    float RayTCurrent()
+    {
+        return _RayTCurrent();
+    }
+
+    uint InstanceIndex()
+    {
+        return _InstanceIndex();
+    }
+
+    uint InstanceID()
+    {
+        return _InstanceID();
+    }
+
+    uint PrimitiveIndex()
+    {
+        return _PrimitiveIndex();
+    }
+
+    float2 UvBarycentrics()
+    {
+        return barycentrics;
+    }
+
+    bool IsFrontFace()
+    {
+       return (HitKind() == HIT_KIND_TRIANGLE_FRONT_FACE);
+    }
+};
+
+void TraceRay(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStruct, uint instanceMask, Ray ray, uint rayFlags, inout UNIFIED_RT_PAYLOAD payload)
 {
     RayDesc rayDesc;
     rayDesc.Origin = ray.origin;
@@ -19,86 +77,142 @@ Hit TraceRayClosestHit(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStr
     rayDesc.Direction = ray.direction;
     rayDesc.TMax = ray.tMax;
 
-    Hit payload;
-	TraceRay(accelStruct.accelStruct, RAY_FLAG_FORCE_OPAQUE | rayFlags, instanceMask, 0, 1, 0, rayDesc, payload);
-
-    return payload;
-}
-
-bool TraceRayAnyHit(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStruct, uint instanceMask, Ray ray, uint rayFlags)
-{
-    RayDesc rayDesc;
-    rayDesc.Origin = ray.origin;
-    rayDesc.TMin = ray.tMin;
-    rayDesc.Direction = ray.direction;
-    rayDesc.TMax = ray.tMax;
-
-    Hit payLoadShadow = (Hit)0;
-    TraceRay(accelStruct.accelStruct, RAY_FLAG_SKIP_CLOSEST_HIT_SHADER | RAY_FLAG_FORCE_OPAQUE | RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | rayFlags, instanceMask, 0, 1, 0, rayDesc, payLoadShadow);
-
-    return payLoadShadow.IsValid();
+	TraceRay(accelStruct.accelStruct, rayFlags, instanceMask, 0, 1, 0, rayDesc, payload);
 }
 
 #elif defined(UNIFIED_RT_BACKEND_COMPUTE)
 
-int GetCullMode(uint rayFlags)
+struct HitContext
 {
-    int cullMode = CULL_MODE_NONE;
+    float3 worldRayOrigin;
+    float3 worldRayDirection;
+    float tmin;
+    float tcurrent;
+    uint instanceID;
+    uint primitiveIndex;
+    float2 barycentrics;
+    bool isFrontFace;
 
-    if (rayFlags & kRayFlagCullFrontFacingTriangles)
-        cullMode = CULL_MODE_FRONTFACE;
+    float3 WorldRayOrigin()
+    {
+        return worldRayOrigin;
+    }
 
-    if (rayFlags & kRayFlagCullBackFacingTriangles)
-        cullMode = CULL_MODE_BACKFACE;
+    float3 WorldRayDirection()
+    {
+        return worldRayDirection;
+    }
 
-    return cullMode;
-}
+    float RayTMin()
+    {
+        return tmin;
+    }
 
-Hit TraceRayClosestHit(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStruct, uint instanceMask, Ray ray, uint rayFlags)
+    float RayTCurrent()
+    {
+        return tcurrent;
+    }
+
+    uint InstanceID()
+    {
+        return instanceID;
+    }
+
+    uint PrimitiveIndex()
+    {
+        return primitiveIndex;
+    }
+
+    float2 UvBarycentrics()
+    {
+        return barycentrics;
+    }
+
+    bool IsFrontFace()
+    {
+        return isFrontFace;
+    }
+};
+
+} // namespace UnifiedRT
+
+#ifdef UNIFIED_RT_ANYHIT_FUNC
+    uint UNIFIED_RT_ANYHIT_FUNC(UnifiedRT::HitContext hitContext, inout UNIFIED_RT_PAYLOAD payload);
+#endif
+
+#ifdef UNIFIED_RT_CLOSESTHIT_FUNC
+    void UNIFIED_RT_CLOSESTHIT_FUNC(UnifiedRT::HitContext hitContext, inout UNIFIED_RT_PAYLOAD payload);
+#endif
+
+namespace UnifiedRT {
+
+#pragma warning(disable : 3557) // prevent warning when the "while (rayQuery.Proceed())" loop is unrolled
+
+void TraceRay(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStruct, uint instanceMask, Ray ray, uint rayFlags, inout UNIFIED_RT_PAYLOAD payload)
 {
-    TraceParams traceParams;
-    traceParams.bvh = accelStruct.bvh;
-    traceParams.bottom_bvhs = accelStruct.bottom_bvhs;
-    traceParams.bottom_bvh_leaves = accelStruct.bottom_bvh_leaves;
-    traceParams.stack = g_stack;
-    traceParams.instance_infos = accelStruct.instance_infos;
-    traceParams.globalThreadIndex = dispatchInfo.globalThreadIndex;
-    traceParams.localThreadIndex = dispatchInfo.localThreadIndex;
-    traceParams.bottom_bvhs_vertices = accelStruct.vertexBuffer;
-    traceParams.bottom_bvhs_vertex_stride = accelStruct.vertexStride;
+ #ifdef UNIFIED_RT_ANYHIT_FUNC
+    RayQuery rayQuery;
+    rayQuery.Init(dispatchInfo.globalThreadIndex, dispatchInfo.localThreadIndex, accelStruct, rayFlags, instanceMask, ray);
+    while (rayQuery.Proceed())
+    {
+        // not necessary but makes sure the compiler optimizes the loop out when one of these flags is set
+        if (rayFlags & (UnifiedRT::kRayFlagForceOpaque | UnifiedRT::kRayFlagCullNonOpaque))
+            break;
 
-    int cull_mode = GetCullMode(rayFlags);
+        HitContext hitContext;
+        hitContext.worldRayOrigin = rayQuery.WorldRayOrigin();
+        hitContext.worldRayDirection = rayQuery.WorldRayDirection();
+        hitContext.tmin = rayQuery.RayTMin();
+        hitContext.tcurrent = rayQuery.CandidateTriangleRayT();
+        hitContext.instanceID = rayQuery.CandidateInstanceID();
+        hitContext.primitiveIndex = rayQuery.CandidatePrimitiveIndex();
+        hitContext.barycentrics = rayQuery.CandidateTriangleBarycentrics();
+        hitContext.isFrontFace = rayQuery.CandidateTriangleFrontFace();
 
-    TraceHitResult hitData = TraceRaySoftware(traceParams, ray.origin, ray.tMin, ray.direction, ray.tMax, instanceMask, cull_mode, true);
+        uint res = UNIFIED_RT_ANYHIT_FUNC(hitContext, payload);
 
-    Hit res;
-    res.instanceID = hitData.inst_id != -1 ? GetUserInstanceID(traceParams, hitData.inst_id) : -1;
-    res.primitiveIndex = hitData.prim_id;
-    res.uvBarycentrics = hitData.uv;
-    res.hitDistance = hitData.hit_distance;
-    res.isFrontFace = hitData.front_face;
+        if (res != UnifiedRT::kIgnoreHit)
+            rayQuery.CommitNonOpaqueTriangleHit();
 
-    return res;
-}
+        if (res == UnifiedRT::kAcceptHitAndEndSearch)
+            rayQuery.Abort();
 
-bool TraceRayAnyHit(DispatchInfo dispatchInfo, RayTracingAccelStruct accelStruct, uint instanceMask, Ray ray, uint rayFlags)
-{
-    TraceParams traceParams;
-    traceParams.bvh = accelStruct.bvh;
-    traceParams.bottom_bvhs = accelStruct.bottom_bvhs;
-    traceParams.bottom_bvh_leaves = accelStruct.bottom_bvh_leaves;
-    traceParams.stack = g_stack;
-    traceParams.instance_infos = accelStruct.instance_infos;
-    traceParams.globalThreadIndex = dispatchInfo.globalThreadIndex;
-    traceParams.localThreadIndex = dispatchInfo.localThreadIndex;
-    traceParams.bottom_bvhs_vertices = accelStruct.vertexBuffer;
-    traceParams.bottom_bvhs_vertex_stride = accelStruct.vertexStride;
+    }
+ #else
+    RayQuery rayQuery;
+    rayQuery.Init(dispatchInfo.globalThreadIndex, dispatchInfo.localThreadIndex, accelStruct, rayFlags | UnifiedRT::kRayFlagForceOpaque, instanceMask, ray);
+    rayQuery.Proceed();
+ #endif
 
-    int cull_mode = GetCullMode(rayFlags);
+#ifdef UNIFIED_RT_CLOSESTHIT_FUNC
+    if (!(rayFlags & kRayFlagSkipClosestHit) && rayQuery.CommittedStatus() == kCommittedTriangleHit)
+    {
+        HitContext hitContext;
+        hitContext.worldRayOrigin = rayQuery.WorldRayOrigin();
+        hitContext.worldRayDirection = rayQuery.WorldRayDirection();
+        hitContext.tmin = rayQuery.RayTMin();
+        hitContext.tcurrent = rayQuery.CommittedRayT();
+        hitContext.instanceID = rayQuery.CommittedInstanceID();
+        hitContext.primitiveIndex = rayQuery.CommittedPrimitiveIndex();
+        hitContext.barycentrics = rayQuery.CommittedTriangleBarycentrics();
+        hitContext.isFrontFace = rayQuery.CommittedTriangleFrontFace();
 
-    TraceHitResult hit = TraceRaySoftware(traceParams, ray.origin, ray.tMin, ray.direction, ray.tMax, instanceMask, cull_mode, false);
+        UNIFIED_RT_CLOSESTHIT_FUNC(hitContext, payload);
+    }
+#endif
 
-    return hit.inst_id != INVALID_NODE;
+#ifdef UNIFIED_RT_MISS_FUNC
+    if (rayQuery.CommittedStatus() == kCommittedNothing)
+    {
+        HitContext hitContext = (HitContext)0;
+        hitContext.worldRayOrigin = rayQuery.WorldRayOrigin();
+        hitContext.worldRayDirection = rayQuery.WorldRayDirection();
+        hitContext.tmin = rayQuery.RayTMin();
+
+        UNIFIED_RT_MISS_FUNC(hitContext, payload);
+    }
+#endif
+
 }
 
 #endif

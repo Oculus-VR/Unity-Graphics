@@ -92,15 +92,15 @@ struct InstanceInfo
     int instance_mask;
     int vertex_offset;
     int blas_leaves_offset;
-    int triangle_culling_enabled; // int instead of a bool because the shader compiler refuses to play ball
-    int invert_triangle_culling; //same
+    uint disable_triangle_culling;
+    uint invert_triangle_culling;
     uint user_instance_id;
-    int padding2;
+    int is_opaque;
     Transform world_to_local_transform;
     Transform local_to_world_transform;
 };
 
-bool fast_intersect_triangle(in int cull_mode,
+bool fast_intersect_triangle(in uint cull_mode,
                              in float3 ray_origin,
                              in float3 ray_direction,
                              in float3 v1,
@@ -129,7 +129,7 @@ bool fast_intersect_triangle(in int cull_mode,
 
     // Barycentric coordinate U is outside range
     bool hit = false;
-    if (!((u < 0.f) || (u > 1.f) || sign(determinant) == cull_mode))
+    if (!((u < 0.f) || (u > 1.f) || determinant == 0.0f || (asuint(determinant) & 0x80000000) == cull_mode))
     {
         const float3 s2 = cross(d, e1);
         const float v = dot(ray_direction, s2) * invd;

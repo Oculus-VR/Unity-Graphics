@@ -29,7 +29,6 @@ namespace UnityEngine.Rendering.RadeonRays
         public static readonly int g_ray_count = Shader.PropertyToID("g_ray_count");
         public static readonly int g_rays = Shader.PropertyToID("g_rays");
         public static readonly int g_hits = Shader.PropertyToID("g_hits");
-        public static readonly int g_stack = Shader.PropertyToID("g_stack");
         public static readonly int g_constants_min_prims_per_treelet = Shader.PropertyToID("g_constants_min_prims_per_treelet");
         public static readonly int g_treelet_count_offset = Shader.PropertyToID("g_treelet_count_offset");
         public static readonly int g_treelet_roots_offset = Shader.PropertyToID("g_treelet_roots_offset");
@@ -56,8 +55,6 @@ namespace UnityEngine.Rendering.RadeonRays
         public static readonly int g_neighbor_offset = Shader.PropertyToID("g_neighbor_offset");
         public static readonly int g_cluster_to_node_offset = Shader.PropertyToID("g_cluster_to_node_offset");
         public static readonly int g_deltas_offset = Shader.PropertyToID("g_deltas_offset");
-        public static readonly int g_dispatch_dimensions = Shader.PropertyToID("g_Dimensions");
-        public static readonly int g_dispatch_dims_in_workgroups = Shader.PropertyToID("g_dispatch_dims_in_workgroups");
         public static readonly int g_leaf_parents_offset = Shader.PropertyToID("g_leaf_parents_offset");
     }
 }

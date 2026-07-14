@@ -1,65 +1,42 @@
-#ifndef _SAMPLING_RANDOM_HLSL_
-#define _SAMPLING_RANDOM_HLSL_
+#ifndef _SAMPLING_QUASIRANDOM_HLSL_
+#define _SAMPLING_QUASIRANDOM_HLSL_
 
 #include "Common.hlsl"
-#include "Hashes.hlsl"
-
-// Low discrepancy sequence generator with various implementations available
-
-/* One of the following must be defined by the file that includes QuasiRandom.hlsl to select an implementation:
-- QRNG_METHOD_SOBOL (Sobol sampler with Owen scrambling, from paper: Practical Hash-based Owen Scrambling by Burley)
-    infinite dims, 2097151 max samples, pixel tiling wraps at 65536
-    define QRNG_SOBOL_GENERATIVE_DIMS <multipleOf2> to control how many source dimensions are used, Default value 1024
-
-- QRNG_METHOD_SOBOL_BLUE_NOISE (from paper: "A Low-Discrepancy Sampler that Distributes Monte Carlo Errors as a Blue Noise in Screen Space" by Heitz and Belcour)
-    256 max dims, 256 max samples (beyond 256, the sequence keeps going with another set of 256 samples belonging to another dim, and so on every 256 samples), pixel tiling wraps at 128
-
-- QRNG_METHOD_GLOBAL_SOBOL_BLUE_NOISE (from paper: "Screen-Space Blue-Noise Diffusion of Monte Carlo Sampling Error via Hierarchical Ordering of Pixels" by Ahmed and Wonka)
-    infinite dims and samples, pixel tiling depends on target sample count. The more samples, the smaller the tile (ex: for 256 samples, tiling size is 4096)
-    define QRNG_GLOBAL_SOBOL_ENHANCED_TILING to get tiling to always wrap at 65536
-    define QRNG_SOBOL_GENERATIVE_DIMS <multipleOf2> to control how many source dimensions are used, Default value 1024
-
-- QRNG_METHOD_KRONECKER (Kronecker sequence from paper "Optimizing Kronecker Sequences for Multidimensional Sampling")
-    fast but lower quality than Sobol, infinite dims and samples, pixel tiling wraps at 65536
-    define QRNG_KRONECKER_ENHANCED_QUALITY to add small scale jitter
-
-These last 2 aren't low discrepancy sequences but traditional Pseudorandom number generators
-- QRNG_METHOD_RANDOM_XOR_SHIFT Xor shift PRNG
-- QRNG_METHOD_RANDOM_PCG_4D (from paper: "Hash Functions for GPU Rendering" by Jarzynski & Olano)
-*/
-
-#if defined(QRNG_METHOD_SOBOL) || defined(QRNG_METHOD_GLOBAL_SOBOL_BLUE_NOISE)
 #include "SobolSampling.hlsl"
+#include "SobolBluenoiseSampling.hlsl"
 
-#ifndef QRNG_SOBOL_GENERATIVE_DIMS
-#define QRNG_SOBOL_GENERATIVE_DIMS SOBOL_MATRICES_COUNT
-#endif
-static const uint kMaxSobolDim = QRNG_SOBOL_GENERATIVE_DIMS;
-#endif
+static const uint kMaxSobolDim = SOBOL_MATRICES_COUNT;
 
-uint PixelHash(uint2 pixelCoord, uint seed = 0)
-{
-    return LowBiasHash32((pixelCoord.x & 0xFFFF) | (pixelCoord.y << 16), seed);
-}
-
-#if defined(QRNG_METHOD_SOBOL)
-
-struct QuasiRandomGenerator
+// Sobol sampler with Owen scrambling, from paper: Practical Hash-based Owen Scrambling by Burley
+// infinite dims, 2097151 max samples, pixel tiling wraps at 65536
+// Define QRNG_SOBOL_02 to only use first 2 sobol dims and rely on scrambling for the others, this
+// effectively makes every pair of dims a perfect (0,2) sequence
+struct QrngSobol
 {
     uint pixelSeed;
     uint sampleIndex;
 
     void Init(uint2 pixelCoord, uint startSampleIndex)
     {
-        pixelSeed = PixelHash(pixelCoord);
+        Init(PixelHash(pixelCoord), startSampleIndex);
+    }
+
+    void Init(uint seed, uint startSampleIndex)
+    {
+        pixelSeed = seed;
         sampleIndex = startSampleIndex;
     }
 
     float GetFloat(uint dimension)
     {
+    #ifdef QRNG_SOBOL_02
+        uint index = NestedUniformOwenScramble(sampleIndex, pixelSeed ^ ( dimension / 2));
+        return GetOwenScrambledSobolSample(index, dimension & 1, LowBiasHash32(dimension, pixelSeed));
+    #else
         uint scrambleSeed = LowBiasHash32(pixelSeed, dimension);
         uint shuffleSeed = pixelSeed;
         return GetOwenScrambledSobolSample(sampleIndex ^ shuffleSeed, dimension % kMaxSobolDim, scrambleSeed);
+    #endif
     }
 
     void NextSample()
@@ -68,10 +45,9 @@ struct QuasiRandomGenerator
     }
 };
 
-#elif defined(QRNG_METHOD_SOBOL_BLUE_NOISE)
-#include "SobolBluenoiseSampling.hlsl"
-
-struct QuasiRandomGenerator
+// From paper: "A Low-Discrepancy Sampler that Distributes Monte Carlo Errors as a Blue Noise in Screen Space" by Heitz and Belcour
+// 256 max dims, 256 max samples (beyond 256, the sequence keeps going with another set of 256 samples belonging to another dim, and so on every 256 samples), pixel tiling wraps at 128
+struct QrngSobolBlueNoise
 {
     uint2 pixelCoord;
     uint sampleIndex;
@@ -80,6 +56,11 @@ struct QuasiRandomGenerator
     {
         pixelCoord = pixelCoord_;
         sampleIndex = startSampleIndex;
+    }
+
+    void Init(uint seed, uint startSampleIndex)
+    {
+        Init(seed / 256, seed % 256);
     }
 
     float GetFloat(uint dimension)
@@ -95,9 +76,11 @@ struct QuasiRandomGenerator
     }
 };
 
-#elif defined(QRNG_METHOD_GLOBAL_SOBOL_BLUE_NOISE)
-
-struct QuasiRandomGenerator
+// From paper: "Screen-Space Blue-Noise Diffusion of Monte Carlo Sampling Error via Hierarchical Ordering of Pixels" by Ahmed and Wonka
+// infinite dims and samples, pixel tiling depends on target sample count. The more samples, the smaller the tile (ex: for 256 samples, tiling size is 4096)
+// define QRNG_GLOBAL_SOBOL_ENHANCED_TILING to get tiling to always wrap at 65536
+// Define QRNG_SOBOL_02 to only use first 2 sobol dims and rely on scrambling for the others
+struct QrngGlobalSobolBlueNoise
 {
     uint pixelMortonCode;
     uint log2SamplesPerPixel;
@@ -110,9 +93,19 @@ struct QuasiRandomGenerator
         sampleIndex = startSampleIndex;
     }
 
+    void Init(uint seed, uint startSampleIndex, uint perPixelSampleCount = 256)
+    {
+        Init(uint2(seed & 0xFFFF, seed >> 16), startSampleIndex, perPixelSampleCount);
+    }
+
     float GetFloat(uint dimension)
     {
+    #ifdef QRNG_SOBOL_02
+        uint index = NestedUniformOwenScramble(sampleIndex, LowBiasHash32(dimension/2, 0xe0aaaf75)) & ((1U << log2SamplesPerPixel) - 1U);
+        return GetOwenScrambledZShuffledSobolSample(index, dimension, 2, pixelMortonCode, log2SamplesPerPixel);
+    #else
         return GetOwenScrambledZShuffledSobolSample(sampleIndex, dimension, kMaxSobolDim, pixelMortonCode, log2SamplesPerPixel);
+    #endif
     }
 
     void NextSample()
@@ -121,9 +114,10 @@ struct QuasiRandomGenerator
     }
 };
 
-#elif defined(QRNG_METHOD_KRONECKER)
-
-struct QuasiRandomGenerator
+// Kronecker sequence from paper "Optimizing Kronecker Sequences for Multidimensional Sampling"
+//fast but lower quality than Sobol, infinite dims and samples, pixel tiling wraps at 65536
+//define QRNG_KRONECKER_ENHANCED_QUALITY to add small scale jitter
+struct QrngKronecker
 {
     uint cranleyPattersonSeed;
     uint shuffledSampleIndex;
@@ -133,7 +127,12 @@ struct QuasiRandomGenerator
 
     void Init(uint2 pixelCoord, uint startSampleIndex)
     {
-        uint hash = PixelHash(pixelCoord);
+        Init(PixelHash(pixelCoord), startSampleIndex);
+    }
+
+    void Init(uint seed, uint startSampleIndex)
+    {
+        uint hash = seed;
         cranleyPattersonSeed = hash;
         uint shuffledStartIndex = (startSampleIndex + hash) % (1 << 20);
         shuffledSampleIndex = shuffledStartIndex;
@@ -175,94 +174,5 @@ struct QuasiRandomGenerator
     }
 };
 
-#elif defined(QRNG_METHOD_RANDOM_XOR_SHIFT)
 
-struct QuasiRandomGenerator
-{
-    uint state;
-
-    void Init(uint2 pixelCoord, uint startSampleIndex)
-    {
-        state = PixelHash(pixelCoord, startSampleIndex);
-    }
-
-    float GetFloat(uint dimension)
-    {
-        state = XorShift32(state);
-        return UintToFloat01(state);
-    }
-
-    void NextSample()
-    {
-    }
-};
-
-#elif defined(QRNG_METHOD_RANDOM_PCG_4D)
-
-struct QuasiRandomGenerator
-{
-    uint4 state;
-
-    void Init(uint2 pixelCoord, uint startSampleIndex)
-    {
-        // Seed for PCG uses a sequential sample number in 4th channel, which increments on every RNG call and starts from 0
-        state = uint4(pixelCoord, startSampleIndex, 0);
-    }
-
-    float GetFloat(int dimension)
-    {
-        state.w++;
-        return UintToFloat01(Pcg4d(state).x);
-    }
-
-    void NextSample()
-    {
-        state.z++;
-    }
-};
-#endif
-
-
-// global dimension offset (could be used to alter the noise pattern)
-#ifndef QRNG_OFFSET
-#define QRNG_OFFSET 0
-#endif
-
-#ifndef QRNG_SAMPLES_PER_BOUNCE
-#define QRNG_SAMPLES_PER_BOUNCE 64
-#endif
-
-struct PathTracingSampler
-{
-    QuasiRandomGenerator generator;
-    int bounceIndex;
-
-    void Init(uint2 pixelCoord, uint startPathIndex, uint perPixelPathCount = 256)
-    {
-        #if defined(QRNG_METHOD_GLOBAL_SOBOL_BLUE_NOISE)
-            generator.Init(pixelCoord, startPathIndex, perPixelPathCount);
-        #else
-            generator.Init(pixelCoord, startPathIndex);
-        #endif
-        bounceIndex = 0;
-    }
-
-    float GetFloatSample(int dimension)
-    {
-        uint actualDimension = QRNG_OFFSET + QRNG_SAMPLES_PER_BOUNCE * bounceIndex + dimension;
-        return generator.GetFloat(actualDimension);
-    }
-
-    void NextBounce()
-    {
-        bounceIndex++;
-    }
-
-    void NextPath()
-    {
-        generator.NextSample();
-        bounceIndex = 0;
-    }
-};
-
-#endif // _SAMPLING_RANDOM_HLSL_
+#endif // _SAMPLING_QUASIRANDOM_HLSL_

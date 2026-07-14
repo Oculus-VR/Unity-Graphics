@@ -38,8 +38,6 @@ THE SOFTWARE.
 // WebGPU has extremely strict uniformity requirements that are incompatible with the current implementation of this shader.
 #pragma exclude_renderers webgpu
 
-#pragma multi_compile __ TOP_LEVEL
-
 #if !(TOP_LEVEL)
 RWStructuredBuffer<float> g_vertices;
 int g_vertices_offset;

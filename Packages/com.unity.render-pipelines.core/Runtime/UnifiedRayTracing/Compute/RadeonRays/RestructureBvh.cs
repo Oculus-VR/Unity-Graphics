@@ -53,7 +53,6 @@ namespace UnityEngine.Rendering.RadeonRays
             GraphicsBuffer scratch, in BottomLevelLevelAccelStruct result)
         {
             var scratchLayout = ScratchBufferLayout.Create(triangleCount);
-            Common.EnableKeyword(cmd, shader, "TOP_LEVEL", false);
 
             cmd.SetComputeIntParam(shader, SID.g_vertices_offset, verticesOffset);
             cmd.SetComputeIntParam(shader, SID.g_constants_vertex_stride, (int)vertexStride);

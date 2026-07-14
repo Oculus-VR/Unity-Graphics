@@ -7,7 +7,7 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
     internal enum UnifiedRayTracingError
     {
         Unknown,
-        OutOfGraphicsBufferMemory,
+        GraphicsBufferAllocationFailed
     }
 
     internal class UnifiedRayTracingException : Exception
