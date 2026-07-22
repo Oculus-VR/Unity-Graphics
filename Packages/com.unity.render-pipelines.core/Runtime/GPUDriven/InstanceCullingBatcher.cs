@@ -925,6 +925,11 @@ namespace UnityEngine.Rendering
             Profiler.EndSample();
         }
 
+        public void DestroyDrawInstances(NativeArray<InstanceHandle> instances)
+        {
+            DestroyInstances(instances);
+        }
+
         public void DestroyMaterials(NativeArray<EntityId_Int32> destroyedMaterials)
         {
             if (destroyedMaterials.Length == 0)
@@ -1031,14 +1036,28 @@ namespace UnityEngine.Rendering
             newBatchMaterialIDs.Dispose();
         }
 
+        public JobHandle SchedulePackedMaterialCacheUpdate(NativeArray<int> materialIDs, NativeArray<GPUDrivenPackedMaterialData> packedMaterialDatas)
+        {
+            return new UpdatePackedMaterialDataCacheJob
+            {
+                materialIDs = materialIDs.AsReadOnly(),
+                packedMaterialDatas = packedMaterialDatas.AsReadOnly(),
+                packedMaterialHash = m_PackedMaterialHash
+            }.Schedule();
+        }
+
         public void BuildBatch(
             NativeArray<InstanceHandle> instances,
             NativeArray<EntityId_Int32> usedMaterialIDs,
             NativeArray<EntityId_Int32> usedMeshIDs,
-            in GPUDrivenRendererGroupData rendererData)
+            in GPUDrivenRendererGroupData rendererData,
+            bool registerMaterialsAndMeshes = true)
         {
-            RegisterBatchMaterials(usedMaterialIDs);
-            RegisterBatchMeshes(usedMeshIDs);
+            if (registerMaterialsAndMeshes)
+            {
+                RegisterBatchMaterials(usedMaterialIDs);
+                RegisterBatchMeshes(usedMeshIDs);
+            }
 
             new CreateDrawBatchesJob
             {

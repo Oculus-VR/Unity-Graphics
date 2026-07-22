@@ -86,6 +86,11 @@ namespace UnityEngine.Rendering
             m_InstanceCullingBatcher.DestroyDrawInstances(instances);
         }
 
+        public void DestroyInstances(NativeArray<InstanceHandle> instances)
+        {
+            DestroyDrawInstances(instances);
+        }
+
         public void DestroyMeshes(NativeArray<EntityId_Int32> destroyedMeshes)
         {
             m_InstanceCullingBatcher.DestroyMeshes(destroyedMeshes);
