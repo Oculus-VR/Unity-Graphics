@@ -307,6 +307,33 @@ namespace UnityEngine.Rendering
     }
 
     [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
+    internal struct UpdatePackedMaterialDataCacheJob : IJob
+    {
+        [ReadOnly] public NativeArray<int>.ReadOnly materialIDs;
+        [ReadOnly] public NativeArray<GPUDrivenPackedMaterialData>.ReadOnly packedMaterialDatas;
+
+        public NativeParallelHashMap<int, GPUDrivenPackedMaterialData> packedMaterialHash;
+
+        private void ProcessMaterial(int i)
+        {
+            var materialID = materialIDs[i];
+            var packedMaterialData = packedMaterialDatas[i];
+
+            if (materialID == 0)
+                return;
+
+            // Cache the packed material so we can detect a change in material that would need to update the renderer data.
+            packedMaterialHash[materialID] = packedMaterialData;
+        }
+
+        public void Execute()
+        {
+            for (int i = 0; i < materialIDs.Length; ++i)
+                ProcessMaterial(i);
+        }
+    }
+
+    [BurstCompile(DisableSafetyChecks = true, OptimizeFor = OptimizeFor.Performance)]
     internal struct CreateDrawBatchesJob : IJob
     {
         [ReadOnly] public bool implicitInstanceIndices;
@@ -729,6 +756,7 @@ namespace UnityEngine.Rendering
         private NativeParallelHashMap<uint, BatchID> m_GlobalBatchIDs;
         private InstanceCuller m_Culler;
         private NativeParallelHashMap<EntityId_Int32, BatchMaterialID> m_BatchMaterialHash;
+        private NativeParallelHashMap<int, GPUDrivenPackedMaterialData> m_PackedMaterialHash;
         private NativeParallelHashMap<EntityId_Int32, BatchMeshID> m_BatchMeshHash;
 
         private int m_CachedInstanceDataBufferLayoutVersion;
@@ -736,6 +764,7 @@ namespace UnityEngine.Rendering
         private OnCullingCompleteCallback m_OnCompleteCallback;
 
         public NativeParallelHashMap<EntityId_Int32, BatchMaterialID> batchMaterialHash => m_BatchMaterialHash;
+        public NativeParallelHashMap<int, GPUDrivenPackedMaterialData> packedMaterialHash => m_PackedMaterialHash;
 
         public InstanceCullingBatcher(RenderersBatchersContext batcherContext, InstanceCullingBatcherDesc desc, BatchRendererGroup.OnFinishedCulling onFinishedCulling)
         {
@@ -785,6 +814,7 @@ namespace UnityEngine.Rendering
             m_CachedInstanceDataBufferLayoutVersion = -1;
             m_OnCompleteCallback = desc.onCompleteCallback;
             m_BatchMaterialHash = new NativeParallelHashMap<EntityId_Int32, BatchMaterialID>(64, Allocator.Persistent);
+            m_PackedMaterialHash = new NativeParallelHashMap<int, GPUDrivenPackedMaterialData>(64, Allocator.Persistent);
             m_BatchMeshHash = new NativeParallelHashMap<EntityId_Int32, BatchMeshID>(64, Allocator.Persistent);
 
             m_GlobalBatchIDs = new NativeParallelHashMap<uint, BatchID>(6, Allocator.Persistent);
@@ -817,6 +847,7 @@ namespace UnityEngine.Rendering
             m_DrawInstanceData = null;
 
             m_BatchMaterialHash.Dispose();
+            m_PackedMaterialHash.Dispose();
             m_BatchMeshHash.Dispose();
         }
 
