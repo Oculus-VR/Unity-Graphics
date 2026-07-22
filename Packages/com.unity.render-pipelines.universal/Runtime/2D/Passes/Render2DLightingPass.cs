@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine.Profiling;
-using UnityEngine.Experimental.Rendering;
 
 namespace UnityEngine.Rendering.Universal
 {
@@ -167,7 +166,6 @@ namespace UnityEngine.Rendering.Universal
             CommandBuffer cmd,
             ScriptableRenderContext context,
             ref RenderingData renderingData,
-            ref FilteringSettings filterSettings,
             ref DrawingSettings normalsDrawSettings,
             ref DrawingSettings drawSettings,
             ref RenderTextureDescriptor desc)
@@ -206,7 +204,7 @@ namespace UnityEngine.Rendering.Universal
 
                     if (layerBatch.useNormals)
                     {
-                        filterSettings.sortingLayerRange = layerBatch.layerRange;
+                        LayerUtility.GetFilterSettings(m_Renderer2DData, ref layerBatch, out var filterSettings);
                         var depthTarget = m_NeedsDepth ? depthAttachmentHandle : null;
                         this.RenderNormals(context, renderingData, normalsDrawSettings, filterSettings, depthTarget, normalsFirstClear);
 						normalsFirstClear = false;
@@ -249,7 +247,7 @@ namespace UnityEngine.Rendering.Universal
                         // This is a local copy of the array element (it's a struct). Remember to add a ref here if you need to modify the real thing.
                         var layerBatch = layerBatches[i];
 
-                        if (layerBatch.lightStats.useAnyLights)
+                        if (layerBatch.lightStats.useLights)
                         {
                             for (var blendStyleIndex = 0; blendStyleIndex < blendStylesCount; blendStyleIndex++)
                             {
@@ -284,24 +282,21 @@ namespace UnityEngine.Rendering.Universal
                             copyStoreAction = resolveDuringBatch == i && resolveIsAfterCopy ? RenderBufferStoreAction.Resolve : RenderBufferStoreAction.StoreAndResolve;
                         else
                             copyStoreAction = RenderBufferStoreAction.Store;
-                        // If our camera sorting layer texture bound is inside our batch we need to break up the DrawRenderers into two batches
-                        if (cameraSortingLayerBoundsIndex >= layerBatch.layerRange.lowerBound && cameraSortingLayerBoundsIndex < layerBatch.layerRange.upperBound && m_Renderer2DData.useCameraSortingLayerTexture)
-                        {
-                            filterSettings.sortingLayerRange = new SortingLayerRange(layerBatch.layerRange.lowerBound, cameraSortingLayerBoundsIndex);
-                            Render(context, cmd, ref renderingData, ref filterSettings, drawSettings);
-                            CopyCameraSortingLayerRenderTexture(context, renderingData, copyStoreAction);
 
-                            filterSettings.sortingLayerRange = new SortingLayerRange((short)(cameraSortingLayerBoundsIndex + 1), layerBatch.layerRange.upperBound);
-                            Render(context, cmd, ref renderingData, ref filterSettings, drawSettings);
-                        }
-                        else
-                        {
-                            filterSettings.sortingLayerRange = new SortingLayerRange(layerBatch.layerRange.lowerBound, layerBatch.layerRange.upperBound);
-                            Render(context, cmd, ref renderingData, ref filterSettings, drawSettings);
 
-                            if (cameraSortingLayerBoundsIndex == layerBatch.layerRange.upperBound && m_Renderer2DData.useCameraSortingLayerTexture)
+                        LayerUtility.GetFilterSettings(m_Renderer2DData, ref layerBatch, out var filterSettings);
+
+                        Render(context, cmd, ref renderingData, ref filterSettings, drawSettings);
+
+                        if (m_Renderer2DData.useCameraSortingLayerTexture)
+                        {
+                            if (cameraSortingLayerBoundsIndex >= layerBatch.layerRange.lowerBound && cameraSortingLayerBoundsIndex <= layerBatch.layerRange.upperBound)
+                            {
                                 CopyCameraSortingLayerRenderTexture(context, renderingData, copyStoreAction);
+                            }
                         }
+
+                        RendererLighting.DisableAllKeywords(CommandBufferHelpers.GetRasterCommandBuffer(cmd));
 
                         // Draw light volumes
                         if (drawLights && (layerBatch.lightStats.totalVolumetricUsage > 0))
@@ -355,6 +350,15 @@ namespace UnityEngine.Rendering.Universal
             ShadowRendering.InitializeBudget(m_Renderer2DData.shadowRenderTextureMemoryBudget);
             RendererLighting.lightBatch.Reset();
 
+            // Set screenParams when pixel perfect camera is used with the reference resolution
+            camera.TryGetComponent(out PixelPerfectCamera pixelPerfectCamera);
+            if (pixelPerfectCamera != null && pixelPerfectCamera.enabled && pixelPerfectCamera.offscreenRTSize != Vector2Int.zero)
+            {
+                var cameraWidth = pixelPerfectCamera.offscreenRTSize.x;
+                var cameraHeight = pixelPerfectCamera.offscreenRTSize.y;
+                renderingData.commandBuffer.SetGlobalVector(ShaderPropertyId.screenParams, new Vector4(cameraWidth, cameraHeight, 1.0f + 1.0f / cameraWidth, 1.0f + 1.0f / cameraHeight));
+            }
+
             var isSceneLit = m_Renderer2DData.lightCullResult.IsSceneLit();
             if (isSceneLit && isLitView)
             {
@@ -378,11 +382,11 @@ namespace UnityEngine.Rendering.Universal
 
                 ShadowRendering.CallOnBeforeRender(renderingData.cameraData.camera, m_Renderer2DData.lightCullResult);
 
-                var layerBatches = LayerUtility.CalculateBatches(m_Renderer2DData.lightCullResult, out var batchCount);
+                var layerBatches = LayerUtility.CalculateBatches(m_Renderer2DData, out var batchCount);
                 var batchesDrawn = 0;
 
                 for (var i = 0; i < batchCount; i += batchesDrawn)
-                    batchesDrawn = DrawLayerBatches(layerBatches, batchCount, i, cmd, context, ref renderingData, ref filterSettings, ref normalsDrawSettings, ref combinedDrawSettings, ref desc);
+                    batchesDrawn = DrawLayerBatches(layerBatches, batchCount, i, cmd, context, ref renderingData, ref normalsDrawSettings, ref combinedDrawSettings, ref desc);
 
                 RendererLighting.DisableAllKeywords(CommandBufferHelpers.GetRasterCommandBuffer(cmd));
                 context.ExecuteCommandBuffer(cmd);

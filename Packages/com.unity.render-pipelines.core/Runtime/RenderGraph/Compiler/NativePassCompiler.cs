@@ -594,7 +594,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                         var numReaders = pointToVer.numReaders;
                         for (var i = 0; i < numReaders; ++i)
                         {
-                            var depIdx = ResourcesData.IndexReader(outputResource, i);
+                            var depIdx = ctx.resources.IndexReader(outputResource, i);
                             ref var dep = ref ctx.resources.readerData[outputResource.iType].ElementAt(depIdx);
                             ref var depPass = ref ctx.passData.ElementAt(dep.passId);
                             if (pass.asyncCompute != depPass.asyncCompute)
@@ -1394,6 +1394,13 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                             ExecuteBeginRenderPass(rgContext, resources, ref nativePass);
                             nrpBegan = true;
                             inRenderPass = true;
+
+                            for (int subpassIndex = nativePass.firstGraphPass; subpassIndex <= nativePass.lastGraphPass; subpassIndex++)
+                            {
+                                ref var subpassData = ref contextData.passData.ElementAt(subpassIndex);
+                                rgContext.executingPass = passes[subpassData.passId];
+                                passes[subpassData.passId].PreExecute(rgContext);
+                            }
                         }
                     }
                 }

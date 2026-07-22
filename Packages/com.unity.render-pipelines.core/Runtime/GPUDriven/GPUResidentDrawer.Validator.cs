@@ -42,7 +42,7 @@ namespace UnityEngine.Rendering
 #if UNITY_EDITOR
             // Check the build target is supported by checking the depth downscale kernel (which has an only_renderers pragma) is present
             var resources = GraphicsSettings.GetRenderPipelineSettings<GPUResidentDrawerResources>();
-            if (!resources.occluderDepthPyramidKernels.HasKernel("OccluderDepthDownscale"))
+            if (!(resources.occluderDepthPyramidKernels && resources.occluderDepthPyramidKernels.HasKernel("OccluderDepthDownscale")))
             {
                 severity = LogType.Warning;
                 message  = Strings.kernelNotPresent;
@@ -81,6 +81,11 @@ namespace UnityEngine.Rendering
                 message = Strings.allowInEditModeDisabled;
                 return false;
             }
+			
+			// Disable GRD in any external AssetImporter child process. GRD isn't made for AssetImporter workflow/lifetime
+			// Avoid memory leak warning messages and also some future issues (UUM-90039)
+            if (AssetDatabase.IsAssetImportWorkerProcess())
+                return false;
 #endif
             // If we are forcing the system, no need to perform further checks
             if (IsForcedOnViaCommandLine())

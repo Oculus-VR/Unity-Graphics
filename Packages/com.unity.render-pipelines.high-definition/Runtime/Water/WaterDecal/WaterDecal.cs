@@ -6,7 +6,7 @@ namespace UnityEngine.Rendering.HighDefinition
     /// <summary>
     /// Water decal component.
     /// </summary>
-    [HDRPHelpURL("WaterSystem-waterdecal")]
+    [HDRPHelpURL("water-decals-and-masking-in-the-water-system")]
     [ExecuteInEditMode]
     public partial class WaterDecal : MonoBehaviour
     {
@@ -64,9 +64,9 @@ namespace UnityEngine.Rendering.HighDefinition
         public CustomRenderTextureUpdateMode updateMode = CustomRenderTextureUpdateMode.OnLoad;
 
         /// <summary>
-        /// Specifies the material used for the deformer.
+        /// Specifies the material used for the water decal.
         /// </summary>
-        [Tooltip("Specifies the material used for the deformer.")]
+        [Tooltip("Specifies the material used for the water decal.")]
         public Material material = null;
 
         internal int updateCount = 0;

@@ -15,6 +15,9 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
         #pragma multi_compile_fragment _ SCREEN_COORD_OVERRIDE
         #pragma multi_compile_local_fragment _ HDR_INPUT HDR_ENCODING
 
+        #pragma multi_compile_local_fragment _ SUBPASS_INPUT_ATTACHMENT
+        #pragma multi_compile _ _MSAA_2 _MSAA_4 _MSAA_8
+
         #pragma dynamic_branch_local_fragment _ _HDR_OVERLAY
 
         #ifdef HDR_ENCODING
@@ -43,6 +46,16 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #endif
         #endif
 
+        #if defined(_MSAA_2)
+            #define MSAA_SAMPLES 2
+        #elif defined(_MSAA_4)
+            #define MSAA_SAMPLES 4
+        #elif defined(_MSAA_8)
+            #define MSAA_SAMPLES 8
+        #else
+            #define MSAA_SAMPLES 1
+        #endif
+
         TEXTURE2D_X(_Bloom_Texture);
         TEXTURE2D(_LensDirt_Texture);
         TEXTURE2D(_Grain_Texture);
@@ -51,11 +64,19 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
         TEXTURE2D(_BlueNoise_Texture);
         TEXTURE2D_X(_OverlayUITexture);
 
+        #if SUBPASS_INPUT_ATTACHMENT
+            #define urp_cameraColor 0
+            #if MSAA_SAMPLES == 1
+                FRAMEBUFFER_INPUT_HALF(urp_cameraColor);
+            #else
+                FRAMEBUFFER_INPUT_HALF_MS(urp_cameraColor);
+            #endif
+        #endif
+
         float4 _BloomTexture_TexelSize;
         float4 _Lut_Params;
         float4 _UserLut_Params;
         float4 _Bloom_Params;
-        float _Bloom_RGBM;
         float4 _LensDirt_Params;
         float _LensDirt_Intensity;
         float4 _Distortion_Params1;
@@ -83,7 +104,6 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
 
         #define BloomIntensity          _Bloom_Params.x
         #define BloomTint               _Bloom_Params.yzw
-        #define BloomRGBM               _Bloom_RGBM.x
         #define LensDirtScale           _LensDirt_Params.xy
         #define LensDirtOffset          _LensDirt_Params.zw
         #define LensDirtIntensity       _LensDirt_Intensity.x
@@ -133,7 +153,7 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
                 if (DistIntensity > 0.0)
                 {
                     float wu = ru * DistTheta;
-                    ru = tan(wu) * (rcp(ru * DistSigma));
+                    ru = tan(wu) * (rcp(ru * DistSigma + HALF_MIN)); // Add HALF_MIN to avoid 1/0
                     uv = uv + ruv * (ru - 1.0);
                 }
                 else
@@ -154,10 +174,25 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             float2 uv = SCREEN_COORD_APPLY_SCALEBIAS(UnityStereoTransformScreenSpaceTex(input.texcoord));
             float2 uvDistorted = DistortUV(uv);
 
-            // NOTE: Hlsl specifies missing input.a to fill 1 (0 for .rgb).
-            // InputColor is a "bottom" layer for alpha output.
-            half4 inputColor = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, ClampUVForBilinear(SCREEN_COORD_REMOVE_SCALEBIAS(uvDistorted), _BlitTexture_TexelSize.xy));
+            half4 inputColor = half4(0.0, 0.0, 0.0, 0.0);
+            #if SUBPASS_INPUT_ATTACHMENT
+                #if MSAA_SAMPLES == 1
+                    inputColor = LOAD_FRAMEBUFFER_INPUT(urp_cameraColor, float2(0,0));
+                #else
+                    UNITY_UNROLL
+                    for(int i = 0; i < MSAA_SAMPLES; ++i) {
+                        half4 col = LOAD_FRAMEBUFFER_INPUT_MS(urp_cameraColor, i, float2(0,0));
+                        inputColor = inputColor + col;
+                    }
+                    inputColor = inputColor / MSAA_SAMPLES;
+                #endif
+            #else
+                // NOTE: Hlsl specifies missing input.a to fill 1 (0 for .rgb).
+                // InputColor is a "bottom" layer for alpha output.
+                inputColor = SAMPLE_TEXTURE2D_X(_BlitTexture, sampler_LinearClamp, ClampUVForBilinear(SCREEN_COORD_REMOVE_SCALEBIAS(uvDistorted), _BlitTexture_TexelSize.xy));                
+            #endif
             half3 color = inputColor.rgb;
+
 
             #if _CHROMATIC_ABERRATION
             {
@@ -194,23 +229,17 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
                 #endif
 
                 #if _BLOOM_HQ
-                half4 bloom = SampleTexture2DBicubic(TEXTURE2D_X_ARGS(_Bloom_Texture, sampler_LinearClamp), SCREEN_COORD_REMOVE_SCALEBIAS(uvBloom), _Bloom_Texture_TexelSize.zwxy, (1.0).xx, unity_StereoEyeIndex);
+                half3 bloom = SampleTexture2DBicubic(TEXTURE2D_X_ARGS(_Bloom_Texture, sampler_LinearClamp), SCREEN_COORD_REMOVE_SCALEBIAS(uvBloom), _Bloom_Texture_TexelSize.zwxy, (1.0).xx, unity_StereoEyeIndex).xyz;
                 #else
-                half4 bloom = SAMPLE_TEXTURE2D_X(_Bloom_Texture, sampler_LinearClamp, SCREEN_COORD_REMOVE_SCALEBIAS(uvBloom));
+                half3 bloom = SAMPLE_TEXTURE2D_X(_Bloom_Texture, sampler_LinearClamp, SCREEN_COORD_REMOVE_SCALEBIAS(uvBloom)).xyz;
                 #endif
 
                 #if UNITY_COLORSPACE_GAMMA
-                bloom.xyz *= bloom.xyz; // γ to linear
+                bloom *= bloom; // γ to linear
                 #endif
 
-                UNITY_BRANCH
-                if (BloomRGBM > 0)
-                {
-                    bloom.xyz = DecodeRGBM(bloom);
-                }
-
-                bloom.xyz *= BloomIntensity;
-                color += bloom.xyz * BloomTint;
+                bloom *= BloomIntensity;
+                color += bloom * BloomTint;
 
                 #if defined(BLOOM_DIRT)
                 {
@@ -320,7 +349,8 @@ Shader "Hidden/Universal Render Pipeline/UberPost"
             #endif
 
             #if _ENABLE_ALPHA_OUTPUT
-            return half4(color, inputColor.a);
+            // Saturate is necessary to avoid issues when additive blending pushes the alpha over 1.
+            return half4(color, saturate(inputColor.a));
             #else
             return half4(color, 1);
             #endif

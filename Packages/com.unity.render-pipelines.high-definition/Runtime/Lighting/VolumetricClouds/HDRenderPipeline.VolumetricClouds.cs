@@ -591,7 +591,7 @@ namespace UnityEngine.Rendering.HighDefinition
 
                 if (passData.perPixelSorting)
                 {
-                    builder.UseDepthBuffer(transparentPrepass.beforeRefraction, DepthAccess.Read); // Dummy buffer to avoid 'Setting MRT without a depth buffer is not supported'
+                    builder.UseDepthBuffer(transparentPrepass.depthBufferPreRefraction, DepthAccess.Read); // Dummy buffer to avoid 'Setting MRT without a depth buffer is not supported'
                     builder.UseColorBuffer(transparentPrepass.beforeRefraction, 1);
                     builder.UseColorBuffer(transparentPrepass.beforeRefractionAlpha, 2);
                     opticalFogBufferIndex = 3;
@@ -604,6 +604,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 {
                     if (!opticalFogTransmittance.IsValid())
                         opticalFogTransmittance = renderGraph.CreateTexture(HDRenderPipeline.GetOpticalFogTransmittanceDesc(hdCamera));
+                    builder.UseDepthBuffer(transparentPrepass.depthBufferPreRefraction, DepthAccess.Read); // Dummy buffer to avoid 'Setting MRT without a depth buffer is not supported'
                     builder.UseColorBuffer(opticalFogTransmittance, opticalFogBufferIndex);
                 }
 
@@ -710,28 +711,28 @@ namespace UnityEngine.Rendering.HighDefinition
         void CreateTracingTextures(RenderGraph renderGraph, RenderGraphBuilder builder, VolumetricClouds settings, float scale, out TextureHandle cloudsLighting, out TextureHandle cloudsDepth)
         {
             cloudsLighting = builder.CreateTransientTexture(new TextureDesc(Vector2.one * scale, true, true)
-            { colorFormat = GetCloudsColorFormat(settings, false), enableRandomWrite = true, name = "Traced Clouds Lighting" });
+            { format = GetCloudsColorFormat(settings, false), enableRandomWrite = true, name = "Traced Clouds Lighting" });
 
             cloudsDepth = builder.CreateTransientTexture(new TextureDesc(Vector2.one * scale, true, true)
-            { colorFormat = GraphicsFormat.R16G16_SFloat, enableRandomWrite = true, name = "Traced Clouds Depth" });
+            { format = GraphicsFormat.R16G16_SFloat, enableRandomWrite = true, name = "Traced Clouds Depth" });
         }
 
         void CreateIntermediateTextures(RenderGraph renderGraph, RenderGraphBuilder builder, VolumetricClouds settings, out TextureHandle intermediate1, out TextureHandle intermediate2)
         {
             intermediate1 = builder.CreateTransientTexture(new TextureDesc(Vector2.one * 0.5f, true, true)
-            { colorFormat = GetCloudsColorFormat(settings, false), enableRandomWrite = true, name = "Temporary Clouds Lighting Buffer 1" });
+            { format = GetCloudsColorFormat(settings, false), enableRandomWrite = true, name = "Temporary Clouds Lighting Buffer 1" });
 
             intermediate2 = builder.CreateTransientTexture(new TextureDesc(Vector2.one * 0.5f, true, true)
-            { colorFormat = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Temporary Clouds Lighting Buffer 2" });
+            { format = GraphicsFormat.R16G16B16A16_SFloat, enableRandomWrite = true, name = "Temporary Clouds Lighting Buffer 2" });
         }
 
         void CreateOutputTextures(RenderGraph renderGraph, RenderGraphBuilder builder, VolumetricClouds settings, out TextureHandle cloudsLighting, out TextureHandle cloudsDepth)
         {
             cloudsLighting = builder.WriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-            { colorFormat = GetCloudsColorFormat(settings, false), enableRandomWrite = true, name = "Volumetric Clouds Lighting Texture" }));
+            { format = GetCloudsColorFormat(settings, false), enableRandomWrite = true, name = "Volumetric Clouds Lighting Texture" }));
 
             cloudsDepth = builder.WriteTexture(renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-            { colorFormat = GraphicsFormat.R16G16_SFloat, enableRandomWrite = true, name = "Volumetric Clouds Depth Texture" }));
+            { format = GraphicsFormat.R16G16_SFloat, enableRandomWrite = true, name = "Volumetric Clouds Depth Texture" }));
         }
 
         static void DoVolumetricCloudsTrace(CommandBuffer cmd, int traceTX, int traceTY, int viewCount, in VolumetricCloudCommonData commonData,

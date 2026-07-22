@@ -98,7 +98,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<ResourceReaderData> Readers(ResourceHandle h)
         {
-            int firstReader = ResourcesData.IndexReader(h, 0);
+            int firstReader = resources.IndexReader(h, 0);
             int numReaders = resources[h].numReaders;
             return resources.readerData[h.iType].MakeReadOnlySpan(firstReader, numReaders);
         }
@@ -114,7 +114,7 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
                 throw new Exception("Invalid reader id");
             }
 #endif
-            return ref resources.readerData[h.iType].ElementAt(ResourcesData.IndexReader(h, 0) + i);
+            return ref resources.readerData[h.iType].ElementAt(resources.IndexReader(h, 0) + i);
         }
 
         // Data per graph level renderpass
@@ -133,6 +133,25 @@ namespace UnityEngine.Rendering.RenderGraphModule.NativeRenderPassCompiler
         // Data per native renderpas
         public NativeList<NativePassData> nativePassData;
         public NativeList<SubPassDescriptor> nativeSubPassData; //Tighty packed list of per nrp subpasses
+
+        public bool passMerged(int passId1, int passId2) {
+            return passData[passId1].nativePassIndex == passData[passId2].nativePassIndex;
+        }
+
+        public bool nativepassFragmentsContain(int passId, int fragIndex)
+        {
+            int nativePassId = passData[passId].nativePassIndex;
+            if (nativePassId <= nativePassData.Length)
+            {
+                NativePassData data = nativePassData[nativePassId];
+                for (int i = 0; i < data.fragments.size; i++)
+                {
+                    if (data.fragments[i].resource.index == fragIndex)
+                        return true;
+                }
+            }
+            return false;
+        }
 
         // resources can be added as fragment both as input and output so make sure not to add them twice (return true upon new addition)
         public bool AddToFragmentList(TextureAccess access, int listFirstIndex, int numItems)

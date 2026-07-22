@@ -99,8 +99,13 @@ namespace UnityEditor.VFX.Block
         {
             GetGraph().TryAddCustomAttribute(attribute, CustomAttributeUtility.GetValueType(AttributeType), string.Empty, false, out var vfxAttribute);
             var setAttribute = ScriptableObject.CreateInstance<SetAttribute>();
+            if (attribute != vfxAttribute.name)
+            {
+                Debug.Log($"[Sanitize] Set Custom Attribute: {attribute} has been renamed into {vfxAttribute.name}");
+            }
             setAttribute.attribute = vfxAttribute.name;
             setAttribute.Composition = Composition;
+            setAttribute.Random = Random;
             setAttribute.ResyncSlots(true);
             ReplaceModel(setAttribute, this, true, false);
             VFXBlock.CopyInputLinks(setAttribute, this);

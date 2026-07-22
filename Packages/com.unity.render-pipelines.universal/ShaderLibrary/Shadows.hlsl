@@ -90,7 +90,7 @@ float4      _AdditionalShadowmapSize; // (xy: 1/width and 1/height, zw: width an
 // blocks bigger than 8kb while others have a 64kb max uniform block size. This number ensures size of buffer
 // AdditionalLightShadows stays reasonable. It also avoids shader compilation errors on SHADER_API_GLES30
 // devices where max number of uniforms per shader GL_MAX_FRAGMENT_UNIFORM_VECTORS is low (224)
-float4      _AdditionalShadowParams[MAX_VISIBLE_LIGHTS];         // Per-light data
+float4      _AdditionalShadowParams[MAX_VISIBLE_LIGHTS];         // Per-light data: (x: shadowStrength, y: softShadows, z: light type (Spot: 0, Point: 1), w: perLightFirstShadowSliceIndex)
 float4x4    _AdditionalLightsWorldToShadow[MAX_VISIBLE_LIGHTS];  // Per-shadow-slice-data
 #endif
 #endif
@@ -112,9 +112,19 @@ CBUFFER_END
 // w: unused
 float4 _ShadowBias;
 
+half IsSpotLight()
+{
+    return round(_ShadowBias.z) == 0.0 ? 1 : 0;
+}
+
+half IsDirectionalLight()
+{
+    return round(_ShadowBias.z) == 1.0 ? 1 : 0;
+}
+
 half IsPointLight()
 {
-    return _ShadowBias.z > 1.0 && _ShadowBias.z <= 2.0 ? 1 : 0;
+    return round(_ShadowBias.z) == 2.0 ? 1 : 0;
 }
 
 #define BEYOND_SHADOW_FAR(shadowCoord) shadowCoord.z <= 0.0 || shadowCoord.z >= 1.0
@@ -226,9 +236,9 @@ real SampleShadowmapFilteredLowQuality(TEXTURE2D_SHADOW_PARAM(ShadowMap, sampler
 
 real SampleShadowmapFilteredMediumQuality(TEXTURE2D_SHADOW_PARAM(ShadowMap, sampler_ShadowMap), float4 shadowCoord, ShadowSamplingData samplingData)
 {
-    real fetchesWeights[9];
-    real2 fetchesUV[9];
-    SampleShadow_ComputeSamples_Tent_5x5(samplingData.shadowmapSize, shadowCoord.xy, fetchesWeights, fetchesUV);
+    float fetchesWeights[9];
+    float2 fetchesUV[9];
+    SampleShadow_ComputeSamples_Tent_Filter_5x5(float, samplingData.shadowmapSize, shadowCoord, fetchesWeights, fetchesUV);
 
     return fetchesWeights[0] * SAMPLE_TEXTURE2D_SHADOW(ShadowMap, sampler_ShadowMap, float3(fetchesUV[0].xy, shadowCoord.z))
                 + fetchesWeights[1] * SAMPLE_TEXTURE2D_SHADOW(ShadowMap, sampler_ShadowMap, float3(fetchesUV[1].xy, shadowCoord.z))
@@ -243,9 +253,9 @@ real SampleShadowmapFilteredMediumQuality(TEXTURE2D_SHADOW_PARAM(ShadowMap, samp
 
 real SampleShadowmapFilteredHighQuality(TEXTURE2D_SHADOW_PARAM(ShadowMap, sampler_ShadowMap), float4 shadowCoord, ShadowSamplingData samplingData)
 {
-    real fetchesWeights[16];
-    real2 fetchesUV[16];
-    SampleShadow_ComputeSamples_Tent_7x7(samplingData.shadowmapSize, shadowCoord.xy, fetchesWeights, fetchesUV);
+    float fetchesWeights[16];
+    float2 fetchesUV[16];
+    SampleShadow_ComputeSamples_Tent_Filter_7x7(float, samplingData.shadowmapSize, shadowCoord, fetchesWeights, fetchesUV);
 
     return fetchesWeights[0] * SAMPLE_TEXTURE2D_SHADOW(ShadowMap, sampler_ShadowMap, float3(fetchesUV[0].xy, shadowCoord.z))
                 + fetchesWeights[1] * SAMPLE_TEXTURE2D_SHADOW(ShadowMap, sampler_ShadowMap, float3(fetchesUV[1].xy, shadowCoord.z))
@@ -337,39 +347,47 @@ half ComputeCascadeIndex(float3 positionWS)
 
 float4 TransformWorldToShadowCoord(float3 positionWS)
 {
-#ifdef _MAIN_LIGHT_SHADOWS_CASCADE
-    half cascadeIndex = ComputeCascadeIndex(positionWS);
+#if defined(_MAIN_LIGHT_SHADOWS_SCREEN) && !defined(_SURFACE_TYPE_TRANSPARENT)
+    float4 shadowCoord = float4(ComputeNormalizedDeviceCoordinatesWithZ(positionWS, GetWorldToHClipMatrix()), 1.0);
 #else
-    half cascadeIndex = half(0.0);
+    #ifdef _MAIN_LIGHT_SHADOWS_CASCADE
+        half cascadeIndex = ComputeCascadeIndex(positionWS);
+    #else
+        half cascadeIndex = half(0.0);
+    #endif
+
+    float4 shadowCoord = float4(mul(_MainLightWorldToShadow[cascadeIndex], float4(positionWS, 1.0)).xyz, 0.0);
 #endif
+    return shadowCoord;
+}
 
-    float4 shadowCoord = mul(_MainLightWorldToShadow[cascadeIndex], float4(positionWS, 1.0));
+half MainLightRealtimeShadow(float4 shadowCoord, half4 shadowParams, ShadowSamplingData shadowSamplingData)
+{
+    #if !defined(MAIN_LIGHT_CALCULATE_SHADOWS)
+        return half(1.0);
+    #endif
 
-    return float4(shadowCoord.xyz, 0);
+    #if defined(_MAIN_LIGHT_SHADOWS_SCREEN) && !defined(_SURFACE_TYPE_TRANSPARENT)
+        return SampleScreenSpaceShadowmap(shadowCoord);
+    #else
+        return SampleShadowmap(TEXTURE2D_ARGS(_MainLightShadowmapTexture, sampler_LinearClampCompare), shadowCoord, shadowSamplingData, shadowParams, false);
+    #endif
 }
 
 half MainLightRealtimeShadow(float4 shadowCoord)
 {
     #if !defined(MAIN_LIGHT_CALCULATE_SHADOWS)
         return half(1.0);
-    #elif defined(_MAIN_LIGHT_SHADOWS_SCREEN) && !defined(_SURFACE_TYPE_TRANSPARENT)
-        return SampleScreenSpaceShadowmap(shadowCoord);
-    #else
-        ShadowSamplingData shadowSamplingData = GetMainLightShadowSamplingData();
-        half4 shadowParams = GetMainLightShadowParams();
-        return SampleShadowmap(TEXTURE2D_ARGS(_MainLightShadowmapTexture, sampler_LinearClampCompare), shadowCoord, shadowSamplingData, shadowParams, false);
     #endif
+
+    return MainLightRealtimeShadow(shadowCoord, GetMainLightShadowParams(), GetMainLightShadowSamplingData());
 }
 
 // returns 0.0 if position is in light's shadow
 // returns 1.0 if position is in light
-half AdditionalLightRealtimeShadow(int lightIndex, float3 positionWS, half3 lightDirection)
+half AdditionalLightRealtimeShadow(int lightIndex, float3 positionWS, half3 lightDirection, half4 shadowParams, ShadowSamplingData shadowSamplingData)
 {
     #if defined(ADDITIONAL_LIGHT_CALCULATE_SHADOWS)
-        ShadowSamplingData shadowSamplingData = GetAdditionalLightShadowSamplingData(lightIndex);
-
-        half4 shadowParams = GetAdditionalLightShadowParams(lightIndex);
-
         int shadowSliceIndex = shadowParams.w;
         if (shadowSliceIndex < 0)
             return 1.0;
@@ -394,6 +412,15 @@ half AdditionalLightRealtimeShadow(int lightIndex, float3 positionWS, half3 ligh
     #else
         return half(1.0);
     #endif
+}
+
+half AdditionalLightRealtimeShadow(int lightIndex, float3 positionWS, half3 lightDirection)
+{
+    #if defined(ADDITIONAL_LIGHT_CALCULATE_SHADOWS)
+        return half(1.0);
+    #endif
+
+    return AdditionalLightRealtimeShadow(lightIndex, positionWS, lightDirection, GetAdditionalLightShadowParams(lightIndex), GetAdditionalLightShadowSamplingData(lightIndex));
 }
 
 half GetMainLightShadowFade(float3 positionWS)
@@ -427,50 +454,61 @@ half MixRealtimeAndBakedShadows(half realtimeShadow, half bakedShadow, half shad
 #endif
 }
 
-half BakedShadow(half4 shadowMask, half4 occlusionProbeChannels)
+half BakedShadow(half4 shadowMask, half4 occlusionProbeChannels, half4 shadowParams)
 {
     // Here occlusionProbeChannels used as mask selector to select shadows in shadowMask
     // If occlusionProbeChannels all components are zero we use default baked shadow value 1.0
     // This code is optimized for mobile platforms:
     // half bakedShadow = any(occlusionProbeChannels) ? dot(shadowMask, occlusionProbeChannels) : 1.0h;
     half bakedShadow = half(1.0) + dot(shadowMask - half(1.0), occlusionProbeChannels);
+    bakedShadow = LerpWhiteTo(bakedShadow, shadowParams.x);
+
     return bakedShadow;
 }
 
 half MainLightShadow(float4 shadowCoord, float3 positionWS, half4 shadowMask, half4 occlusionProbeChannels)
 {
-    half realtimeShadow = MainLightRealtimeShadow(shadowCoord);
+    half4 shadowParams = GetMainLightShadowParams();
+    half realtimeShadow = MainLightRealtimeShadow(shadowCoord, shadowParams, GetMainLightShadowSamplingData());
 
-#ifdef CALCULATE_BAKED_SHADOWS
-    half bakedShadow = BakedShadow(shadowMask, occlusionProbeChannels);
-#else
-    half bakedShadow = half(1.0);
-#endif
+    #ifdef CALCULATE_BAKED_SHADOWS
+        half bakedShadow = BakedShadow(shadowMask, occlusionProbeChannels, shadowParams);
+    #else
+        half bakedShadow = half(1.0);
+    #endif
 
-#ifdef MAIN_LIGHT_CALCULATE_SHADOWS
-    half shadowFade = GetMainLightShadowFade(positionWS);
-#else
-    half shadowFade = half(1.0);
-#endif
+    #ifdef MAIN_LIGHT_CALCULATE_SHADOWS
+        half shadowFade = GetMainLightShadowFade(positionWS);
+    #else
+        half shadowFade = half(1.0);
+    #endif
 
     return MixRealtimeAndBakedShadows(realtimeShadow, bakedShadow, shadowFade);
 }
 
 half AdditionalLightShadow(int lightIndex, float3 positionWS, half3 lightDirection, half4 shadowMask, half4 occlusionProbeChannels)
 {
-    half realtimeShadow = AdditionalLightRealtimeShadow(lightIndex, positionWS, lightDirection);
+    half4 shadowParams = GetAdditionalLightShadowParams(lightIndex);
+    ShadowSamplingData samplingData = GetAdditionalLightShadowSamplingData(lightIndex);
+    half realtimeShadow = AdditionalLightRealtimeShadow(lightIndex, positionWS, lightDirection, shadowParams, samplingData);
 
-#ifdef CALCULATE_BAKED_SHADOWS
-    half bakedShadow = BakedShadow(shadowMask, occlusionProbeChannels);
-#else
-    half bakedShadow = half(1.0);
-#endif
+    #ifdef CALCULATE_BAKED_SHADOWS
+        // This fading of the baked shadow using the light's shadow strength parameter needs
+        // to be guarded against the Real-Time Shadow keyword as _AdditionalShadowParams is
+        // only included in URP Shaders and updated when real time additional shadows are enabled.
+        #ifndef ADDITIONAL_LIGHT_CALCULATE_SHADOWS
+            shadowParams.x = half(1.0);
+        #endif
+        half bakedShadow = BakedShadow(shadowMask, occlusionProbeChannels, shadowParams);
+    #else
+        half bakedShadow = half(1.0);
+    #endif
 
-#ifdef ADDITIONAL_LIGHT_CALCULATE_SHADOWS
-    half shadowFade = GetAdditionalLightShadowFade(positionWS);
-#else
-    half shadowFade = half(1.0);
-#endif
+    #ifdef ADDITIONAL_LIGHT_CALCULATE_SHADOWS
+        half shadowFade = GetAdditionalLightShadowFade(positionWS);
+    #else
+        half shadowFade = half(1.0);
+    #endif
 
     return MixRealtimeAndBakedShadows(realtimeShadow, bakedShadow, shadowFade);
 }
@@ -493,6 +531,24 @@ float3 ApplyShadowBias(float3 positionWS, float3 normalWS, float3 lightDirection
     positionWS = lightDirection * _ShadowBias.xxx + positionWS;
     positionWS = normalWS * scale.xxx + positionWS;
     return positionWS;
+}
+
+float4 ApplyShadowClamping(float4 positionCS)
+{
+    #if UNITY_REVERSED_Z
+        float clamped = min(positionCS.z, positionCS.w * UNITY_NEAR_CLIP_VALUE);
+    #else
+        float clamped = max(positionCS.z, positionCS.w * UNITY_NEAR_CLIP_VALUE);
+    #endif
+
+    // The current implementation of vertex clamping in Universal RP is the same as in Unity Built-In RP.
+    // We follow the same convention in Universal RP where it's only enabled for Directional Lights
+    // (see: Shadows.cpp::RenderShadowMaps() #L2161-L2162)
+    // (see: Shadows.cpp::RenderShadowMaps() #L2086-L2102)
+    // (see: Shadows.cpp::PrepareStateForShadowMap() #L1685-L1686)
+    positionCS.z = lerp(positionCS.z, clamped, IsDirectionalLight());
+
+    return positionCS;
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -550,6 +606,16 @@ real SampleShadowmap(float4 shadowCoord, TEXTURE2D_SHADOW_PARAM(ShadowMap, sampl
 half AdditionalLightRealtimeShadow(int lightIndex, float3 positionWS)
 {
     return AdditionalLightRealtimeShadow(lightIndex, positionWS, half3(1, 0, 0));
+}
+
+// Deprecated: Use BakedShadow(half4 shadowMask, half4 occlusionProbeChannels, half4 shadowParams) as it supports shadowStrength from the light
+half BakedShadow(half4 shadowMask, half4 occlusionProbeChannels)
+{
+    #ifndef CALCULATE_BAKED_SHADOWS
+        return half(1.0);
+    #endif
+
+    return BakedShadow(shadowMask, occlusionProbeChannels, half4(1,0,0,0));
 }
 
 #endif

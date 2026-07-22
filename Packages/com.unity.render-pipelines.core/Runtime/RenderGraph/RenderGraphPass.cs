@@ -8,6 +8,7 @@ namespace UnityEngine.Rendering.RenderGraphModule
     [DebuggerDisplay("RenderPass: {name} (Index:{index} Async:{enableAsyncCompute})")]
     abstract class RenderGraphPass
     {
+        public virtual void PreExecute(InternalRenderGraphContext renderGraphContext) { return; }
         public abstract void Execute(InternalRenderGraphContext renderGraphContext);
         public abstract void Release(RenderGraphObjectPool pool);
         public abstract bool HasRenderFunc();
@@ -96,6 +97,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             colorBufferMaxIndex = -1;
             fragmentInputMaxIndex = -1;
             randomAccessResourceMaxIndex = -1;
+
+            // We do not need to clear colorBufferAccess and fragmentInputAccess as we have the colorBufferMaxIndex and fragmentInputMaxIndex
+            // which are reset above so we only clear depthAccess here.
+            depthAccess = default(TextureAccess);
         }
 
         // Check if the pass has any render targets set-up
@@ -591,6 +596,18 @@ namespace UnityEngine.Rendering.RenderGraphModule
     where PassData : class, new()
     {
         internal static RasterGraphContext c = new RasterGraphContext();
+        internal BaseRenderFunc<PassData, RasterGraphContext> preRenderFunc;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public override void PreExecute(InternalRenderGraphContext renderGraphContext)
+        {
+            if (preRenderFunc != null)
+            {
+                RasterGraphContext temp_c = new RasterGraphContext();
+                temp_c.FromInternalContext(renderGraphContext);
+                preRenderFunc(data, temp_c);
+            }
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void Execute(InternalRenderGraphContext renderGraphContext)

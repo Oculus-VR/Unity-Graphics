@@ -31,6 +31,22 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
+        static bool TryGetShadowIndex(ref LayerBatch layerBatch, int lightIndex, out int shadowIndex)
+        {
+            shadowIndex = 0;
+
+            for (int i = 0; i < layerBatch.shadowIndices.Count; ++i)
+            {
+                if (layerBatch.shadowIndices[i] == lightIndex)
+                {
+                    shadowIndex = i;
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         [Obsolete(DeprecationMessage.CompatibilityScriptingAPIObsolete, false)]
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
@@ -84,14 +100,15 @@ namespace UnityEngine.Rendering.Universal
                     if (passData.layerBatch.lightStats.useNormalMap)
                         s_PropertyBlock.SetTexture(k_NormalMapID, passData.normalMap);
 
-                    if (passData.layerBatch.lightStats.useShadows)
-                        s_PropertyBlock.SetTexture(k_ShadowMapID, passData.shadowMap);
+                    var useShadows = passData.layerBatch.lightStats.useShadows && layerBatch.shadowIndices.Contains(j);
+                    if (useShadows && TryGetShadowIndex(ref layerBatch, j, out var shadowIndex))
+                        s_PropertyBlock.SetTexture(k_ShadowMapID, passData.shadowTextures[shadowIndex]);
 
                     if (!passData.isVolumetric || (passData.isVolumetric && light.volumetricEnabled))
                         RendererLighting.SetCookieShaderProperties(light, s_PropertyBlock);
 
                     // Set shader global properties
-                    RendererLighting.SetPerLightShaderGlobals(cmd, light, slotIndex, passData.isVolumetric, false, LightBatch.isBatchingSupported);
+                    RendererLighting.SetPerLightShaderGlobals(cmd, light, slotIndex, passData.isVolumetric, useShadows, LightBatch.isBatchingSupported);
 
                     if (light.normalMapQuality != Light2D.NormalMapQuality.Disabled || light.lightType == Light2D.LightType.Point)
                         RendererLighting.SetPerPointLightShaderGlobals(cmd, light, slotIndex, LightBatch.isBatchingSupported);
@@ -112,7 +129,7 @@ namespace UnityEngine.Rendering.Universal
             }
         }
 
-        internal static void ExecuteUnsafe(UnsafeCommandBuffer cmd, PassData passData, ref LayerBatch layerBatch, List<Light2D> lights, bool useShadows = false)
+        internal static void ExecuteUnsafe(UnsafeCommandBuffer cmd, PassData passData, ref LayerBatch layerBatch, List<Light2D> lights)
         {
             cmd.SetGlobalFloat(k_InverseHDREmulationScaleID, 1.0f / passData.rendererData.hdrEmulationScale);
 
@@ -123,7 +140,7 @@ namespace UnityEngine.Rendering.Universal
                 cmd.BeginSample(blendOpName);
 
                 if (!Renderer2D.supportsMRT && !passData.isVolumetric)
-                    cmd.SetRenderTarget(passData.lightTextures[i], passData.depthTexture);
+                    cmd.SetRenderTarget(passData.lightTextures[i]);
 
                 var indicesIndex = Renderer2D.supportsMRT ? i : 0;
                 if (!passData.isVolumetric)
@@ -161,8 +178,9 @@ namespace UnityEngine.Rendering.Universal
                     if (passData.layerBatch.lightStats.useNormalMap)
                         s_PropertyBlock.SetTexture(k_NormalMapID, passData.normalMap);
 
-                    if (passData.layerBatch.lightStats.useShadows)
-                        s_PropertyBlock.SetTexture(k_ShadowMapID, passData.shadowMap);
+                    var useShadows = passData.layerBatch.lightStats.useShadows && layerBatch.shadowIndices.Contains(j);
+                    if (useShadows && TryGetShadowIndex(ref layerBatch, j, out var shadowIndex))
+                        s_PropertyBlock.SetTexture(k_ShadowMapID, passData.shadowTextures[shadowIndex]);
 
                     if (!passData.isVolumetric || (passData.isVolumetric && light.volumetricEnabled))
                         RendererLighting.SetCookieShaderProperties(light, s_PropertyBlock);
@@ -196,14 +214,11 @@ namespace UnityEngine.Rendering.Universal
             internal bool isVolumetric;
 
             internal TextureHandle normalMap;
-            internal TextureHandle shadowMap;
+            internal TextureHandle[] shadowTextures;
 
             // TODO: Optimize and remove low level pass
             // For low level shadow and light pass
-            internal RenderTargetIdentifier[] lightTexturesRT;
             internal TextureHandle[] lightTextures;
-            internal TextureHandle depthTexture;
-            internal TextureHandle shadowDepth;
         }
 
         public void Render(RenderGraph graph, ContextContainer frameData, Renderer2DData rendererData, ref LayerBatch layerBatch, int batchIndex, bool isVolumetric = false)
@@ -222,18 +237,19 @@ namespace UnityEngine.Rendering.Universal
                 {
                     intermediateTexture[0] = commonResourceData.activeColorTexture;
                     passData.lightTextures = universal2DResourceData.lightTextures[batchIndex];
-                    passData.depthTexture = universal2DResourceData.intermediateDepth;
 
                     for (var i = 0; i < passData.lightTextures.Length; i++)
                         builder.UseTexture(passData.lightTextures[i], AccessFlags.Write);
-
-                    builder.UseTexture(passData.depthTexture, AccessFlags.Write);
 
                     if (layerBatch.lightStats.useNormalMap)
                         builder.UseTexture(universal2DResourceData.normalsTexture[batchIndex]);
 
                     if (layerBatch.lightStats.useShadows)
-                        builder.UseTexture(universal2DResourceData.shadowsTexture);
+                    {
+                        passData.shadowTextures = universal2DResourceData.shadowTextures[batchIndex];
+                        for (var i = 0; i < passData.shadowTextures.Length; i++)
+                            builder.UseTexture(passData.shadowTextures[i]);
+                    }
 
                     foreach (var light in layerBatch.lights)
                     {
@@ -248,7 +264,6 @@ namespace UnityEngine.Rendering.Universal
                     passData.rendererData = rendererData;
                     passData.isVolumetric = isVolumetric;
                     passData.normalMap = layerBatch.lightStats.useNormalMap ? universal2DResourceData.normalsTexture[batchIndex] : TextureHandle.nullHandle;
-                    passData.shadowMap = layerBatch.lightStats.useShadows ? universal2DResourceData.shadowsTexture : TextureHandle.nullHandle;
 
                     builder.AllowPassCulling(false);
                     builder.AllowGlobalStateModification(true);
@@ -266,18 +281,19 @@ namespace UnityEngine.Rendering.Universal
                 {
                     intermediateTexture[0] = commonResourceData.activeColorTexture;
                     var lightTextures = !isVolumetric ? universal2DResourceData.lightTextures[batchIndex] : intermediateTexture;
-                    var depthTexture = !isVolumetric ? universal2DResourceData.intermediateDepth : commonResourceData.activeDepthTexture;
 
                     for (var i = 0; i < lightTextures.Length; i++)
                         builder.SetRenderAttachment(lightTextures[i], i);
-
-                    builder.SetRenderAttachmentDepth(depthTexture);
 
                     if (layerBatch.lightStats.useNormalMap)
                         builder.UseTexture(universal2DResourceData.normalsTexture[batchIndex]);
 
                     if (layerBatch.lightStats.useShadows)
-                        builder.UseTexture(universal2DResourceData.shadowsTexture);
+                    {
+                        passData.shadowTextures = universal2DResourceData.shadowTextures[batchIndex];
+                        for (var i = 0; i < passData.shadowTextures.Length; i++)
+                            builder.UseTexture(passData.shadowTextures[i]);
+                    }
 
                     foreach (var light in layerBatch.lights)
                     {
@@ -292,7 +308,6 @@ namespace UnityEngine.Rendering.Universal
                     passData.rendererData = rendererData;
                     passData.isVolumetric = isVolumetric;
                     passData.normalMap = layerBatch.lightStats.useNormalMap ? universal2DResourceData.normalsTexture[batchIndex] : TextureHandle.nullHandle;
-                    passData.shadowMap = layerBatch.lightStats.useShadows ? universal2DResourceData.shadowsTexture : TextureHandle.nullHandle;
 
                     builder.AllowPassCulling(false);
                     builder.AllowGlobalStateModification(true);

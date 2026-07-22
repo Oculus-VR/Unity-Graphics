@@ -6,12 +6,10 @@ namespace UnityEngine.Rendering.Universal
 {
     internal sealed partial class Renderer2D : ScriptableRenderer
     {
-        #if UNITY_SWITCH || UNITY_EMBEDDED_LINUX || UNITY_QNX
+        #if UNITY_SWITCH || UNITY_EMBEDDED_LINUX || UNITY_QNX || UNITY_ANDROID
         const GraphicsFormat k_DepthStencilFormat = GraphicsFormat.D24_UNorm_S8_UInt;
-        internal const int k_DepthBufferBits = 24;
         #else
         const GraphicsFormat k_DepthStencilFormat = GraphicsFormat.D32_SFloat_S8_UInt;
-        internal const int k_DepthBufferBits = 32;
         #endif
 
         const int k_FinalBlitPassQueueOffset = 1;
@@ -120,6 +118,8 @@ namespace UnityEngine.Rendering.Universal
             LensFlareCommonSRP.mergeNeeded = 0;
             LensFlareCommonSRP.maxLensFlareWithOcclusionTemporalSample = 1;
             LensFlareCommonSRP.Initialize();
+
+            Light2DManager.Initialize();
         }
 
         protected override void Dispose(bool disposing)
@@ -135,11 +135,12 @@ namespace UnityEngine.Rendering.Universal
             m_FinalBlitPass?.Dispose();
             m_DrawOffscreenUIPass?.Dispose();
             m_DrawOverlayUIPass?.Dispose();
+            Light2DManager.Dispose();
 
             CoreUtils.Destroy(m_BlitMaterial);
             CoreUtils.Destroy(m_BlitHDRMaterial);
             CoreUtils.Destroy(m_SamplingMaterial);
-            
+
             CleanupRenderGraphResources();
 
             base.Dispose(disposing);
@@ -203,7 +204,7 @@ namespace UnityEngine.Rendering.Universal
             ref var cameraTargetDescriptor = ref cameraData.cameraTargetDescriptor;
 
             var colorDescriptor = cameraTargetDescriptor;
-            colorDescriptor.depthBufferBits = (int)DepthBits.None;
+            colorDescriptor.depthStencilFormat = GraphicsFormat.None;
             m_ColorBufferSystem.SetCameraSettings(colorDescriptor, colorTextureFilterMode);
 
             if (cameraData.renderType == CameraRenderType.Base)
@@ -232,7 +233,7 @@ namespace UnityEngine.Rendering.Universal
                 {
                     var depthDescriptor = cameraTargetDescriptor;
                     depthDescriptor.colorFormat = RenderTextureFormat.Depth;
-                    depthDescriptor.depthBufferBits = k_DepthBufferBits;
+                    depthDescriptor.depthStencilFormat = k_DepthStencilFormat; 
                     if (!cameraData.resolveFinalTarget && m_UseDepthStencilBuffer)
                         depthDescriptor.bindMS = depthDescriptor.msaaSamples > 1 && !SystemInfo.supportsMultisampleAutoResolve && (SystemInfo.supportsMultisampledTextures != 0);
                     RenderingUtils.ReAllocateHandleIfNeeded(ref m_DepthTextureHandle, depthDescriptor, FilterMode.Point, wrapMode: TextureWrapMode.Clamp, name: "_CameraDepthAttachment");
@@ -407,17 +408,23 @@ namespace UnityEngine.Rendering.Universal
             bool hasPassesAfterPostProcessing = activeRenderPassQueue.Find(x => x.renderPassEvent == RenderPassEvent.AfterRenderingPostProcessing) != null;
             bool needsColorEncoding = DebugHandler == null || !DebugHandler.HDRDebugViewIsActive(cameraData.resolveFinalTarget);
 
+            // Don't resolve during post processing if there are passes after or pixel perfect camera is used
+            bool pixelPerfectCameraEnabled = ppc != null && ppc.enabled;
+            bool hasCaptureActions = cameraData.captureActions != null && lastCameraInStack;
+            bool resolvePostProcessingToCameraTarget = !hasCaptureActions && !hasPassesAfterPostProcessing && !requireFinalPostProcessPass && !pixelPerfectCameraEnabled;
+
             if (hasPostProcess)
             {
-                var desc = PostProcessPass.GetCompatibleDescriptor(cameraTargetDescriptor, cameraTargetDescriptor.width, cameraTargetDescriptor.height, cameraTargetDescriptor.graphicsFormat, DepthBits.None);
+                var desc = PostProcessPass.GetCompatibleDescriptor(cameraTargetDescriptor, cameraTargetDescriptor.width, cameraTargetDescriptor.height, cameraTargetDescriptor.graphicsFormat);
                 RenderingUtils.ReAllocateHandleIfNeeded(ref m_PostProcessPasses.m_AfterPostProcessColor, desc, FilterMode.Point, TextureWrapMode.Clamp, name: "_AfterPostProcessTexture");
 
                 postProcessPass.Setup(
                     cameraTargetDescriptor,
                     colorTargetHandle,
-                    afterPostProcessColorHandle,
+                    resolvePostProcessingToCameraTarget,
                     depthTargetHandle,
                     colorGradingLutHandle,
+                    null,
                     requireFinalPostProcessPass,
                     afterPostProcessColorHandle.nameID == k_CameraTarget.nameID && needsColorEncoding);
 
@@ -426,7 +433,7 @@ namespace UnityEngine.Rendering.Universal
 
             RTHandle finalTargetHandle = colorTargetHandle;
 
-            if (ppc != null && ppc.enabled && ppc.cropFrame != PixelPerfectCamera.CropFrame.None)
+            if (pixelPerfectCameraEnabled && ppc.cropFrame != PixelPerfectCamera.CropFrame.None)
             {
                 EnqueuePass(m_PixelPerfectBackgroundPass);
 
@@ -446,7 +453,18 @@ namespace UnityEngine.Rendering.Universal
                 finalPostProcessPass.SetupFinalPass(finalTargetHandle, hasPassesAfterPostProcessing, needsColorEncoding);
                 EnqueuePass(finalPostProcessPass);
             }
-            else if (lastCameraInStack && finalTargetHandle != k_CameraTarget)
+
+            // If post-processing then we already resolved to camera target while doing post.
+            // Also only do final blit if camera is not rendering to RT.
+            bool cameraTargetResolved =
+                   // final PP always blit to camera target
+                   requireFinalPostProcessPass ||
+                   // no final PP but we have PP stack. In that case it blit unless there are render pass after PP or pixel perfect camera is used
+                   (hasPostProcess && !hasPassesAfterPostProcessing && !hasCaptureActions && !pixelPerfectCameraEnabled) ||
+                   // offscreen camera rendering to a texture, we don't need a blit pass to resolve to screen
+                   colorTargetHandle.nameID == k_CameraTarget.nameID;
+
+            if (!cameraTargetResolved)
             {
                 m_FinalBlitPass.Setup(cameraTargetDescriptor, finalTargetHandle);
                 EnqueuePass(m_FinalBlitPass);
@@ -527,10 +545,7 @@ namespace UnityEngine.Rendering.Universal
             get => !IsGLDevice();
         }
 
-        internal override bool supportsNativeRenderPassRendergraphCompiler
-        {
-            get => !IsGLDevice(); // GLES and doesn't support MSAA resolve with the NRP API
-        }
+        internal override bool supportsNativeRenderPassRendergraphCompiler => true;
     }
 
 #if UNITY_EDITOR

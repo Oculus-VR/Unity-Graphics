@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using UnityEditor.Rendering.Analytics;
 using UnityEditor.UIElements;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -165,126 +167,13 @@ namespace UnityEditor.Rendering.HighDefinition
 
         #region UIELEMENT
 
-        class ToolbarRadio : UIElements.Toolbar, INotifyValueChanged<int>
-        {
-            [Obsolete("UxmlFactory is deprecated and will be removed. Use UxmlElementAttribute instead.", false)]
-            public new class UxmlFactory : UxmlFactory<ToolbarRadio, UxmlTraits> { }
-            [Obsolete("UxmlTraits is deprecated and will be removed. Use UxmlElementAttribute instead.", false)]
-            public new class UxmlTraits : Button.UxmlTraits { }
-
-            List<ToolbarToggle> radios = new List<ToolbarToggle>();
-
-            public new static readonly string ussClassName = "unity-toolbar-radio";
-
-            public int radioLength => radios.Count;
-
-            int m_Value;
-            public int value
-            {
-                get => m_Value;
-                set
-                {
-                    if (value == m_Value)
-                        return;
-
-                    if (panel != null)
-                    {
-                        using (ChangeEvent<int> evt = ChangeEvent<int>.GetPooled(m_Value, value))
-                        {
-                            evt.target = this;
-                            SetValueWithoutNotify(value);
-                            SendEvent(evt);
-                        }
-                    }
-                    else
-                    {
-                        SetValueWithoutNotify(value);
-                    }
-                }
-            }
-
-            public ToolbarRadio()
-            {
-                AddToClassList(ussClassName);
-            }
-
-            void AddRadio(string label = null, string tooltip = null)
-            {
-                var toggle = new ToolbarToggle()
-                {
-                    text = label,
-                    tooltip = tooltip
-                };
-                toggle.RegisterValueChangedCallback(InnerValueChanged(radioLength));
-                toggle.SetValueWithoutNotify(radioLength == 0);
-                if (radioLength == 0)
-                    toggle.AddToClassList("SelectedRadio");
-                radios.Add(toggle);
-                Add(toggle);
-                toggle.AddToClassList("Radio");
-            }
-
-            public void AddRadios((string label, string tooltip)[] tabs)
-            {
-                if (tabs.Length == 0)
-                    return;
-
-                if (radioLength > 0)
-                {
-                    radios[radioLength - 1].RemoveFromClassList("LastRadio");
-                }
-                foreach (var (label, tooltip) in tabs)
-                    AddRadio(label, tooltip);
-
-                radios[radioLength - 1].AddToClassList("LastRadio");
-            }
-
-            EventCallback<ChangeEvent<bool>> InnerValueChanged(int radioIndex)
-            {
-                return (ChangeEvent<bool> evt) =>
-                {
-                    if (radioIndex == m_Value)
-                    {
-                        if (!evt.newValue)
-                        {
-                            //cannot deselect in a radio
-                            radios[m_Value].RemoveFromClassList("SelectedRadio");
-                            radios[radioIndex].AddToClassList("SelectedRadio");
-                            radios[radioIndex].SetValueWithoutNotify(true);
-                        }
-                        else
-                            value = -1;
-                    }
-                    else
-                        value = radioIndex;
-                };
-            }
-
-            public void SetValueWithoutNotify(int newValue)
-            {
-                if (m_Value != newValue)
-                {
-                    if (newValue < 0 || newValue >= radioLength)
-                        throw new System.IndexOutOfRangeException();
-
-                    if (m_Value != newValue)
-                    {
-                        radios[m_Value].RemoveFromClassList("SelectedRadio");
-                        radios[newValue].AddToClassList("SelectedRadio");
-                        radios[newValue].SetValueWithoutNotify(true);
-                        m_Value = newValue;
-                    }
-                }
-            }
-        }
-
         abstract class VisualElementUpdatable : VisualElement
         {
-            protected Func<bool> m_Tester;
+            protected Func<Result> m_Tester;
             bool m_HaveFixer;
-            public bool currentStatus { get; private set; }
+            public Result currentStatus { get; private set; }
 
-            protected VisualElementUpdatable(Func<bool> tester, bool haveFixer)
+            protected VisualElementUpdatable(Func<Result> tester, bool haveFixer)
             {
                 m_Tester = tester;
                 m_HaveFixer = haveFixer;
@@ -292,37 +181,16 @@ namespace UnityEditor.Rendering.HighDefinition
 
             public virtual void CheckUpdate()
             {
-                bool wellConfigured = m_Tester();
-                if (wellConfigured ^ currentStatus)
-                {
-                    UpdateDisplay(wellConfigured, m_HaveFixer);
+                var wellConfigured = m_Tester();
+                if (wellConfigured != currentStatus)
                     currentStatus = wellConfigured;
-                }
+
+                UpdateDisplay(wellConfigured, m_HaveFixer);
             }
 
-            protected void Init() => UpdateDisplay(currentStatus, m_HaveFixer);
+            public void Init() => UpdateDisplay(currentStatus, m_HaveFixer);
 
-            protected abstract void UpdateDisplay(bool statusOK, bool haveFixer);
-        }
-
-        class HiddableUpdatableContainer : VisualElementUpdatable
-        {
-            public HiddableUpdatableContainer(Func<bool> tester, bool haveFixer = false) : base(tester, haveFixer) { }
-
-            public override void CheckUpdate()
-            {
-                base.CheckUpdate();
-                if (currentStatus)
-                {
-                    foreach (VisualElementUpdatable updatable in Children().Where(e => e is VisualElementUpdatable))
-                        updatable.CheckUpdate();
-                }
-            }
-
-            new public void Init() => base.Init();
-
-            protected override void UpdateDisplay(bool visible, bool haveFixer)
-                => style.display = visible ? DisplayStyle.Flex : DisplayStyle.None;
+            public abstract void UpdateDisplay(Result status, bool haveFixer);
         }
 
         class ConfigInfoLine : VisualElementUpdatable
@@ -334,160 +202,137 @@ namespace UnityEditor.Rendering.HighDefinition
 
             readonly bool m_VisibleStatus;
             readonly bool m_SkipErrorIcon;
-
-            public ConfigInfoLine(string label, string error, MessageType messageType, string resolverButtonLabel, Func<bool> tester, Action resolver, int indent = 0, bool visibleStatus = true, bool skipErrorIcon = false)
-                : base(tester, resolver != null)
+            private Image m_StatusOk;
+            private Image m_StatusKO;
+            private Image m_StatusPending;
+            private Button m_Resolver;
+            private HelpBox m_HelpBox;
+            public ConfigInfoLine(Entry entry)
+                : base(() => entry.check(), entry.fix != null)
             {
-                m_VisibleStatus = visibleStatus;
-                m_SkipErrorIcon = skipErrorIcon;
-                var testLabel = new Label(label)
+
+                m_VisibleStatus = entry.configStyle.messageType == MessageType.Error || entry.forceDisplayCheck;
+                m_SkipErrorIcon = entry.skipErrorIcon;
+                var testLabel = new Label(entry.configStyle.label)
                 {
-                    name = "TestLabel"
+                    name = "TestLabel",
+                    style =
+                    {
+                        paddingLeft = style.paddingLeft.value.value + entry.indent * Style.k_IndentStepSize
+                    }
                 };
-                var fixer = new Button(resolver)
+
+                var testRow = new VisualElement()
                 {
-                    text = resolverButtonLabel,
-                    name = "Resolver"
+                    name = "TestRow",
+                    style =
+                    {
+                        marginBottom = 2,
+                    }
                 };
-                var testRow = new VisualElement() { name = "TestRow" };
                 testRow.Add(testLabel);
-                if (m_VisibleStatus)
+
+                m_StatusOk = new Image()
                 {
-                    var statusOK = new Image()
+                    image = CoreEditorStyles.iconComplete,
+                    name = "StatusOK",
+                    style =
                     {
-                        image = CoreEditorStyles.iconComplete,
-                        name = "StatusOK",
-                        style =
-                        {
-                            height = 16,
-                            width = 16
-                        }
-                    };
-                    var statusKO = new Image()
+                        height = 16,
+                        width = 16
+                    }
+                };
+                m_StatusKO = new Image()
+                {
+                    image = CoreEditorStyles.iconFail,
+                    name = "StatusError",
+                    style =
                     {
-                        image = CoreEditorStyles.iconFail,
-                        name = "StatusError",
-                        style =
-                        {
-                            height = 16,
-                            width = 16
-                        }
-                    };
-                    testRow.Add(statusOK);
-                    testRow.Add(statusKO);
-                }
-                testRow.Add(fixer);
+                        height = 16,
+                        width = 16
+                    }
+                };
+                m_StatusPending = new Image()
+                {
+                    image = CoreEditorStyles.iconPending,
+                    name = "StatusPending",
+                    style =
+                    {
+                        height = 16,
+                        width = 16
+                    }
+                };
+                testRow.Add(m_StatusOk);
+                testRow.Add(m_StatusKO);
+                testRow.Add(m_StatusPending);
 
                 Add(testRow);
-                HelpBox.Kind kind;
-                switch (messageType)
+                var kind = entry.configStyle.messageType switch
                 {
-                    default:
-                    case MessageType.None: kind = HelpBox.Kind.None; break;
-                    case MessageType.Error: kind = HelpBox.Kind.Error; break;
-                    case MessageType.Warning: kind = HelpBox.Kind.Warning; break;
-                    case MessageType.Info: kind = HelpBox.Kind.Info; break;
-                }
-                Add(new HelpBox(kind, error));
+                    MessageType.Error => HelpBoxMessageType.Error,
+                    MessageType.Warning => HelpBoxMessageType.Warning,
+                    MessageType.Info => HelpBoxMessageType.Info,
+                    _ => HelpBoxMessageType.None,
+                };
 
-                testLabel.style.paddingLeft = style.paddingLeft.value.value + indent * Style.k_IndentStepSize;
+                string error = entry.configStyle.error;
+
+                // If it is necessary, append tht name of the current asset.
+                var hdrpAsset = HDRenderPipeline.currentAsset;
+                if (entry.displayAssetName && hdrpAsset != null)
+                {
+                    error += " (" + hdrpAsset.name + ").";
+                }
+
+                m_HelpBox = new HelpBox(error, kind);
+                m_HelpBox.Q<Label>().style.flexGrow = 1;
+
+                m_Resolver = new Button(() =>
+                {
+                    if (entry.fix != null)
+                    {
+                        string context = "{" + $"\"id\" : \"{entry.configStyle.label}\"" + "}";
+                        GraphicsToolUsageAnalytic.ActionPerformed<HDWizard>("Fix", new string[] { context });
+                        entry.fix.Invoke(false);
+                    }
+                })
+                {
+                    text = entry.configStyle.button,
+                    name = "Resolver",
+                    style =
+                    {
+                        position = Position.Relative,
+                    }
+                };
+
+                m_HelpBox.Add(m_Resolver);
+                Add(m_HelpBox);
 
                 Init();
             }
 
-            protected override void UpdateDisplay(bool statusOK, bool haveFixer)
+            public override void UpdateDisplay(Result status, bool haveFixer)
             {
-                if (!((hierarchy.parent as HiddableUpdatableContainer)?.currentStatus ?? true))
+                m_StatusOk.style.display = DisplayStyle.None;
+                m_StatusKO.style.display = DisplayStyle.None;
+                m_StatusPending.style.display = DisplayStyle.None;
+
+                if (m_VisibleStatus)
                 {
-                    if (m_VisibleStatus)
-                    {
-                        this.Q(name: "StatusOK").style.display = DisplayStyle.None;
-                        this.Q(name: "StatusError").style.display = DisplayStyle.None;
-                    }
-                    this.Q(name: "Resolver").style.display = DisplayStyle.None;
-                    this.Q(className: "HelpBox").style.display = DisplayStyle.None;
+                    m_StatusOk.style.display = status == Result.OK ? DisplayStyle.Flex : DisplayStyle.None;
+                    m_StatusPending.style.display = status == Result.Pending ? DisplayStyle.Flex : DisplayStyle.None;
+                    if (!m_SkipErrorIcon)
+                        m_StatusKO.style.display = status == Result.Failed ? DisplayStyle.Flex : DisplayStyle.None;
                 }
-                else
-                {
-                    if (m_VisibleStatus)
-                    {
-                        this.Q(name: "StatusOK").style.display = statusOK ? DisplayStyle.Flex : DisplayStyle.None;
-                        this.Q(name: "StatusError").style.display = !statusOK ? (m_SkipErrorIcon ? DisplayStyle.None : DisplayStyle.Flex) : DisplayStyle.None;
-                    }
-                    this.Q(name: "Resolver").style.display = statusOK || !haveFixer ? DisplayStyle.None : DisplayStyle.Flex;
-                    this.Q(className: "HelpBox").style.display = statusOK ? DisplayStyle.None : DisplayStyle.Flex;
-                }
-            }
-        }
 
-        class HelpBox : VisualElement
-        {
-            public enum Kind
-            {
-                None,
-                Info,
-                Warning,
-                Error
-            }
-
-            readonly Label label;
-            readonly Image icon;
-
-            public string text
-            {
-                get => label.text;
-                set => label.text = value;
-            }
-
-            Kind m_Kind = Kind.None;
-            public Kind kind
-            {
-                get => m_Kind;
-                set
-                {
-                    if (m_Kind != value)
-                    {
-                        m_Kind = value;
-
-                        string iconName;
-                        switch (kind)
-                        {
-                            default:
-                            case Kind.None:
-                                icon.style.display = DisplayStyle.None;
-                                return;
-                            case Kind.Info:
-                                iconName = "console.infoicon";
-                                break;
-                            case Kind.Warning:
-                                iconName = "console.warnicon";
-                                break;
-                            case Kind.Error:
-                                iconName = "console.erroricon";
-                                break;
-                        }
-                        icon.image = EditorGUIUtility.IconContent(iconName).image;
-                        icon.style.display = DisplayStyle.Flex;
-                    }
-                }
-            }
-
-            public HelpBox(Kind kind, string message)
-            {
-                this.label = new Label(message);
-                icon = new Image();
-
-                AddToClassList("HelpBox");
-                Add(icon);
-                Add(this.label);
-
-                this.kind = kind;
+                m_Resolver.style.display = status != Result.Failed || !haveFixer ? DisplayStyle.None : DisplayStyle.Flex;
+                m_HelpBox.style.display = status != Result.Failed ? DisplayStyle.None : DisplayStyle.Flex;
             }
         }
 
         class FixAllButton : VisualElementUpdatable
         {
-            public FixAllButton(string label, Func<bool> tester, Action resolver)
+            public FixAllButton(string label, Func<Result> tester, Action resolver)
                 : base(tester, resolver != null)
             {
                 Add(new Button(resolver)
@@ -496,22 +341,23 @@ namespace UnityEditor.Rendering.HighDefinition
                     name = "FixAll"
                 });
 
+                AddToClassList("FixAllButton");
+
                 Init();
             }
 
-            protected override void UpdateDisplay(bool statusOK, bool haveFixer)
-                => this.Q(name: "FixAll").style.display = statusOK ? DisplayStyle.None : DisplayStyle.Flex;
+            public override void UpdateDisplay(Result status, bool haveFixer)
+                => this.Q(name: "FixAll").style.display = status != Result.Failed ? DisplayStyle.None : DisplayStyle.Flex;
         }
 
         class ScopeBox : VisualElementUpdatable
         {
             readonly Label label;
-            bool initTitleBackground;
 
             public ScopeBox(string title) : base(null, false)
             {
                 label = new Label(title);
-                label.name = "Title";
+                label.AddToClassList("ScopeBoxLabel");
                 AddToClassList("ScopeBox");
                 Add(label);
             }
@@ -522,8 +368,98 @@ namespace UnityEditor.Rendering.HighDefinition
                     updatable.CheckUpdate();
             }
 
-            protected override void UpdateDisplay(bool statusOK, bool haveFixer)
-            { }
+            public override void UpdateDisplay(Result status, bool haveFixer)
+            {
+                bool hasChildren = false;
+                foreach (VisualElementUpdatable updatable in Children().Where(e => e is VisualElementUpdatable))
+                {
+                    updatable.UpdateDisplay(status, haveFixer);
+                    hasChildren = true;
+                }
+
+                style.display = hasChildren ? DisplayStyle.Flex : DisplayStyle.None;
+            }
+        }
+
+        class InclusiveModeElement : VisualElementUpdatable
+        {
+            private InclusiveMode m_Mode;
+            private ScopeBox m_GlobalScope;
+            private ScopeBox m_CurrentScope;
+            private FixAllButton m_FixAllButton;
+            private HDWizard m_Wizard;
+
+            private bool m_AvailableInCurrentPlatform = true;
+
+            public InclusiveModeElement(InclusiveMode mode, string label, string tooltip, HDWizard wizard)
+                : base(null, false)
+            {
+                m_Mode = mode;
+                m_Wizard = wizard;
+
+                var foldout = new HeaderFoldout
+                {
+                    text = label,
+                    tooltip = tooltip,
+                    documentationURL = DocumentationInfo.GetPageLink(Documentation.packageName, $"Render-Pipeline-Wizard", $"{mode}Tab")
+                };
+
+                m_FixAllButton = new FixAllButton(
+                    Style.resolveAll,
+                    () => m_Wizard.IsAFixAvailableInScope(m_Mode) ? Result.OK : Result.Failed,
+                    () => m_Wizard.FixAllEntryInScope(m_Mode));
+
+                bool userOnWindows = RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
+
+                if (userOnWindows)
+                    foldout.Add(m_FixAllButton);
+
+                m_GlobalScope = new ScopeBox(Style.global);
+                foldout.Add(m_GlobalScope);
+
+                m_CurrentScope = new ScopeBox(Style.currentQuality);
+                foldout.Add(m_CurrentScope);
+
+                if (!userOnWindows)
+                {
+                    // VR and DXR are only supported on windows
+                    if (m_Mode == InclusiveMode.VR || m_Mode == InclusiveMode.DXROptional)
+                    {
+                        m_AvailableInCurrentPlatform = false;
+                        foldout.Add(new HelpBox("This section is not available in your current OS platform.", HelpBoxMessageType.Warning));
+                    }
+                }
+
+                foldout.value = HDUserSettings.IsOpen(mode);
+                foldout.RegisterValueChangedCallback(evt => HDUserSettings.SetOpen(mode, evt.newValue));
+
+                Add(foldout);
+            }
+
+            public void Add(Entry entry, ConfigInfoLine configLine)
+            {
+                if (!m_AvailableInCurrentPlatform || entry.inclusiveScope != m_Mode)
+                    return;
+
+                if (entry.scope == QualityScope.Global)
+                    m_GlobalScope.Add(configLine);
+                else
+                    m_CurrentScope.Add(configLine);
+            }
+
+            public override void CheckUpdate()
+            {
+                m_GlobalScope.CheckUpdate();
+                m_CurrentScope.CheckUpdate();
+                m_FixAllButton.CheckUpdate();
+            }
+
+            public override void UpdateDisplay(Result status, bool haveFixer)
+            {
+                m_GlobalScope.UpdateDisplay(status, haveFixer);
+                m_CurrentScope.UpdateDisplay(status, haveFixer);
+                m_FixAllButton.UpdateDisplay(status, haveFixer);
+            }
         }
 
         #endregion

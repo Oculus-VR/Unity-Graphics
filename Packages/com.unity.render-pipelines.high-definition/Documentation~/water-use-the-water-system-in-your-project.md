@@ -1,5 +1,5 @@
 
-# Use the Water System in your Project
+# Use the water system in your Project
 
 This page provides an overview of the basic workflow to include a water surface simulation in your project, along with three configuration examples that may help you better understand how to adjust water properties to meet your needs.
 
@@ -24,10 +24,7 @@ This is especially important when you upgrade your project from an earlier versi
 1. Select a global Volume in your scene, such as the **Sky and Fog Volume**.
 2. Click **Add Override**.
 3. Select **Lighting** > **Water Rendering**.
-4. Set the Water **Enable** property to True.
-
-![](Images/WaterSystem-EnableTrue.png)
-
+4. In the **Water Rendering** component, set **State** to **Enabled**.
 
 This is especially important when you upgrade your project from an earlier version of Unity, because water is inactive by default. If your project originates in HDRP 14 (Unity 2022.2) or later, the water implementation may work even if you only enable it in the **Quality** settings.
 
@@ -95,4 +92,4 @@ To simulate a clean outdoor swimming pool on a clear day with little wind:
 
 
 ## Additional resources
-* <a href="settings-and-properties-related-to-the-water-system.md">Settings and properties related to the Water System</a>
+* <a href="settings-and-properties-related-to-the-water-system.md">Settings and properties related to the water system</a>

@@ -650,8 +650,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 UniversalStructFields.Varyings.sh,
                 UniversalStructFields.Varyings.probeOcclusion,
                 UniversalStructFields.Varyings.fogFactorAndVertexLight, // fog and vertex lighting, vert input is dependency
-                // todo
-                //UniversalStructFields.Varyings.shadowCoord,             // shadow coord, vert input is dependency
+                UniversalStructFields.Varyings.shadowCoord,             // shadow coord, vert input is dependency
             };
 
             public static FieldCollection GBufferProjector = new FieldCollection()
@@ -661,8 +660,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 UniversalStructFields.Varyings.dynamicLightmapUV,
                 UniversalStructFields.Varyings.sh,
                 UniversalStructFields.Varyings.probeOcclusion,
-                // todo
-                //UniversalStructFields.Varyings.shadowCoord,             // shadow coord, vert input is dependency
+                UniversalStructFields.Varyings.shadowCoord,             // shadow coord, vert input is dependency
             };
 
             public static FieldCollection ScreenSpaceMesh = new FieldCollection()
@@ -680,8 +678,7 @@ namespace UnityEditor.Rendering.Universal.ShaderGraph
                 UniversalStructFields.Varyings.sh,
                 UniversalStructFields.Varyings.probeOcclusion,
                 UniversalStructFields.Varyings.fogFactorAndVertexLight, // fog and vertex lighting, vert input is dependency
-                // todo
-                //UniversalStructFields.Varyings.shadowCoord,             // shadow coord, vert input is dependency
+                UniversalStructFields.Varyings.shadowCoord,             // shadow coord, vert input is dependency
             };
         }
         #endregion

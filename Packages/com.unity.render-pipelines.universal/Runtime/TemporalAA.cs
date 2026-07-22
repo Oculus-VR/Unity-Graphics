@@ -190,6 +190,13 @@ namespace UnityEngine.Rendering.Universal
         /// <param name="allowScaling">true if the jitter function's output supports scaling</param>
         internal delegate void JitterFunc(int frameIndex, out Vector2 jitter, out bool allowScaling);
 
+        internal static int CalculateTaaFrameIndex(ref Settings settings)
+        {
+            // URP supports adding an offset value to the TAA frame index for testing determinism.
+            int taaFrameCountOffset = settings.jitterFrameCountOffset;
+            return Time.frameCount + taaFrameCountOffset;
+        }
+
         internal static Matrix4x4 CalculateJitterMatrix(UniversalCameraData cameraData, JitterFunc jitterFunc)
         {
             Matrix4x4 jitterMat = Matrix4x4.identity;
@@ -197,8 +204,7 @@ namespace UnityEngine.Rendering.Universal
             bool isJitter = cameraData.IsTemporalAAEnabled();
             if (isJitter)
             {
-                int taaFrameCountOffset = cameraData.taaSettings.jitterFrameCountOffset;
-                int taaFrameIndex = Time.frameCount + taaFrameCountOffset;
+                int taaFrameIndex = CalculateTaaFrameIndex(ref cameraData.taaSettings);
 
                 float actualWidth = cameraData.cameraTargetDescriptor.width;
                 float actualHeight = cameraData.cameraTargetDescriptor.height;
@@ -251,16 +257,18 @@ namespace UnityEngine.Rendering.Universal
 
         private static readonly float[] taaFilterWeights = new float[taaFilterOffsets.Length + 1];
 
-        internal static float[] CalculateFilterWeights(float jitterScale)
+        internal static float[] CalculateFilterWeights(ref Settings settings)
         {
+            int taaFrameIndex = CalculateTaaFrameIndex(ref settings);
+
             // Based on HDRP
             // Precompute weights used for the Blackman-Harris filter.
             float totalWeight = 0;
             for (int i = 0; i < 9; ++i)
             {
                 // The internal jitter function used by TAA always allows scaling
-                CalculateJitter(Time.frameCount, out var jitter, out var _);
-                jitter *= jitterScale;
+                CalculateJitter(taaFrameIndex, out var jitter, out var _);
+                jitter *= settings.jitterScale;
 
                 // The rendered frame (pixel grid) is already jittered.
                 // We sample 3x3 neighbors with int offsets, but weight the samples
@@ -303,7 +311,7 @@ namespace UnityEngine.Rendering.Universal
             taaDesc.mipCount = 0;
             taaDesc.graphicsFormat = cameraDesc.graphicsFormat;
             taaDesc.sRGB = false;
-            taaDesc.depthBufferBits = 0;
+            taaDesc.depthStencilFormat = GraphicsFormat.None;
             taaDesc.dimension = cameraDesc.dimension;
             taaDesc.vrUsage = cameraDesc.vrUsage;
             taaDesc.memoryless = RenderTextureMemoryless.None;
@@ -329,47 +337,47 @@ namespace UnityEngine.Rendering.Universal
 
         static uint s_warnCounter = 0;
 
-        internal static string ValidateAndWarn(UniversalCameraData cameraData)
+        internal static string ValidateAndWarn(UniversalCameraData cameraData, bool isSTPRequested = false)
         {
-            string warning = null;
+            string reasonWarning = null;
 
-            if(warning == null && !cameraData.postProcessEnabled)
-                warning = "Disabling TAA because camera has post-processing disabled.";
+            if(reasonWarning == null && !cameraData.postProcessEnabled)
+                reasonWarning = "because camera has post-processing disabled.";
 
             if (cameraData.taaHistory == null)
             {
-                warning = "Disabling TAA due to invalid persistent data.";
+                reasonWarning = "due to invalid persistent data.";
             }
 
-            if (warning == null && cameraData.cameraTargetDescriptor.msaaSamples != 1)
+            if (reasonWarning == null && cameraData.cameraTargetDescriptor.msaaSamples != 1)
             {
                 if (cameraData.xr != null && cameraData.xr.enabled)
-                    warning = "Disabling TAA because MSAA is on. MSAA must be disabled globally for all cameras in XR mode.";
+                    reasonWarning = "because MSAA is on. MSAA must be disabled globally for all cameras in XR mode.";
                 else
-                    warning = "Disabling TAA because MSAA is on. Turn MSAA off on the camera or current URP Asset to enable TAA.";
+                    reasonWarning = "because MSAA is on. Turn MSAA off on the camera or current URP Asset.";
             }
 
-            if(warning == null && cameraData.camera.TryGetComponent<UniversalAdditionalCameraData>(out var additionalCameraData))
+            if(reasonWarning == null && cameraData.camera.TryGetComponent<UniversalAdditionalCameraData>(out var additionalCameraData))
             {
                 if (additionalCameraData.renderType == CameraRenderType.Overlay ||
                     additionalCameraData.cameraStack.Count > 0)
                 {
-                    warning = "Disabling TAA because camera is stacked.";
+                    reasonWarning = "because camera is stacked.";
                 }
             }
 
-            if (warning == null && cameraData.camera.allowDynamicResolution)
-                warning = "Disabling TAA because camera has dynamic resolution enabled. You can use a constant render scale instead.";
+            if (reasonWarning == null && cameraData.camera.allowDynamicResolution)
+                reasonWarning = "because camera has dynamic resolution enabled. You can use a constant render scale instead.";
 
-            if(warning == null && !cameraData.renderer.SupportsMotionVectors())
-                warning = "Disabling TAA because the renderer does not implement motion vectors. Motion vectors are required for TAA.";
+            if(reasonWarning == null && !cameraData.renderer.SupportsMotionVectors())
+                reasonWarning = "because the renderer does not implement motion vectors. Motion vectors are required.";
 
             const int warningThrottleFrames = 60 * 1; // 60 FPS * 1 sec
             if (s_warnCounter % warningThrottleFrames == 0)
-                Debug.LogWarning(warning);
+                Debug.LogWarning("Disabling TAA " + (isSTPRequested ? "and STP " : "") + reasonWarning);
             s_warnCounter++;
 
-            return warning;
+            return reasonWarning;
         }
 
         internal static void ExecutePass(CommandBuffer cmd, Material taaMaterial, ref CameraData cameraData, RTHandle source, RTHandle destination, RenderTexture motionVectors)
@@ -404,7 +412,7 @@ namespace UnityEngine.Rendering.Universal
                 taaMaterial.SetFloat(ShaderConstants._TaaVarianceClampScale, taa.varianceClampScale);
 
                 if (taa.quality == TemporalAAQuality.VeryHigh)
-                    taaMaterial.SetFloatArray(ShaderConstants._TaaFilterWeights, CalculateFilterWeights(taa.jitterScale));
+                    taaMaterial.SetFloatArray(ShaderConstants._TaaFilterWeights, CalculateFilterWeights(ref taa));
 
                 switch (taaHistoryAccumulationTex.rt.graphicsFormat)
                 {
@@ -493,7 +501,7 @@ namespace UnityEngine.Rendering.Universal
                 passData.taaVarianceClampScale = taa.varianceClampScale;
 
                 if (taa.quality == TemporalAAQuality.VeryHigh)
-                    passData.taaFilterWeights = CalculateFilterWeights(taa.jitterScale);
+                    passData.taaFilterWeights = CalculateFilterWeights(ref taa);
                 else
                     passData.taaFilterWeights = null;
 

@@ -133,6 +133,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             rastercmd.m_ExecutingPass = context.executingPass;
             cmd = rastercmd;
         }
+
+        public int CurrentRGPassId() {
+            return cmd.m_ExecutingPass.index;
+        }
     }
 
     /// <summary>
@@ -225,7 +229,6 @@ namespace UnityEngine.Rendering.RenderGraphModule
     /// <param name="renderGraphContext">Global Render Graph context.</param>
     [MovedFrom(true, "UnityEngine.Experimental.Rendering.RenderGraphModule", "UnityEngine.Rendering.RenderGraphModule")]
     public delegate void BaseRenderFunc<PassData, ContextType>(PassData data, ContextType renderGraphContext) where PassData : class, new();
-
 
     /// <summary>
     /// This class is the main entry point of the Render Graph system.
@@ -958,10 +961,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             [CallerLineNumber] int line = 0) where PassData : class, new()
 #endif
         {
-            AddPassDebugMetadata(passName, file, line);
-
             var renderPass = m_RenderGraphPool.Get<RasterRenderGraphPass<PassData>>();
             renderPass.Initialize(m_RenderPasses.Count, m_RenderGraphPool.Get<PassData>(), passName, RenderGraphPassType.Raster, sampler);
+
+            AddPassDebugMetadata(renderPass, file, line);
 
             passData = renderPass.data;
 
@@ -1005,10 +1008,10 @@ namespace UnityEngine.Rendering.RenderGraphModule
             [CallerLineNumber] int line = 0) where PassData : class, new()
 #endif
         {
-            AddPassDebugMetadata(passName, file, line);
-
             var renderPass = m_RenderGraphPool.Get<ComputeRenderGraphPass<PassData>>();
             renderPass.Initialize(m_RenderPasses.Count, m_RenderGraphPool.Get<PassData>(), passName, RenderGraphPassType.Compute, sampler);
+
+            AddPassDebugMetadata(renderPass, file, line);
 
             passData = renderPass.data;
 
@@ -1066,11 +1069,11 @@ namespace UnityEngine.Rendering.RenderGraphModule
             [CallerLineNumber] int line = 0) where PassData : class, new()
 #endif
         {
-            AddPassDebugMetadata(passName, file, line);
-
             var renderPass = m_RenderGraphPool.Get<UnsafeRenderGraphPass<PassData>>();
             renderPass.Initialize(m_RenderPasses.Count, m_RenderGraphPool.Get<PassData>(), passName, RenderGraphPassType.Unsafe, sampler);
             renderPass.AllowGlobalState(true);
+
+            AddPassDebugMetadata(renderPass, file, line);
 
             passData = renderPass.data;
 
@@ -1096,11 +1099,11 @@ namespace UnityEngine.Rendering.RenderGraphModule
             [CallerLineNumber] int line = 0) where PassData : class, new()
 #endif
         {
-            AddPassDebugMetadata(passName, file, line);
-
-            var renderPass = m_RenderGraphPool.Get<RenderGraphPass<PassData>>();
+            var renderPass = m_RenderGraphPool.Get<RenderGraphPass<PassData>>();          
             renderPass.Initialize(m_RenderPasses.Count, m_RenderGraphPool.Get<PassData>(), passName, RenderGraphPassType.Legacy, sampler);
             renderPass.AllowGlobalState(true);// Old pass types allow global state by default as HDRP relies on it
+
+            AddPassDebugMetadata(renderPass, file, line);
 
             passData = renderPass.data;
 
@@ -1234,10 +1237,8 @@ namespace UnityEngine.Rendering.RenderGraphModule
                     else
                         ExecuteRenderGraph();
 
-#if RENDER_GRAPH_CLEAR_GLOBALS
                     // Clear the shader bindings for all global textures to make sure bindings don't leak outside the graph
                     ClearGlobalBindings();
-#endif
                 }
             }
             catch (Exception e)
@@ -2474,6 +2475,7 @@ namespace UnityEngine.Rendering.RenderGraphModule
                             textureData.depth = renderTargetInfo.volumeDepth;
                             textureData.samples = renderTargetInfo.msaaSamples;
                             textureData.format = renderTargetInfo.format;
+                            textureData.bindMS = renderTargetInfo.bindMS;
 
                             newResource.textureData = textureData;
                         }

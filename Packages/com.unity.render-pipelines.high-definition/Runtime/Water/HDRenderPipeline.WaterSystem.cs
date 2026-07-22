@@ -440,8 +440,8 @@ namespace UnityEngine.Rendering.HighDefinition
                 float triangleSize = (1 << lod) * cb._GridSize.x / WaterConsts.k_WaterTessellatedMeshResolution;
                 // align grid size on region extent
                 float2 optimalTriangleSize = new float2(
-                    extent.x / Mathf.Max(Mathf.Floor(extent.x / triangleSize), 1),
-                    extent.y / Mathf.Max(Mathf.Floor(extent.y / triangleSize), 1));
+                    extent.x / Mathf.Max(Mathf.Ceil(extent.x / triangleSize), 1),
+                    extent.y / Mathf.Max(Mathf.Ceil(extent.y / triangleSize), 1));
                 cb._GridSize = optimalTriangleSize * cb._GridSize.x / triangleSize;
                 // align grid pos on one region corner
                 float2 corner = -(cb._PatchOffset + 0.5f * cb._GridSize) - cb._RegionExtent;
@@ -1023,13 +1023,13 @@ namespace UnityEngine.Rendering.HighDefinition
                 cameraHeight = renderGraph.ImportBuffer(m_WaterCameraHeightBuffer),
 
                 waterGBuffer0 = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { colorFormat = GraphicsFormat.B10G11R11_UFloatPack32, enableRandomWrite = true, name = "Water GBuffer 0", fallBackToBlackTexture = true }),
+                { format = GraphicsFormat.B10G11R11_UFloatPack32, enableRandomWrite = true, name = "Water GBuffer 0", fallBackToBlackTexture = true }),
                 waterGBuffer1 = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { colorFormat = GraphicsFormat.R8G8B8A8_UNorm, enableRandomWrite = true, name = "Water GBuffer 1", fallBackToBlackTexture = true }),
+                { format = GraphicsFormat.R8G8B8A8_UNorm, enableRandomWrite = true, name = "Water GBuffer 1", fallBackToBlackTexture = true }),
                 waterGBuffer2 = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { colorFormat = GraphicsFormat.R8G8B8A8_UNorm, enableRandomWrite = true, name = "Water GBuffer 2", fallBackToBlackTexture = true }),
+                { format = GraphicsFormat.R8G8B8A8_UNorm, enableRandomWrite = true, name = "Water GBuffer 2", fallBackToBlackTexture = true }),
                 waterGBuffer3 = renderGraph.CreateTexture(new TextureDesc(Vector2.one, true, true)
-                { colorFormat = GraphicsFormat.R8G8B8A8_UNorm, enableRandomWrite = true, name = "Water GBuffer 3", fallBackToBlackTexture = true }),
+                { format = GraphicsFormat.R8G8B8A8_UNorm, enableRandomWrite = true, name = "Water GBuffer 3", fallBackToBlackTexture = true }),
 
                 indirectBuffer = renderGraph.CreateBuffer(new BufferDesc((WaterConsts.k_NumWaterVariants + 1) * 3, sizeof(uint), GraphicsBuffer.Target.IndirectArguments) { name = "Water Deferred Indirect" }),
                 tileBuffer = renderGraph.CreateBuffer(new BufferDesc((WaterConsts.k_NumWaterVariants + 1) * numTiles * hdCamera.viewCount, sizeof(uint)) { name = "Water Deferred Tiles" })

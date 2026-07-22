@@ -181,6 +181,13 @@ namespace UnityEngine.Rendering.Universal
         // Store locally the value on the instance due as the Render Pipeline Asset data might change before the disposal of the asset, making some APV Resources leak.
         internal bool apvIsEnabled = false;
 
+        // In some specific cases, we modify Screen.msaaSamples to reduce GPU bandwidth
+        internal static bool canOptimizeScreenMSAASamples { get; private set; }
+
+        // For iOS and macOS players, the Screen API MSAA samples change request is only applied in the next frame (UUM-42825)
+        // To adress this, we need to store here the MSAA sample count at the beginning of the frame
+        internal static int startFrameScreenMSAASamples { get; private set; }
+
         // Reference to the asset associated with the pipeline.
         // When a pipeline asset is switched in `GraphicsSettings`, the `UniversalRenderPipelineCore.asset` member
         // becomes unreliable for the purpose of pipeline and renderer clean-up in the `Dispose` call from
@@ -418,6 +425,9 @@ namespace UnityEngine.Rendering.Universal
 #endif
             // For XR, HDR and no camera cases, UI Overlay ownership must be enforced
             AdjustUIOverlayOwnership(cameraCount);
+            
+            // Bandwidth optimization with Render Graph in some circumstances
+            SetupScreenMSAASamplesState(cameraCount);
 
             GPUResidentDrawer.ReinitializeIfNeeded();
 
@@ -438,7 +448,6 @@ namespace UnityEngine.Rendering.Universal
                 // This is for texture streaming
                 UniversalRenderPipelineDebugDisplaySettings.Instance.UpdateMaterials();
 #endif
-
                 // URP uses the camera's allowDynamicResolution flag to decide if useDynamicScale should be enabled for camera render targets.
                 // However, the RTHandle system has an additional setting that controls if useDynamicScale will be set for render targets allocated via RTHandles.
                 // In order to avoid issues at runtime, we must make the RTHandle system setting consistent with URP's logic. URP already synchronizes the setting
@@ -1411,12 +1420,12 @@ namespace UnityEngine.Rendering.Universal
             }
             else if ((cameraData.renderScale < 1.0f) || (!isScenePreviewOrReflectionCamera && ((cameraData.upscalingFilter == ImageUpscalingFilter.FSR) || (cameraData.upscalingFilter == ImageUpscalingFilter.STP))))
             {
-                // When certain upscalers are enabled, we still consider 100% render scale an upscaling operation. (This behavior is only intended for game view cameras)
+                // When certain upscalers are requested, we still consider 100% render scale an upscaling operation. (This behavior is only intended for game view cameras)
                 // This allows us to run the upscaling shader passes all the time since they improve visual quality even at 100% scale.
 
                 cameraData.imageScalingMode = ImageScalingMode.Upscaling;
 
-                // When STP is enabled, we force temporal anti-aliasing on since it's a prerequisite.
+                // When STP is requested, we force temporal anti-aliasing on since it's a prerequisite.
                 if (cameraData.upscalingFilter == ImageUpscalingFilter.STP)
                 {
                     cameraData.antialiasing = AntialiasingMode.TemporalAntiAliasing;
@@ -1497,7 +1506,6 @@ namespace UnityEngine.Rendering.Universal
             }
 
             cameraData.renderer = renderer;
-            cameraData.requiresDepthTexture |= isSceneViewCamera;
             cameraData.postProcessingRequiresDepthTexture = CheckPostProcessForDepth(cameraData);
             cameraData.resolveFinalTarget = resolveFinalTarget;
 
@@ -1863,7 +1871,7 @@ namespace UnityEngine.Rendering.Universal
                 xrMultipassEnabled = cameraData.xr.enabled && !cameraData.xr.singlePassEnabled;
 #endif
                 bool allocation;
-                if (cameraData.IsSTPEnabled())
+                if (cameraData.IsSTPRequested())
                 {
                     Debug.Assert(cameraData.stpHistory != null);
 
@@ -1886,9 +1894,9 @@ namespace UnityEngine.Rendering.Universal
             {
                 cameraData.taaHistory.Reset();   // TAA GPUResources is explicitly released if the feature is turned off. We could refactor this to rely on the type request and the "gc" only.
 
-                // In the case where STP is enabled, but TAA gets disabled for various reasons, we should release the STP history resources
-                if (cameraData.IsSTPEnabled())
-                    cameraData.stpHistory.Reset();
+                // In the case where STP is requested, but TAA gets disabled for various reasons so STP is disabled, we should release the STP history resources
+                if (cameraData.IsSTPRequested())
+                    cameraData.stpHistory?.Reset();
             }
         }
 
@@ -2389,6 +2397,14 @@ namespace UnityEngine.Rendering.Universal
                 // by setting rendersUIOverlay (public API) to false in a callback added to RenderPipelineManager.beginContextRendering
                 SupportedRenderingFeatures.active.rendersUIOverlay = true;
             }
+        }
+
+        private static void SetupScreenMSAASamplesState(int cameraCount)
+        {
+            // Enable potential bandwidth optimization only when rendering a single base camera
+            canOptimizeScreenMSAASamples = (cameraCount == 1);
+            // Save ScreenMSAASamples value at beginning of the frame, useful for iOS/macOS
+            startFrameScreenMSAASamples = Screen.msaaSamples;
         }
     }
 }

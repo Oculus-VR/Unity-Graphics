@@ -507,8 +507,6 @@ namespace UnityEditor.Rendering.HighDefinition
 
         public override void OnInspectorGUI()
         {
-            HDEditorUtils.EnsureFrameSetting(FrameSettingsField.VolumetricClouds, "Volumetric Clouds");
-
             // This whole editor has nothing to display if the SSR feature is not supported
             HDRenderPipelineAsset currentAsset = HDRenderPipeline.currentAsset;
             bool notSupported = currentAsset != null && !currentAsset.currentPlatformRenderPipelineSettings.supportVolumetricClouds;
@@ -525,7 +523,7 @@ namespace UnityEditor.Rendering.HighDefinition
             PropertyField(m_Enable, EditorGUIUtility.TrTextContent("State"));
 
             if (m_Enable.value.boolValue && !notSupported)
-                HDEditorUtils.EnsureFrameSetting(FrameSettingsField.VolumetricClouds, "Volumetric Clouds");
+                HDEditorUtils.EnsureFrameSetting(FrameSettingsField.VolumetricClouds);
 
             EditorGUILayout.Space();
 

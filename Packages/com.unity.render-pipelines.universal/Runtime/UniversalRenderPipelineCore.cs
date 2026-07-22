@@ -1061,6 +1061,7 @@ namespace UnityEngine.Rendering.Universal
             ShaderGlobalKeywords.SoftShadows = GlobalKeyword.Create(ShaderKeywordStrings.SoftShadows);
             ShaderGlobalKeywords.SoftShadowsLow = GlobalKeyword.Create(ShaderKeywordStrings.SoftShadowsLow);
             ShaderGlobalKeywords.SoftShadowsMedium = GlobalKeyword.Create(ShaderKeywordStrings.SoftShadowsMedium);
+            ShaderGlobalKeywords.SoftShadowsHigh = GlobalKeyword.Create(ShaderKeywordStrings.SoftShadowsHigh);
             ShaderGlobalKeywords.MixedLightingSubtractive = GlobalKeyword.Create(ShaderKeywordStrings.MixedLightingSubtractive);
             ShaderGlobalKeywords.LightmapShadowMixing = GlobalKeyword.Create(ShaderKeywordStrings.LightmapShadowMixing);
             ShaderGlobalKeywords.ShadowsShadowMask = GlobalKeyword.Create(ShaderKeywordStrings.ShadowsShadowMask);
@@ -1207,6 +1208,15 @@ namespace UnityEngine.Rendering.Universal
         /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 8 per pixel sample count. </summary>
         public const string DepthMsaa8 = "_DEPTH_MSAA_8";
 
+        /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 2 per pixel sample count. </summary>
+        public const string Msaa2 = "_MSAA_2";
+
+        /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 4 per pixel sample count. </summary>
+        public const string Msaa4 = "_MSAA_4";
+
+        /// <summary> Keyword used for Multi Sampling Anti-Aliasing (MSAA) with 8 per pixel sample count. </summary>
+        public const string Msaa8 = "_MSAA_8";
+
         /// <summary> Keyword used for Linear to SRGB conversions. </summary>
         public const string LinearToSRGBConversion = "_LINEAR_TO_SRGB_CONVERSION";
 
@@ -1263,9 +1273,6 @@ namespace UnityEngine.Rendering.Universal
 
         /// <summary> Keyword used for high quality Bloom dirt. </summary>
         public const string BloomHQDirt = "_BLOOM_HQ_DIRT";
-
-        /// <summary> Keyword used for RGBM format for Bloom. </summary>
-        public const string UseRGBM = "_USE_RGBM";
 
         /// <summary> Keyword used for Distortion. </summary>
         public const string Distortion = "_DISTORTION";

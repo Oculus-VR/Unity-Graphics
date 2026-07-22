@@ -520,6 +520,8 @@ namespace UnityEngine.Rendering.HighDefinition
             m_ConstantBuffer._CelestialLightCount = s_CelestialLightCount;
             m_ConstantBuffer._CelestialBodyCount = s_CelestialBodyCount;
             m_ConstantBuffer._CelestialLightExposure = s_CelestialLightExposure;
+            if (builtinParams.volumetricClouds != null)
+                m_ConstantBuffer._VolumetricCloudsBottomAltitude = builtinParams.volumetricClouds.bottomAltitude.value;
 
             ConstantBuffer.PushGlobal(cmd, m_ConstantBuffer, m_ShaderVariablesPhysicallyBasedSkyID);
         }
@@ -560,7 +562,7 @@ namespace UnityEngine.Rendering.HighDefinition
                 cameraPosPS -= (upAltitude.w - 1.0f) * (Vector3)upAltitude.xyz;
 
             bool simpleEarthMode = pbrSky.type.value == PhysicallyBasedSkyModel.EarthSimple;
-            bool customMaterial = pbrSky.renderingMode.value == PhysicallyBasedSky.RenderingMode.Material && pbrSky.material.value != null;
+            bool customMaterial = pbrSky.renderingMode.value == PhysicallyBasedSky.RenderingMode.Material && pbrSky.material.value != null && pbrSky.material.overrideState;
             var material = customMaterial ? pbrSky.material.value : m_PbrSkyMaterial;
 
             // Common material properties

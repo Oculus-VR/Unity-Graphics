@@ -1,0 +1,28 @@
+pluginManagement {
+    repositories {
+        **ARTIFACTORYREPOSITORY**
+        maven { url 'https://maven.thefacebook.com/nexus/content/repositories/maven.google.com' }
+        maven { url 'https://maven.thefacebook.com/nexus/content/repositories/jcenter.bintray.com' }
+        maven {
+            url 'D:/full-fbsource/unity_sample_games'
+        }
+        maven {
+            url 'C:/cygwin/data/sandcastle/boxes/trunk-hg-full-fbsource/unity_sample_games'
+        }
+    }
+}
+
+include ':launcher', ':unityLibrary'
+**INCLUDES**
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories {
+        **ARTIFACTORYREPOSITORY**
+        maven { url 'https://maven.thefacebook.com/nexus/content/repositories/maven.google.com' }
+        maven { url 'https://maven.thefacebook.com/nexus/content/repositories/jcenter.bintray.com' }
+        flatDir {
+            dirs "${project(':unityLibrary').projectDir}/libs"
+        }
+    }
+}
