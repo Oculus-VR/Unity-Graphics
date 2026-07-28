@@ -29,7 +29,7 @@ namespace UnityEngine.Rendering.Sampling
         {
             if ((resourceBitmask & (uint)ResourceType.BlueNoiseTextures) != 0)
             {
-                const string path = "Packages/com.unity.rendering.light-transport/Runtime/";
+                const string path = "Packages/com.unity.render-pipelines.core/Runtime/";
 
                 m_SobolScramblingTile = AssetDatabase.LoadAssetAtPath<Texture2D>(path + "Sampling/Textures/SobolBlueNoise/ScramblingTile256SPP.png");
                 m_SobolRankingTile = AssetDatabase.LoadAssetAtPath<Texture2D>(path + "Sampling/Textures/SobolBlueNoise/RankingTile256SPP.png");
@@ -66,5 +66,3 @@ namespace UnityEngine.Rendering.Sampling
 
     }
 }
-
-

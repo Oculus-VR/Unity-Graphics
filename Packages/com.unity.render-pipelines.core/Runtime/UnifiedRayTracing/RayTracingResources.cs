@@ -22,7 +22,7 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
 #if UNITY_EDITOR
         public void Load()
         {
-            const string path = "Packages/com.unity.rendering.light-transport/Runtime/";
+            const string path = "Packages/com.unity.render-pipelines.core/Runtime/";
 
             geometryPoolKernels        = AssetDatabase.LoadAssetAtPath<ComputeShader>(path + "UnifiedRayTracing/Common/GeometryPool/GeometryPoolKernels.compute");
             copyBuffer                 = AssetDatabase.LoadAssetAtPath<ComputeShader>(path + "UnifiedRayTracing/Common/Utilities/CopyBuffer.compute");
@@ -40,5 +40,3 @@ namespace UnityEngine.Rendering.UnifiedRayTracing
 
     }
 }
-
-

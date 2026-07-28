@@ -423,8 +423,6 @@ namespace UnityEngine.Rendering
                 overridenComponents |= InstanceComponentGroup.Lightmap;
             }
 
-            // Scan all materials once to retrieve whether this renderer is indirect-compatible or not (and store it in the RangeKey).
-            var supportsIndirect = true;
             for (int matIndex = 0; matIndex < materialsCount; ++matIndex)
             {
                 if (matIndex >= submeshCount)
@@ -435,7 +433,6 @@ namespace UnityEngine.Rendering
 
                 var materialIndex = rendererData.materialIndex[materialsOffset + matIndex];
                 var packedMaterialData = rendererData.packedMaterialData[materialIndex];
-                supportsIndirect &= packedMaterialData.isIndirectSupported;
             }
 
             var rangeKey = new RangeKey
@@ -446,7 +443,7 @@ namespace UnityEngine.Rendering
                 shadowCastingMode = packedRendererData.shadowCastingMode,
                 staticShadowCaster = packedRendererData.staticShadowCaster,
                 rendererPriority = rendererPriority,
-                supportsIndirect = supportsIndirect
+                supportsIndirect = true,  // For 6000.0, we always support indirect draw calls.
             };
 
             ref DrawRange drawRange = ref EditDrawRange(rangeKey);
